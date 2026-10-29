@@ -45,8 +45,7 @@ export function AppSidebar() {
                       end={item.path.split('/').length <= 3}
                       className={({ isActive }) =>
                         [
-                          'block rounded-lg py-1.5 text-[13px] transition',
-                          isTopLevel ? 'px-2.5' : 'px-2.5',
+                          'block rounded-lg px-2.5 py-1.5 text-[13px] transition',
                           isActive
                             ? 'bg-brand-100 font-semibold text-brand-900'
                             : 'font-medium text-ink/75 hover:bg-brand-50 hover:text-brand-900',

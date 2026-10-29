@@ -1,14 +1,15 @@
-import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { Outlet } from 'react-router-dom'
+import { PembelianSubnav } from '@/components/pembelian/PembelianSubnav'
+import { PembelianProvider } from '@/features/pembelian/PembelianContext'
 
+/** Induk modul Pembelian: data bersama + stepper alur. */
 export function PembelianPage() {
   return (
-    <ModulePlaceholder
-      moduleName="Pembelian"
-      notes={[
-        'Pencatatan pembelian gabah',
-        'Penerimaan & konfirmasi berat',
-        'Status pembayaran ke pemasok',
-      ]}
-    />
+    <PembelianProvider>
+      <div className="space-y-2.5">
+        <PembelianSubnav />
+        <Outlet />
+      </div>
+    </PembelianProvider>
   )
 }

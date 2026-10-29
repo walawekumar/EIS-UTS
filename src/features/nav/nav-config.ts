@@ -32,21 +32,21 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Pembelian',
     items: [
       {
-        id: 'pembelian-pesanan',
-        label: 'Pesanan Gabah',
+        id: 'pembelian-pencatatan',
+        label: 'Pencatatan',
         path: '/app/pembelian',
         roles: ['admin', 'pembelian'],
       },
       {
         id: 'pembelian-penerimaan',
-        label: 'Penerimaan',
+        label: 'Penerimaan & Timbang',
         path: '/app/pembelian/penerimaan',
         roles: ['admin', 'pembelian'],
       },
       {
-        id: 'pembelian-utang',
-        label: 'Utang Pemasok',
-        path: '/app/pembelian/utang',
+        id: 'pembelian-pembayaran',
+        label: 'Pembayaran Pemasok',
+        path: '/app/pembelian/pembayaran',
         roles: ['admin', 'pembelian'],
       },
     ],

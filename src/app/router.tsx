@@ -13,6 +13,10 @@ import { KoreksiPage } from '@/pages/modules/persediaan/KoreksiPage'
 import { MutasiPage } from '@/pages/modules/persediaan/MutasiPage'
 import { SaldoPage } from '@/pages/modules/persediaan/SaldoPage'
 import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { PembelianPage } from '@/pages/modules/PembelianPage'
+import { PembayaranPage } from '@/pages/modules/pembelian/PembayaranPage'
+import { PencatatanPage } from '@/pages/modules/pembelian/PencatatanPage'
+import { PenerimaanPage } from '@/pages/modules/pembelian/PenerimaanPage'
 
 function ModuleBody({ name, notes }: { name: string; notes: string[] }) {
   return (
@@ -91,50 +95,24 @@ export function AppRouter() {
             path="/app/pembelian"
             element={
               <AppShell
-                title="Pembelian"
-                subtitle="Pembelian dan penerimaan gabah dari pemasok"
+                title="Pembelian Gabah"
+                subtitle="Pencatatan, timbang & konfirmasi berat, dan pembayaran pemasok"
               />
             }
           >
-            <Route
-              index
-              element={
-                <ModuleBody
-                  name="Pesanan Gabah"
-                  notes={[
-                    'Buat pesanan ke pemasok',
-                    'Status draft / dikonfirmasi',
-                    'Estimasi volume & harga',
-                  ]}
-                />
-              }
-            />
-            <Route
-              path="penerimaan"
-              element={
-                <ModuleBody
-                  name="Penerimaan"
-                  notes={[
-                    'Konfirmasi berat timbang',
-                    'Selisih vs pesanan',
-                    'Masuk stok gabah',
-                  ]}
-                />
-              }
-            />
-            <Route
-              path="utang"
-              element={
-                <ModuleBody
-                  name="Utang Pemasok"
-                  notes={[
-                    'Saldo utang per pemasok',
-                    'Jatuh tempo',
-                    'Pembayaran sebagian/lunas',
-                  ]}
-                />
-              }
-            />
+            <Route element={<PembelianPage />}>
+              <Route index element={<PencatatanPage />} />
+              <Route
+                path="pencatatan"
+                element={<Navigate to="/app/pembelian" replace />}
+              />
+              <Route path="penerimaan" element={<PenerimaanPage />} />
+              <Route path="pembayaran" element={<PembayaranPage />} />
+              <Route
+                path="utang"
+                element={<Navigate to="/app/pembelian/pembayaran" replace />}
+              />
+            </Route>
           </Route>
 
           <Route
