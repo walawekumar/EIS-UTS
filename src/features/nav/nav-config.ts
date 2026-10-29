@@ -1,10 +1,18 @@
 import type { UserRole } from '@/types/auth'
 
+export type NavChild = {
+  id: string
+  label: string
+  path: string
+}
+
 export type NavItem = {
   id: string
   label: string
   path: string
   roles: UserRole[]
+  /** Sub-halaman; path harus diawali path induk */
+  children?: NavChild[]
 }
 
 export type NavGroup = {
@@ -36,6 +44,11 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Pembelian Gabah',
         path: '/app/pembelian',
         roles: ['admin', 'pembelian'],
+        children: [
+          { id: 'pembelian-pencatatan', label: 'Pencatatan', path: '/app/pembelian/pencatatan' },
+          { id: 'pembelian-penerimaan', label: 'Penerimaan & Timbang', path: '/app/pembelian/penerimaan' },
+          { id: 'pembelian-pembayaran', label: 'Pembayaran Pemasok', path: '/app/pembelian/pembayaran' },
+        ],
       },
     ],
   },

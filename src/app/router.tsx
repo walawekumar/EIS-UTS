@@ -6,6 +6,10 @@ import { LoginPage } from '@/pages/LoginPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DashboardPage } from '@/pages/modules/DashboardPage'
 import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { PembelianPage } from '@/pages/modules/PembelianPage'
+import { PembayaranPage } from '@/pages/modules/pembelian/PembayaranPage'
+import { PencatatanPage } from '@/pages/modules/pembelian/PencatatanPage'
+import { PenerimaanPage } from '@/pages/modules/pembelian/PenerimaanPage'
 
 function ModuleBody({ name, notes }: { name: string; notes: string[] }) {
   return (
@@ -63,28 +67,42 @@ export function AppRouter() {
             />
           </Route>
 
-          <Route
-            path="/app/pembelian"
-            element={
-              <AppShell
-                title="Pembelian"
-                subtitle="Pembelian dan penerimaan gabah dari pemasok"
-              />
-            }
-          >
+          {/* Data pembelian dibagi ke semua sub-halaman lewat PembelianPage */}
+          <Route path="/app/pembelian" element={<PembelianPage />}>
+            <Route index element={<Navigate to="pencatatan" replace />} />
             <Route
-              index
+              path="pencatatan"
               element={
-                <ModuleBody
-                  name="Pembelian"
-                  notes={[
-                    'Pencatatan pembelian gabah',
-                    'Penerimaan & konfirmasi berat',
-                    'Status pembayaran ke pemasok',
-                  ]}
+                <AppShell
+                  title="Pencatatan Pembelian Gabah"
+                  subtitle="Catat setiap pembelian dari pemasok: taksiran berat dan harga sepakat"
                 />
               }
-            />
+            >
+              <Route index element={<PencatatanPage />} />
+            </Route>
+            <Route
+              path="penerimaan"
+              element={
+                <AppShell
+                  title="Penerimaan & Konfirmasi Berat"
+                  subtitle="Timbang gabah yang datang, uji mutu, hitung rafaksi, lalu konfirmasi bersama pemasok"
+                />
+              }
+            >
+              <Route index element={<PenerimaanPage />} />
+            </Route>
+            <Route
+              path="pembayaran"
+              element={
+                <AppShell
+                  title="Status Pembayaran Pemasok"
+                  subtitle="Pantau utang ke pemasok, jatuh tempo, dan catat pembayaran"
+                />
+              }
+            >
+              <Route index element={<PembayaranPage />} />
+            </Route>
           </Route>
 
           <Route

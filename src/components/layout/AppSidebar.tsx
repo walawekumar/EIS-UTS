@@ -35,14 +35,37 @@ export function AppSidebar() {
                     className={({ isActive }) =>
                       [
                         'block rounded-lg px-2.5 py-2 text-[13px] transition',
-                        isActive
-                          ? 'bg-brand-100 font-semibold text-brand-900'
-                          : 'font-medium text-ink/80 hover:bg-brand-50 hover:text-brand-900',
+                        isActive && item.children
+                          ? 'font-semibold text-brand-900'
+                          : isActive
+                            ? 'bg-brand-100 font-semibold text-brand-900'
+                            : 'font-medium text-ink/80 hover:bg-brand-50 hover:text-brand-900',
                       ].join(' ')
                     }
                   >
                     {item.label}
                   </NavLink>
+                  {item.children ? (
+                    <ul className="mt-0.5 ml-3.5 space-y-0.5 border-l border-line pl-2">
+                      {item.children.map((child) => (
+                        <li key={child.id}>
+                          <NavLink
+                            to={child.path}
+                            className={({ isActive }) =>
+                              [
+                                'block rounded-lg px-2.5 py-1.5 text-[12.5px] transition',
+                                isActive
+                                  ? 'bg-brand-100 font-semibold text-brand-900'
+                                  : 'font-medium text-muted hover:bg-brand-50 hover:text-brand-900',
+                              ].join(' ')
+                            }
+                          >
+                            {child.label}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </li>
               ))}
             </ul>

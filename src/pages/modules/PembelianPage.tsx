@@ -1,14 +1,11 @@
-import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { Outlet } from 'react-router-dom'
+import { PembelianProvider } from '@/features/pembelian/PembelianContext'
 
+/** Induk modul Pembelian: data bersama untuk sub-halaman pencatatan, penerimaan, pembayaran. */
 export function PembelianPage() {
   return (
-    <ModulePlaceholder
-      moduleName="Pembelian"
-      notes={[
-        'Pencatatan pembelian gabah',
-        'Penerimaan & konfirmasi berat',
-        'Status pembayaran ke pemasok',
-      ]}
-    />
+    <PembelianProvider>
+      <Outlet />
+    </PembelianProvider>
   )
 }
