@@ -32,7 +32,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Ringkasan stok, produksi, dan keuangan',
     path: '/app/dashboard',
     category: 'lainnya',
-    accent: '#1f5c3b',
+    accent: '#1b6b43',
     icon: 'dashboard',
   },
   {
@@ -41,7 +41,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Pemasok, pelanggan, produk, dan satuan',
     path: '/app/master-data',
     category: 'master',
-    accent: '#2f6b4f',
+    accent: '#0f766e',
     icon: 'master',
   },
   {
@@ -50,7 +50,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Pembelian dan penerimaan gabah',
     path: '/app/pembelian',
     category: 'operasional',
-    accent: '#3d7a3a',
+    accent: '#3f7d2e',
     icon: 'buy',
   },
   {
@@ -59,7 +59,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Saldo dan mutasi bahan baku serta produk',
     path: '/app/persediaan',
     category: 'operasional',
-    accent: '#4a6e3b',
+    accent: '#4d7c0f',
     icon: 'stock',
   },
   {
@@ -68,7 +68,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Batch giling multi-output dan rendemen',
     path: '/app/produksi',
     category: 'produksi',
-    accent: '#5a7a2e',
+    accent: '#a16207',
     icon: 'mill',
   },
   {
@@ -77,7 +77,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Penjualan, pengiriman, dan tagihan',
     path: '/app/penjualan',
     category: 'operasional',
-    accent: '#2d6a4f',
+    accent: '#047857',
     icon: 'sell',
   },
   {
@@ -86,7 +86,7 @@ export const APP_MODULES: AppModule[] = [
     description: 'Kas, utang, piutang, dan biaya dasar',
     path: '/app/keuangan',
     category: 'keuangan',
-    accent: '#1b4332',
+    accent: '#14532d',
     icon: 'finance',
   },
 ]

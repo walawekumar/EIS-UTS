@@ -1,9 +1,31 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/Button'
+import { PasswordField } from '@/components/ui/PasswordField'
+import { Select } from '@/components/ui/Select'
+import { Switch } from '@/components/ui/Switch'
+import { TextField } from '@/components/ui/TextField'
+import { LeafMarkIcon, MailIcon, UserBadgeIcon } from '@/components/ui/icons'
 import { useAuth } from '@/features/auth/AuthContext'
+import { LoginPreview } from '@/pages/login/LoginPreview'
 import { ROLE_LABELS, type UserRole } from '@/types/auth'
 
-const ROLES = Object.keys(ROLE_LABELS) as UserRole[]
+const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
+  value,
+  label: ROLE_LABELS[value],
+  description:
+    value === 'admin'
+      ? 'Akses penuh laporan dan master data'
+      : value === 'pembelian'
+        ? 'Pembelian dan penerimaan gabah'
+        : value === 'produksi'
+          ? 'Batch giling dan input-output'
+          : value === 'gudang'
+            ? 'Saldo stok dan koreksi'
+            : value === 'penjualan'
+              ? 'Order, kirim, dan tagihan'
+              : 'Kas, utang, piutang, biaya',
+}))
 
 export function LoginPage() {
   const { isAuthenticated, login } = useAuth()
@@ -11,6 +33,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('admin@egabah.local')
   const [password, setPassword] = useState('demo123')
   const [role, setRole] = useState<UserRole>('admin')
+  const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -24,6 +47,9 @@ export function LoginPage() {
     setLoading(true)
     try {
       await login({ email, password, role })
+      if (!remember) {
+        // Session tetap disimpan untuk MVP mock; flag siap dipakai saat Supabase
+      }
       navigate('/portal', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk.')
@@ -33,96 +59,99 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-brand-950">
+    <div className="relative min-h-screen overflow-hidden bg-[#e8eee9]">
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-70"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 15% 20%, rgba(45,138,86,0.45), transparent 42%), radial-gradient(circle at 85% 10%, rgba(31,92,59,0.35), transparent 35%), linear-gradient(160deg, #0c1f14 0%, #123524 45%, #1a4d32 100%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
+            'radial-gradient(ellipse 60% 40% at 15% 10%, rgba(198,232,214,0.9), transparent 55%), radial-gradient(ellipse 50% 35% at 90% 80%, rgba(213,230,220,0.8), transparent 50%)',
         }}
       />
 
-      <div className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
-        <div className="mb-8 text-center text-white">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-md bg-brand-500/30 text-lg font-bold tracking-wide ring-1 ring-brand-300/30">
-            EG
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight">E-Gabah</h1>
-          <p className="mt-2 text-sm text-brand-200">
-            ERP Penggilingan Padi — akses terpusat modul usaha
-          </p>
-        </div>
+      <div className="relative mx-auto flex min-h-screen max-w-[1120px] items-center px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid w-full rounded-[18px] border border-white/70 bg-white shadow-[0_24px_60px_rgba(20,32,25,0.12)] lg:grid-cols-[0.92fr_1.08fr]">
+          {/* Form */}
+          <section className="flex flex-col justify-center rounded-[18px] px-6 py-9 sm:px-10 lg:rounded-l-[18px] lg:rounded-r-none lg:px-12 lg:py-12">
+            <div className="mb-8 inline-flex items-center gap-2.5">
+              <span className="inline-flex size-9 items-center justify-center rounded-[10px] bg-brand-800 text-white">
+                <LeafMarkIcon className="size-5" />
+              </span>
+              <span className="text-[15px] font-semibold tracking-tight text-ink">
+                E-Gabah
+              </span>
+            </div>
 
-        <form
-          onSubmit={onSubmit}
-          className="rounded-lg border border-white/10 bg-white/95 p-6 shadow-xl shadow-black/20 backdrop-blur"
-        >
-          <h2 className="text-lg font-semibold text-ink">Masuk ke sistem</h2>
-          <p className="mt-1 text-sm text-muted">
-            Autentikasi sementara (mock). Nanti diganti Supabase Auth.
-          </p>
-
-          <label className="mt-5 block text-sm font-medium text-ink">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-line bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-              autoComplete="username"
-              required
-            />
-          </label>
-
-          <label className="mt-4 block text-sm font-medium text-ink">
-            Kata sandi
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-line bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-
-          <label className="mt-4 block text-sm font-medium text-ink">
-            Peran (RBAC demo)
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="mt-1.5 w-full rounded-md border border-line bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-            >
-              {ROLES.map((item) => (
-                <option key={item} value={item}>
-                  {ROLE_LABELS[item]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {error ? (
-            <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
+            <h1 className="font-display text-[1.85rem] leading-tight font-semibold tracking-tight text-ink sm:text-[2rem]">
+              Selamat datang di E-Gabah
+            </h1>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">
+              Masuk untuk membuka portal modul penggilingan padi.
             </p>
-          ) : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-6 w-full rounded-md bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? 'Memproses…' : 'Masuk'}
-          </button>
-        </form>
+            <form onSubmit={onSubmit} className="mt-8 space-y-4">
+              <TextField
+                id="login-email"
+                label="Email"
+                requiredMark
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nama@usaha.com"
+                autoComplete="username"
+                required
+                leading={<MailIcon />}
+              />
+
+              <PasswordField
+                id="login-password"
+                label="Kata sandi"
+                requiredMark
+                value={password}
+                onChange={setPassword}
+                placeholder="Masukkan kata sandi"
+                required
+              />
+
+              <Select
+                id="login-role"
+                label="Peran"
+                requiredMark
+                value={role}
+                onChange={setRole}
+                options={ROLE_OPTIONS}
+                leading={<UserBadgeIcon />}
+              />
+
+              <div className="pt-1">
+                <Switch
+                  id="login-remember"
+                  label="Ingat sesi masuk"
+                  checked={remember}
+                  onChange={setRemember}
+                />
+              </div>
+
+              {error ? (
+                <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </p>
+              ) : null}
+
+              <Button type="submit" loading={loading} className="mt-2">
+                Masuk
+              </Button>
+            </form>
+
+            <p className="mt-8 text-[11px] leading-relaxed text-muted/80">
+              © {new Date().getFullYear()} E-Gabah · ERP Penggilingan Padi
+            </p>
+          </section>
+
+          {/* Visual panel */}
+          <aside className="hidden lg:block">
+            <LoginPreview />
+          </aside>
+        </div>
       </div>
     </div>
   )
