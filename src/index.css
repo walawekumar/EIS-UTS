@@ -2,28 +2,32 @@
 
 @theme {
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Sora', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 
-  --color-brand-950: #0c1f14;
-  --color-brand-900: #123524;
-  --color-brand-800: #165a38;
-  --color-brand-700: #1b6b43;
-  --color-brand-600: #218050;
-  --color-brand-500: #2a9a61;
-  --color-brand-400: #4fb57c;
-  --color-brand-300: #8dceb0;
-  --color-brand-200: #c7e8d6;
-  --color-brand-100: #e6f5ed;
-  --color-brand-50: #f3faf6;
+  /* Accent hijau dalam — dipakai hemat */
+  --color-brand-950: #0d1f16;
+  --color-brand-900: #143325;
+  --color-brand-800: #1a4030;
+  --color-brand-700: #21533d;
+  --color-brand-600: #2a674c;
+  --color-brand-500: #347a5b;
+  --color-brand-400: #5a9478;
+  --color-brand-300: #8fb3a0;
+  --color-brand-200: #c5d7cc;
+  --color-brand-100: #e4ece7;
+  --color-brand-50: #f2f5f3;
 
-  --color-surface: #eef3f0;
-  --color-ink: #142019;
-  --color-muted: #5a6b61;
-  --color-line: #d3ddd7;
+  /* Netral kertas / beton — bukan mint AI */
+  --color-surface: #f3f2ef;
+  --color-ink: #1c1b19;
+  --color-muted: #6a6864;
+  --color-line: #dddcd7;
+  --color-panel: #ffffff;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.625rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.375rem;
 }
 
 @layer base {
@@ -44,30 +48,14 @@
   * {
     box-sizing: border-box;
   }
+
+  button,
+  input {
+    font: inherit;
+  }
 }
 
 @layer utilities {
-  .animate-rise {
-    animation: rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .animate-fade {
-    animation: fade 420ms ease-out both;
-  }
-
-  .stagger-1 {
-    animation-delay: 60ms;
-  }
-  .stagger-2 {
-    animation-delay: 120ms;
-  }
-  .stagger-3 {
-    animation-delay: 180ms;
-  }
-  .stagger-4 {
-    animation-delay: 240ms;
-  }
-
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -78,24 +66,9 @@
     width: 0;
     height: 0;
   }
-}
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
 }

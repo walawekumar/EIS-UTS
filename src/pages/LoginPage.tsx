@@ -38,7 +38,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   if (isAuthenticated) {
-    return <Navigate to="/portal" replace />
+    return <Navigate to="/app/dashboard" replace />
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +50,7 @@ export function LoginPage() {
       if (!remember) {
         // Session tetap disimpan untuk MVP mock; flag siap dipakai saat Supabase
       }
-      navigate('/portal', { replace: true })
+      navigate('/app/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk.')
     } finally {
