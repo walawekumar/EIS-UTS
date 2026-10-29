@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import {
   PAYMENT_METHOD_LABEL,
+  PAYMENT_TERM_DAYS,
   SUPPLIERS,
   formatDate,
   formatKg,
@@ -155,9 +156,9 @@ export function PembayaranView({ purchases, selectedId, onSelect, onPay }: Pemba
       <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className={[panelClass, 'p-4 sm:p-5'].join(' ')}>
           <div className="mb-3">
-            <h2 className="text-[14px] font-semibold text-ink">Status pembayaran ke pemasok</h2>
+            <h2 className="text-[14px] font-semibold text-ink">Daftar tagihan pemasok</h2>
             <p className="mt-0.5 text-[12px] text-muted">
-              Utang muncul setelah berat dikonfirmasi. Jatuh tempo dihitung dari tanggal konfirmasi.
+              Tagihan muncul setelah berat dikonfirmasi. Jatuh tempo {PAYMENT_TERM_DAYS} hari dari tanggal konfirmasi.
             </p>
           </div>
 
@@ -179,10 +180,10 @@ export function PembayaranView({ purchases, selectedId, onSelect, onPay }: Pemba
           {rows.length === 0 ? (
             <EmptyState title="Tidak ada tagihan yang cocok" hint="Ubah filter, pemasok, atau kata kunci." />
           ) : (
-            <div className="scrollbar-none overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-left text-[13px]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-[13px] [&_td]:whitespace-nowrap">
                 <thead>
-                  <tr className="border-b border-ink/20 text-[11px] tracking-wide text-muted uppercase">
+                  <tr className="border-b border-ink/20 text-[11px] tracking-wide whitespace-nowrap text-muted uppercase">
                     <th className="py-2 pr-3 pl-2 font-medium">Dokumen</th>
                     <th className="py-2 pr-3 font-medium">Pemasok</th>
                     <th className="py-2 pr-3 text-right font-medium">Total</th>

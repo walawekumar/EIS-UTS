@@ -10,6 +10,7 @@ import { PembelianPage } from '@/pages/modules/PembelianPage'
 import { PembayaranPage } from '@/pages/modules/pembelian/PembayaranPage'
 import { PencatatanPage } from '@/pages/modules/pembelian/PencatatanPage'
 import { PenerimaanPage } from '@/pages/modules/pembelian/PenerimaanPage'
+import { ProduksiPage } from '@/pages/modules/ProduksiPage'
 
 function ModuleBody({ name, notes }: { name: string; notes: string[] }) {
   return (
@@ -129,24 +130,12 @@ export function AppRouter() {
             path="/app/produksi"
             element={
               <AppShell
-                title="Produksi"
-                subtitle="Batch giling multi-output dan perhitungan rendemen"
+                title="Batch Produksi"
+                subtitle="Giling gabah menjadi beras, menir, dedak, dan sekam — pantau rendemen dan selisih massa"
               />
             }
           >
-            <Route
-              index
-              element={
-                <ModuleBody
-                  name="Produksi"
-                  notes={[
-                    'Batch produksi multi-output',
-                    'Input gabah → beras, menir, dedak, sekam',
-                    'Hitung rendemen & selisih massa',
-                  ]}
-                />
-              }
-            />
+            <Route index element={<ProduksiPage />} />
           </Route>
 
           <Route

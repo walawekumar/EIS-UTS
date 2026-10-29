@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { GrainLabel, StageLabel } from '@/components/pembelian/StatusLabel'
 import {
   EmptyState,
-  FilterPills,
+  FilterDropdown,
   SearchInput,
   panelClass,
   primaryBtn,
@@ -60,11 +60,11 @@ export function PencatatanView({
   return (
     <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <section className={[panelClass, 'p-4 sm:p-5'].join(' ')}>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-[14px] font-semibold text-ink">Catatan pembelian gabah</h2>
-            <p className="mt-0.5 text-[12px] text-muted">
-              Setiap gabah yang dibeli dicatat dulu dengan taksiran berat dan harga sepakat.
+            <h2 className="text-[14px] font-semibold text-ink">Daftar pembelian</h2>
+            <p className="font-mono text-[11px] text-muted">
+              {rows.length} dari {purchases.length} dokumen
             </p>
           </div>
           <button type="button" onClick={onCreate} className={primaryBtn}>
@@ -75,16 +75,17 @@ export function PencatatanView({
           </button>
         </div>
 
-        <div className="mb-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <SearchInput value={query} onChange={setQuery} placeholder="Cari dokumen, pemasok, no. polisi…" />
-          <FilterPills
+        <div className="mb-3 flex items-center gap-2">
+          <SearchInput fullWidth value={query} onChange={setQuery} placeholder="Cari dokumen, pemasok, no. polisi…" />
+          <FilterDropdown
+            label="Tahap"
             value={stage}
             onChange={setStage}
             options={[
-              { id: 'semua', label: 'Semua', count: purchases.length },
-              { id: 'dicatat', label: 'Belum ditimbang', count: count('dicatat') },
-              { id: 'ditimbang', label: 'Menunggu konfirmasi', count: count('ditimbang') },
-              { id: 'diterima', label: 'Diterima', count: count('diterima') },
+              { id: 'semua', label: 'Semua', tone: 'bg-slate-400', count: purchases.length },
+              { id: 'dicatat', label: 'Belum ditimbang', tone: 'bg-slate-500', count: count('dicatat') },
+              { id: 'ditimbang', label: 'Menunggu konfirmasi', tone: 'bg-amber-500', count: count('ditimbang') },
+              { id: 'diterima', label: 'Berat dikonfirmasi', tone: 'bg-brand-600', count: count('diterima') },
             ]}
           />
         </div>
@@ -92,14 +93,13 @@ export function PencatatanView({
         {rows.length === 0 ? (
           <EmptyState title="Tidak ada catatan yang cocok" hint="Ubah filter atau kata kunci pencarian." />
         ) : (
-          <div className="scrollbar-none overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-ink/20 text-[11px] tracking-wide text-muted uppercase">
+                <tr className="border-b border-ink/20 text-[11px] tracking-wide whitespace-nowrap text-muted uppercase">
                   <th className="py-2 pr-3 pl-2 font-medium">Dokumen</th>
                   <th className="py-2 pr-3 font-medium">Pemasok</th>
                   <th className="py-2 pr-3 font-medium">Jenis</th>
-                  <th className="py-2 pr-3 text-right font-medium">Karung</th>
                   <th className="py-2 pr-3 text-right font-medium">Taksiran</th>
                   <th className="py-2 pr-3 text-right font-medium">Harga/kg</th>
                   <th className="py-2 pr-3 text-right font-medium">Nilai</th>
@@ -128,30 +128,31 @@ export function PencatatanView({
                         active ? 'bg-brand-50' : 'hover:bg-surface',
                       ].join(' ')}
                     >
-                      <td className="py-2.5 pr-3 pl-2">
+                      <td className="py-2.5 pr-3 pl-2 whitespace-nowrap">
                         <span className={['num block', active ? 'font-semibold text-brand-900' : 'text-ink'].join(' ')}>
                           {p.id}
                         </span>
                         <span className="num block text-[11px] text-muted">{formatDate(p.date)}</span>
                       </td>
                       <td className="py-2.5 pr-3">
-                        <span className="block max-w-[190px] truncate text-ink">{supplier?.name}</span>
-                        <span className="block max-w-[190px] truncate text-[11px] text-muted">{supplier?.village}</span>
+                        <span className="block max-w-[180px] truncate text-ink">{supplier?.name}</span>
+                        <span className="block max-w-[180px] truncate text-[11px] text-muted">{supplier?.village}</span>
                       </td>
                       <td className="py-2.5 pr-3">
                         <GrainLabel grain={p.grain} />
                       </td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">{p.sacks}</td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">{formatKg(p.estimatedKg)}</td>
-                      <td className="num py-2.5 pr-3 text-right text-muted">{formatNumber(p.price)}</td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">
-                        {p.stage === 'diterima' ? (
-                          formatRupiah(s.total)
-                        ) : (
-                          <span className="text-muted" title="Nilai taksiran">
-                            ± {formatRupiah(s.estimatedValue)}
-                          </span>
-                        )}
+                      <td className="py-2.5 pr-3 text-right whitespace-nowrap">
+                        <span className="num block text-ink">{formatKg(p.estimatedKg)}</span>
+                        <span className="num block text-[11px] text-muted">{p.sacks} karung</span>
+                      </td>
+                      <td className="num py-2.5 pr-3 text-right whitespace-nowrap text-muted">{formatNumber(p.price)}</td>
+                      <td className="py-2.5 pr-3 text-right whitespace-nowrap">
+                        <span className="num block text-ink">
+                          {formatRupiah(p.stage === 'diterima' ? s.total : s.estimatedValue)}
+                        </span>
+                        <span className="block text-[11px] text-muted">
+                          {p.stage === 'diterima' ? 'nilai final' : 'taksiran'}
+                        </span>
                       </td>
                       <td className="py-2.5 pr-2">
                         <StageLabel stage={p.stage} />
@@ -236,7 +237,7 @@ function PurchaseRecordDetail({
 
       <dl className="divide-y divide-line text-[13px]">
         {[
-          ['Jenis gabah', `${p.grain} · ${GRAIN_STANDARD[p.grain].label}`],
+          ['Jenis gabah', `${p.grain} (${GRAIN_STANDARD[p.grain].label})`],
           ['Jumlah karung', `${p.sacks} karung`],
           ['Taksiran berat', formatKg(p.estimatedKg)],
           ['Harga sepakat', `${formatRupiah(p.price)}/kg`],
@@ -245,7 +246,7 @@ function PurchaseRecordDetail({
         ].map(([label, value]) => (
           <div key={label} className="flex items-baseline justify-between gap-3 py-2">
             <dt className="shrink-0 text-muted">{label}</dt>
-            <dd className="num truncate text-right text-ink">{value}</dd>
+            <dd className="num min-w-0 text-right text-ink">{value}</dd>
           </div>
         ))}
       </dl>
