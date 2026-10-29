@@ -17,10 +17,11 @@ export type ActivityRow = {
   actor: string
 }
 
-export type SideItem = {
-  title: string
-  meta: string
-  progress?: number
+export type StockRow = {
+  label: string
+  value: string
+  percent: number
+  tone?: 'ok' | 'warn'
 }
 
 export type DashboardView = {
@@ -32,8 +33,8 @@ export type DashboardView = {
   chartSeries: { name: string; color: string; values: number[] }[]
   chartLabels: string[]
   activities: ActivityRow[]
-  sideTitle: string
-  sideItems: SideItem[]
+  stockTitle: string
+  stockRows: StockRow[]
 }
 
 const LABELS_7D = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
@@ -76,9 +77,9 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
     chartUnit: 'Indeks operasional',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Produksi', color: '#216348', values: [42, 48, 45, 55, 52, 60, 58] },
-      { name: 'Penjualan', color: '#5aaf88', values: [30, 34, 38, 36, 44, 48, 52] },
-      { name: 'Pembelian', color: '#8a9a90', values: [22, 28, 24, 30, 26, 32, 29] },
+      { name: 'Produksi', color: '#1a4d36', values: [42, 48, 45, 55, 52, 60, 58] },
+      { name: 'Penjualan', color: '#35966b', values: [30, 34, 38, 36, 44, 48, 52] },
+      { name: 'Pembelian', color: '#8fcbb0', values: [22, 28, 24, 30, 26, 32, 29] },
     ],
     activities: [
       {
@@ -153,13 +154,69 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         status: 'ok',
         actor: 'Keuangan',
       },
+      {
+        date: '25 Okt',
+        type: 'Pengiriman',
+        reference: 'DO-0908',
+        amount: 'Rp 1,8 jt',
+        status: 'ok',
+        actor: 'Penjualan',
+      },
+      {
+        date: '24 Okt',
+        type: 'Penerimaan',
+        reference: 'RCV-0238',
+        amount: '980 kg',
+        status: 'ok',
+        actor: 'Pembelian',
+      },
+      {
+        date: '24 Okt',
+        type: 'Biaya',
+        reference: 'EXP-0118',
+        amount: 'Rp 0,5 jt',
+        status: 'draft',
+        actor: 'Keuangan',
+      },
+      {
+        date: '23 Okt',
+        type: 'Batch selesai',
+        reference: 'BAT-0184',
+        amount: 'Rendemen 64%',
+        status: 'ok',
+        actor: 'Produksi',
+      },
+      {
+        date: '23 Okt',
+        type: 'Koreksi stok',
+        reference: 'ADJ-0075',
+        amount: '+12 kg',
+        status: 'warn',
+        actor: 'Gudang',
+      },
+      {
+        date: '22 Okt',
+        type: 'Order',
+        reference: 'SO-1098',
+        amount: 'Rp 3,1 jt',
+        status: 'ok',
+        actor: 'Penjualan',
+      },
+      {
+        date: '22 Okt',
+        type: 'Pembayaran',
+        reference: 'PAY-0325',
+        amount: 'Rp 1,2 jt',
+        status: 'ok',
+        actor: 'Keuangan',
+      },
     ],
-    sideTitle: 'Prioritas hari ini',
-    sideItems: [
-      { title: 'Konfirmasi penerimaan gabah', meta: '2 dokumen', progress: 60 },
-      { title: 'Batch menunggu QC', meta: '1 batch', progress: 35 },
-      { title: 'Piutang jatuh tempo', meta: 'Rp 3,4 jt', progress: 80 },
-      { title: 'Cek kapasitas gudang', meta: '72% terisi', progress: 72 },
+    stockTitle: 'Saldo gudang',
+    stockRows: [
+      { label: 'Gabah kering', value: '12.480 kg', percent: 72 },
+      { label: 'Beras premium', value: '4.820 kg', percent: 58 },
+      { label: 'Menir & dedak', value: '1.240 kg', percent: 41 },
+      { label: 'Sekam', value: '860 kg', percent: 28, tone: 'warn' },
     ],
   },
   pembelian: {
@@ -227,10 +284,12 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         actor: 'Anda',
       },
     ],
-    sideTitle: 'Antrian pembelian',
-    sideItems: [
-      { title: 'PO menunggu konfirmasi', meta: '3 dokumen', progress: 40 },
-      { title: 'Selisih timbang ditinjau', meta: '1 kasus', progress: 70 },
+    stockTitle: 'Antrian pasokan',
+    stockRows: [
+      { label: 'PO terbuka', value: '3 dok', percent: 45 },
+      { label: 'Menunggu timbang', value: '1 truk', percent: 70, tone: 'warn' },
+      { label: 'Utang pemasok', value: 'Rp 6,2 jt', percent: 62 },
+      { label: 'Kuota harian', value: '2.150 kg', percent: 80 },
     ],
   },
   produksi: {
@@ -291,10 +350,12 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         actor: 'Anda',
       },
     ],
-    sideTitle: 'Antrian produksi',
-    sideItems: [
-      { title: 'Batch menunggu input', meta: 'BAT-0190', progress: 20 },
-      { title: 'Hitung ulang rendemen', meta: 'BAT-0187', progress: 55 },
+    stockTitle: 'Kapasitas batch',
+    stockRows: [
+      { label: 'Mesin A', value: '82%', percent: 82, tone: 'warn' },
+      { label: 'Mesin B', value: '64%', percent: 64 },
+      { label: 'Antrian input', value: '2 batch', percent: 40 },
+      { label: 'QC pending', value: '1 batch', percent: 25, tone: 'warn' },
     ],
   },
   gudang: {
@@ -363,10 +424,12 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         actor: 'Anda',
       },
     ],
-    sideTitle: 'Perlu dicek',
-    sideItems: [
-      { title: 'Selisih fisik vs sistem', meta: 'Gudang A', progress: 45 },
-      { title: 'Koreksi menunggu alasan', meta: 'ADJ-0077', progress: 25 },
+    stockTitle: 'Saldo gudang',
+    stockRows: [
+      { label: 'Gabah kering', value: '12.480 kg', percent: 72 },
+      { label: 'Beras premium', value: '4.820 kg', percent: 58 },
+      { label: 'Beras medium', value: '2.100 kg', percent: 36 },
+      { label: 'Lokasi A full', value: '91%', percent: 91, tone: 'warn' },
     ],
   },
   penjualan: {
@@ -426,10 +489,12 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         actor: 'Anda',
       },
     ],
-    sideTitle: 'Antrean kirim',
-    sideItems: [
-      { title: 'DO menunggu muat', meta: '3 dokumen', progress: 50 },
-      { title: 'Tagihan tempo', meta: 'Rp 2,1 jt', progress: 75 },
+    stockTitle: 'Pipeline kirim',
+    stockRows: [
+      { label: 'DO menunggu muat', value: '3 dok', percent: 50 },
+      { label: 'Siap kirim', value: '5 order', percent: 68 },
+      { label: 'Tagihan tempo', value: 'Rp 2,1 jt', percent: 75, tone: 'warn' },
+      { label: 'Stok beras siap', value: '4.820 kg', percent: 58 },
     ],
   },
   keuangan: {
@@ -490,10 +555,12 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         actor: 'Anda',
       },
     ],
-    sideTitle: 'Jatuh tempo',
-    sideItems: [
-      { title: 'Utang pemasok', meta: 'Rp 4,5 jt · 3 hari', progress: 70 },
-      { title: 'Piutang pelanggan', meta: 'Rp 2,8 jt · 5 hari', progress: 55 },
+    stockTitle: 'Posisi kas',
+    stockRows: [
+      { label: 'Kas masuk', value: 'Rp 12,6 jt', percent: 78 },
+      { label: 'Kas keluar', value: 'Rp 4,1 jt', percent: 34 },
+      { label: 'Utang pemasok', value: 'Rp 4,5 jt', percent: 70, tone: 'warn' },
+      { label: 'Piutang pelanggan', value: 'Rp 2,8 jt', percent: 55 },
     ],
   },
 }

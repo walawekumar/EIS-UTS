@@ -8,6 +8,15 @@ function greetingByHour(date = new Date()): string {
   return 'Selamat malam'
 }
 
+/** Sambutan singkat — disesuaikan jam agar terasa personal */
+function welcomeByHour(date = new Date()): string {
+  const hour = date.getHours()
+  if (hour < 11) return 'Semoga langkah pagi ini membawa hasil yang baik.'
+  if (hour < 15) return 'Selamat datang kembali — fokuskan yang penting hari ini.'
+  if (hour < 18) return 'Tetap semangat; setiap keputusan hari ini berharga.'
+  return 'Terima kasih sudah menyelesaikan hari dengan baik.'
+}
+
 function formatMonthYear(date = new Date()): string {
   return new Intl.DateTimeFormat('id-ID', {
     month: 'long',
@@ -21,20 +30,20 @@ export function DashboardGreeting() {
   const initial = name.charAt(0).toUpperCase()
 
   return (
-    <section className="flex items-center gap-3.5 rounded-2xl border border-brand-200/80 bg-brand-800 px-4 py-3.5 text-white sm:gap-4 sm:px-5">
+    <section className="flex items-center gap-4 rounded-2xl border border-brand-200/80 bg-brand-800 px-4 py-4 text-white sm:gap-5 sm:px-5 sm:py-5">
       <div
-        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[15px] font-semibold ring-2 ring-white/20"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[17px] font-semibold ring-2 ring-white/20 sm:size-14 sm:text-[19px]"
         aria-hidden
       >
         {initial}
       </div>
 
       <div className="min-w-0 flex-1">
-        <h2 className="truncate text-[16px] font-semibold tracking-tight sm:text-[17px]">
+        <h2 className="truncate text-[18px] font-semibold tracking-tight sm:text-[20px]">
           {greetingByHour()}, {name}
         </h2>
-        <p className="mt-0.5 truncate text-[12px] text-brand-100/85">
-          {user?.roleLabel ?? 'Pengguna'} · pantau operasional hari ini
+        <p className="mt-1 truncate text-[13px] leading-snug text-brand-100/90 sm:text-[14px]">
+          {welcomeByHour()}
         </p>
       </div>
 

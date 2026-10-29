@@ -13,7 +13,7 @@ export type NavGroup = {
   items: NavItem[]
 }
 
-/** Menu ketat per peran — operasional dipisah orang */
+/** Menu ketat per peran — grup induk + sub-menu operasional */
 export const NAV_GROUPS: NavGroup[] = [
   {
     id: 'home',
@@ -32,9 +32,21 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Pembelian',
     items: [
       {
-        id: 'pembelian-gabah',
-        label: 'Pembelian Gabah',
+        id: 'pembelian-pesanan',
+        label: 'Pesanan Gabah',
         path: '/app/pembelian',
+        roles: ['admin', 'pembelian'],
+      },
+      {
+        id: 'pembelian-penerimaan',
+        label: 'Penerimaan',
+        path: '/app/pembelian/penerimaan',
+        roles: ['admin', 'pembelian'],
+      },
+      {
+        id: 'pembelian-utang',
+        label: 'Utang Pemasok',
+        path: '/app/pembelian/utang',
         roles: ['admin', 'pembelian'],
       },
     ],
@@ -44,9 +56,21 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Persediaan',
     items: [
       {
-        id: 'stok',
-        label: 'Stok & Mutasi',
+        id: 'stok-saldo',
+        label: 'Saldo Stok',
         path: '/app/persediaan',
+        roles: ['admin', 'gudang'],
+      },
+      {
+        id: 'stok-mutasi',
+        label: 'Mutasi',
+        path: '/app/persediaan/mutasi',
+        roles: ['admin', 'gudang'],
+      },
+      {
+        id: 'stok-koreksi',
+        label: 'Koreksi',
+        path: '/app/persediaan/koreksi',
         roles: ['admin', 'gudang'],
       },
     ],
@@ -56,9 +80,21 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Produksi',
     items: [
       {
-        id: 'batch',
-        label: 'Batch Produksi',
+        id: 'batch-list',
+        label: 'Batch Giling',
         path: '/app/produksi',
+        roles: ['admin', 'produksi'],
+      },
+      {
+        id: 'batch-input',
+        label: 'Input–Output',
+        path: '/app/produksi/input-output',
+        roles: ['admin', 'produksi'],
+      },
+      {
+        id: 'batch-rendemen',
+        label: 'Rendemen',
+        path: '/app/produksi/rendemen',
         roles: ['admin', 'produksi'],
       },
     ],
@@ -69,8 +105,20 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: 'penjualan-order',
-        label: 'Penjualan & Kirim',
+        label: 'Order',
         path: '/app/penjualan',
+        roles: ['admin', 'penjualan'],
+      },
+      {
+        id: 'penjualan-kirim',
+        label: 'Pengiriman',
+        path: '/app/penjualan/pengiriman',
+        roles: ['admin', 'penjualan'],
+      },
+      {
+        id: 'penjualan-tagihan',
+        label: 'Tagihan',
+        path: '/app/penjualan/tagihan',
         roles: ['admin', 'penjualan'],
       },
     ],
@@ -81,8 +129,26 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: 'kas',
-        label: 'Kas, Utang & Piutang',
+        label: 'Kas',
         path: '/app/keuangan',
+        roles: ['admin', 'keuangan'],
+      },
+      {
+        id: 'utang',
+        label: 'Utang Pemasok',
+        path: '/app/keuangan/utang',
+        roles: ['admin', 'keuangan'],
+      },
+      {
+        id: 'piutang',
+        label: 'Piutang Pelanggan',
+        path: '/app/keuangan/piutang',
+        roles: ['admin', 'keuangan'],
+      },
+      {
+        id: 'biaya',
+        label: 'Biaya Operasional',
+        path: '/app/keuangan/biaya',
         roles: ['admin', 'keuangan'],
       },
     ],
@@ -92,9 +158,21 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Master Data',
     items: [
       {
-        id: 'master-data',
-        label: 'Data Acuan',
+        id: 'master-mitra',
+        label: 'Pemasok & Pelanggan',
         path: '/app/master-data',
+        roles: ['admin'],
+      },
+      {
+        id: 'master-produk',
+        label: 'Produk & Satuan',
+        path: '/app/master-data/produk',
+        roles: ['admin'],
+      },
+      {
+        id: 'master-pengguna',
+        label: 'Pengguna & Peran',
+        path: '/app/master-data/pengguna',
         roles: ['admin'],
       },
     ],
@@ -114,7 +192,9 @@ export function canAccessPath(role: UserRole, path: string): boolean {
 
   return NAV_GROUPS.some((group) =>
     group.items.some(
-      (item) => path.startsWith(item.path) && item.roles.includes(role),
+      (item) =>
+        item.roles.includes(role) &&
+        (path === item.path || path.startsWith(`${item.path}/`)),
     ),
   )
 }

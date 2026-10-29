@@ -5,6 +5,13 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DashboardPage } from '@/pages/modules/DashboardPage'
+import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
+import { KasPage } from '@/pages/modules/keuangan/KasPage'
+import { PiutangPage } from '@/pages/modules/keuangan/PiutangPage'
+import { UtangPage } from '@/pages/modules/keuangan/UtangPage'
+import { KoreksiPage } from '@/pages/modules/persediaan/KoreksiPage'
+import { MutasiPage } from '@/pages/modules/persediaan/MutasiPage'
+import { SaldoPage } from '@/pages/modules/persediaan/SaldoPage'
 import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
 
 function ModuleBody({ name, notes }: { name: string; notes: string[] }) {
@@ -21,7 +28,6 @@ export function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<RequireAuth />}>
-        {/* Portal disembunyikan */}
         <Route path="/portal" element={<Navigate to="/app/dashboard" replace />} />
 
         <Route element={<RequireRole />}>
@@ -56,8 +62,26 @@ export function AppRouter() {
               index
               element={
                 <ModuleBody
-                  name="Master Data"
-                  notes={['Pemasok & pelanggan', 'Produk & satuan', 'Pengguna & peran']}
+                  name="Pemasok & Pelanggan"
+                  notes={['Daftar pemasok', 'Daftar pelanggan', 'Kontak & syarat bayar']}
+                />
+              }
+            />
+            <Route
+              path="produk"
+              element={
+                <ModuleBody
+                  name="Produk & Satuan"
+                  notes={['Produk gabah & beras', 'Produk sampingan', 'Satuan & konversi']}
+                />
+              }
+            />
+            <Route
+              path="pengguna"
+              element={
+                <ModuleBody
+                  name="Pengguna & Peran"
+                  notes={['Akun pengguna', 'Pemetaan peran', 'Status aktif/nonaktif']}
                 />
               }
             />
@@ -76,11 +100,37 @@ export function AppRouter() {
               index
               element={
                 <ModuleBody
-                  name="Pembelian"
+                  name="Pesanan Gabah"
                   notes={[
-                    'Pencatatan pembelian gabah',
-                    'Penerimaan & konfirmasi berat',
-                    'Status pembayaran ke pemasok',
+                    'Buat pesanan ke pemasok',
+                    'Status draft / dikonfirmasi',
+                    'Estimasi volume & harga',
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="penerimaan"
+              element={
+                <ModuleBody
+                  name="Penerimaan"
+                  notes={[
+                    'Konfirmasi berat timbang',
+                    'Selisih vs pesanan',
+                    'Masuk stok gabah',
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="utang"
+              element={
+                <ModuleBody
+                  name="Utang Pemasok"
+                  notes={[
+                    'Saldo utang per pemasok',
+                    'Jatuh tempo',
+                    'Pembayaran sebagian/lunas',
                   ]}
                 />
               }
@@ -92,19 +142,13 @@ export function AppRouter() {
             element={
               <AppShell
                 title="Persediaan"
-                subtitle="Saldo dan mutasi bahan baku serta produk"
+                subtitle="Saldo, mutasi, transfer lokasi, dan koreksi stok"
               />
             }
           >
-            <Route
-              index
-              element={
-                <ModuleBody
-                  name="Persediaan"
-                  notes={['Saldo bahan baku & produk', 'Mutasi stok', 'Koreksi dengan alasan']}
-                />
-              }
-            />
+            <Route index element={<SaldoPage />} />
+            <Route path="mutasi" element={<MutasiPage />} />
+            <Route path="koreksi" element={<KoreksiPage />} />
           </Route>
 
           <Route
@@ -120,12 +164,30 @@ export function AppRouter() {
               index
               element={
                 <ModuleBody
-                  name="Produksi"
+                  name="Batch Giling"
+                  notes={['Daftar batch aktif', 'Status proses / selesai', 'Operator batch']}
+                />
+              }
+            />
+            <Route
+              path="input-output"
+              element={
+                <ModuleBody
+                  name="Input–Output"
                   notes={[
-                    'Batch produksi multi-output',
-                    'Input gabah → beras, menir, dedak, sekam',
-                    'Hitung rendemen & selisih massa',
+                    'Input gabah',
+                    'Output beras, menir, dedak, sekam',
+                    'Selisih massa',
                   ]}
+                />
+              }
+            />
+            <Route
+              path="rendemen"
+              element={
+                <ModuleBody
+                  name="Rendemen"
+                  notes={['Hitung rendemen', 'Target vs aktual', 'Laporan per batch']}
                 />
               }
             />
@@ -144,12 +206,26 @@ export function AppRouter() {
               index
               element={
                 <ModuleBody
-                  name="Penjualan"
-                  notes={[
-                    'Order penjualan',
-                    'Pengiriman & pengurangan stok',
-                    'Tagihan pelanggan',
-                  ]}
+                  name="Order"
+                  notes={['Order pelanggan', 'Alokasi stok', 'Status order']}
+                />
+              }
+            />
+            <Route
+              path="pengiriman"
+              element={
+                <ModuleBody
+                  name="Pengiriman"
+                  notes={['Surat jalan / DO', 'Pengurangan stok', 'Konfirmasi kirim']}
+                />
+              }
+            />
+            <Route
+              path="tagihan"
+              element={
+                <ModuleBody
+                  name="Tagihan"
+                  notes={['Invoice pelanggan', 'Status bayar', 'Jatuh tempo']}
                 />
               }
             />
@@ -164,14 +240,17 @@ export function AppRouter() {
               />
             }
           >
+            <Route index element={<KasPage />} />
             <Route
-              index
-              element={
-                <ModuleBody
-                  name="Keuangan"
-                  notes={['Kas masuk/keluar', 'Utang & piutang', 'Biaya operasional dasar']}
-                />
-              }
+              path="kas"
+              element={<Navigate to="/app/keuangan" replace />}
+            />
+            <Route path="utang" element={<UtangPage />} />
+            <Route path="piutang" element={<PiutangPage />} />
+            <Route path="biaya" element={<BiayaPage />} />
+            <Route
+              path="utang-piutang"
+              element={<Navigate to="/app/keuangan/utang" replace />}
             />
           </Route>
         </Route>
