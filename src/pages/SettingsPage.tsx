@@ -4,7 +4,7 @@ export function SettingsPage() {
   const { user } = useAuth()
 
   return (
-    <div className="max-w-lg border border-line bg-panel p-5">
+    <div className="max-w-lg rounded-xl border border-line bg-panel p-5 shadow-[0_1px_2px_rgba(20,32,25,0.04)]">
       <h2 className="text-[15px] font-semibold text-ink">Pengaturan akun</h2>
       <p className="mt-1 text-[13px] text-muted">
         Profil dasar. Autentikasi Supabase menyusul.

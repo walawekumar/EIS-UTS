@@ -9,7 +9,7 @@ import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
 
 function ModuleBody({ name, notes }: { name: string; notes: string[] }) {
   return (
-    <div className="border border-line bg-panel p-5">
+    <div className="rounded-xl border border-line bg-panel p-5 shadow-[0_1px_2px_rgba(20,32,25,0.04)]">
       <ModulePlaceholder moduleName={name} notes={notes} />
     </div>
   )

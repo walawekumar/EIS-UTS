@@ -221,7 +221,7 @@ export function Select<T extends string>({
               bottom: pos.bottom,
               zIndex: 100,
             }}
-            className="scrollbar-none overflow-y-auto overscroll-contain rounded-[10px] border border-line bg-white py-1 shadow-[0_16px_40px_rgba(20,32,25,0.16)] outline-none"
+            className="scrollbar-none overflow-y-auto overscroll-contain rounded-xl border border-line bg-white py-1 shadow-[0_16px_40px_rgba(20,32,25,0.16)] outline-none"
           >
             {options.map((opt, index) => {
               const isSelected = opt.value === value
@@ -276,7 +276,7 @@ export function Select<T extends string>({
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
         className={[
-          'flex h-11 w-full items-center gap-2.5 rounded-[10px] border bg-white px-3 text-left transition',
+          'flex h-11 w-full items-center gap-2.5 rounded-xl border bg-white px-3 text-left transition',
           open
             ? 'border-brand-600 ring-2 ring-brand-100'
             : 'border-line hover:border-brand-300',

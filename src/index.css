@@ -5,29 +5,27 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 
-  /* Accent hijau dalam — dipakai hemat */
   --color-brand-950: #0d1f16;
   --color-brand-900: #143325;
-  --color-brand-800: #1a4030;
-  --color-brand-700: #21533d;
-  --color-brand-600: #2a674c;
-  --color-brand-500: #347a5b;
-  --color-brand-400: #5a9478;
-  --color-brand-300: #8fb3a0;
-  --color-brand-200: #c5d7cc;
-  --color-brand-100: #e4ece7;
-  --color-brand-50: #f2f5f3;
+  --color-brand-800: #1a4d36;
+  --color-brand-700: #216348;
+  --color-brand-600: #2a7a58;
+  --color-brand-500: #35966b;
+  --color-brand-400: #5aaf88;
+  --color-brand-300: #8fcbb0;
+  --color-brand-200: #c5e6d5;
+  --color-brand-100: #e3f4eb;
+  --color-brand-50: #f2faf6;
 
-  /* Netral kertas / beton — bukan mint AI */
-  --color-surface: #f3f2ef;
-  --color-ink: #1c1b19;
-  --color-muted: #6a6864;
-  --color-line: #dddcd7;
+  --color-surface: #f0f4f1;
+  --color-ink: #1a211d;
+  --color-muted: #5f6d65;
+  --color-line: #d5e0d9;
   --color-panel: #ffffff;
 
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
 }
 
 @layer base {

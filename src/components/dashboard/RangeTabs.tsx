@@ -6,8 +6,8 @@ type RangeTabsProps = {
 
 export function RangeTabs({ value, options, onChange }: RangeTabsProps) {
   return (
-    <div className="inline-flex border border-line">
-      {options.map((opt, i) => {
+    <div className="inline-flex rounded-xl border border-line bg-surface p-0.5">
+      {options.map((opt) => {
         const active = opt.id === value
         return (
           <button
@@ -15,9 +15,10 @@ export function RangeTabs({ value, options, onChange }: RangeTabsProps) {
             type="button"
             onClick={() => onChange(opt.id)}
             className={[
-              'px-2.5 py-1 font-mono text-[11px] transition',
-              i > 0 ? 'border-l border-line' : '',
-              active ? 'bg-brand-800 text-white' : 'bg-panel text-muted hover:text-ink',
+              'rounded-lg px-2.5 py-1 font-mono text-[11px] transition',
+              active
+                ? 'bg-brand-800 text-white shadow-sm'
+                : 'text-muted hover:text-ink',
             ].join(' ')}
           >
             {opt.label}

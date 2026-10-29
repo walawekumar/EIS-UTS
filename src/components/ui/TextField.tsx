@@ -27,7 +27,7 @@ export function TextField({
       </label>
       <div
         className={[
-          'group flex h-11 items-center gap-2.5 rounded-[10px] border bg-white px-3 transition',
+          'group flex h-11 items-center gap-2.5 rounded-xl border bg-white px-3 transition',
           error
             ? 'border-red-300 focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100'
             : 'border-line focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100',

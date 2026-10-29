@@ -76,9 +76,9 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
     chartUnit: 'Indeks operasional',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Produksi', color: '#1a4030', values: [42, 48, 45, 55, 52, 60, 58] },
-      { name: 'Penjualan', color: '#1c1b19', values: [30, 34, 38, 36, 44, 48, 52] },
-      { name: 'Pembelian', color: '#8a8882', values: [22, 28, 24, 30, 26, 32, 29] },
+      { name: 'Produksi', color: '#216348', values: [42, 48, 45, 55, 52, 60, 58] },
+      { name: 'Penjualan', color: '#5aaf88', values: [30, 34, 38, 36, 44, 48, 52] },
+      { name: 'Pembelian', color: '#8a9a90', values: [22, 28, 24, 30, 26, 32, 29] },
     ],
     activities: [
       {
@@ -121,12 +121,45 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         status: 'draft',
         actor: 'Gudang',
       },
+      {
+        date: '27 Okt',
+        type: 'Order',
+        reference: 'SO-1102',
+        amount: 'Rp 2,4 jt',
+        status: 'ok',
+        actor: 'Penjualan',
+      },
+      {
+        date: '26 Okt',
+        type: 'PO draft',
+        reference: 'PO-0155',
+        amount: 'Rp 6,0 jt',
+        status: 'draft',
+        actor: 'Pembelian',
+      },
+      {
+        date: '26 Okt',
+        type: 'Batch proses',
+        reference: 'BAT-0187',
+        amount: 'Input 800 kg',
+        status: 'warn',
+        actor: 'Produksi',
+      },
+      {
+        date: '25 Okt',
+        type: 'Kas masuk',
+        reference: 'PAY-0328',
+        amount: 'Rp 3,0 jt',
+        status: 'ok',
+        actor: 'Keuangan',
+      },
     ],
     sideTitle: 'Prioritas hari ini',
     sideItems: [
       { title: 'Konfirmasi penerimaan gabah', meta: '2 dokumen', progress: 60 },
       { title: 'Batch menunggu QC', meta: '1 batch', progress: 35 },
       { title: 'Piutang jatuh tempo', meta: 'Rp 3,4 jt', progress: 80 },
+      { title: 'Cek kapasitas gudang', meta: '72% terisi', progress: 72 },
     ],
   },
   pembelian: {
@@ -154,12 +187,19 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         positive: true,
         spark: [12, 11, 11, 10, 10, 10, 9.8],
       },
+      {
+        label: 'Pemasok aktif',
+        value: '18',
+        delta: '+1',
+        positive: true,
+        spark: [14, 15, 15, 16, 17, 17, 18],
+      },
     ],
     chartTitle: 'Volume pembelian',
     chartUnit: 'kg gabah',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Diterima', color: '#1a4030', values: [800, 1200, 900, 1500, 1100, 1800, 2150] },
+      { name: 'Diterima', color: '#216348', values: [800, 1200, 900, 1500, 1100, 1800, 2150] },
     ],
     activities: [
       {
@@ -218,13 +258,20 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         positive: true,
         spark: [62, 63, 63, 64, 63, 64, 64],
       },
+      {
+        label: 'Input gabah hari ini',
+        value: '3.200 kg',
+        delta: '+5%',
+        positive: true,
+        spark: [2.4, 2.6, 2.8, 2.9, 3.0, 3.1, 3.2],
+      },
     ],
     chartTitle: 'Output batch',
     chartUnit: 'kg beras',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Beras', color: '#1a4030', values: [420, 480, 450, 510, 490, 530, 560] },
-      { name: 'Sampingan', color: '#8a8882', values: [120, 140, 130, 150, 145, 160, 155] },
+      { name: 'Beras', color: '#216348', values: [420, 480, 450, 510, 490, 530, 560] },
+      { name: 'Sampingan', color: '#8a9a90', values: [120, 140, 130, 150, 145, 160, 155] },
     ],
     activities: [
       {
@@ -275,13 +322,20 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         positive: true,
         spark: [8, 9, 10, 11, 12, 13, 14],
       },
+      {
+        label: 'Produk sampingan',
+        value: '860 kg',
+        delta: '+2%',
+        positive: true,
+        spark: [700, 740, 780, 800, 820, 840, 860],
+      },
     ],
     chartTitle: 'Mutasi stok',
     chartUnit: 'jumlah transaksi',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Masuk', color: '#1a4030', values: [4, 6, 5, 7, 6, 8, 9] },
-      { name: 'Keluar', color: '#8a8882', values: [3, 4, 5, 4, 6, 5, 5] },
+      { name: 'Masuk', color: '#216348', values: [4, 6, 5, 7, 6, 8, 9] },
+      { name: 'Keluar', color: '#8a9a90', values: [3, 4, 5, 4, 6, 5, 5] },
     ],
     activities: [
       {
@@ -340,12 +394,19 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         positive: false,
         spark: [6, 6.2, 6.5, 6.8, 7, 7.1, 7.2],
       },
+      {
+        label: 'Menunggu kirim',
+        value: '3',
+        delta: '-1',
+        positive: true,
+        spark: [5, 5, 4, 4, 4, 3, 3],
+      },
     ],
     chartTitle: 'Nilai penjualan',
     chartUnit: 'juta rupiah',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Omzet', color: '#1a4030', values: [9, 11, 10, 13, 14, 16, 18] },
+      { name: 'Omzet', color: '#216348', values: [9, 11, 10, 13, 14, 16, 18] },
     ],
     activities: [
       {
@@ -396,13 +457,20 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
         positive: false,
         spark: [16, 16.2, 16.5, 16.7, 16.8, 16.9, 17],
       },
+      {
+        label: 'Biaya operasional',
+        value: 'Rp 1,2 jt',
+        delta: '-4%',
+        positive: true,
+        spark: [1.5, 1.4, 1.4, 1.3, 1.3, 1.25, 1.2],
+      },
     ],
     chartTitle: 'Arus kas',
     chartUnit: 'juta rupiah',
     chartLabels: LABELS_7D,
     chartSeries: [
-      { name: 'Masuk', color: '#1a4030', values: [6, 7, 8, 9, 10, 11, 12] },
-      { name: 'Keluar', color: '#8a8882', values: [5, 4.8, 4.5, 4.4, 4.3, 4.2, 4.1] },
+      { name: 'Masuk', color: '#216348', values: [6, 7, 8, 9, 10, 11, 12] },
+      { name: 'Keluar', color: '#8a9a90', values: [5, 4.8, 4.5, 4.4, 4.3, 4.2, 4.1] },
     ],
     activities: [
       {

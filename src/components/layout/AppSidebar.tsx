@@ -1,39 +1,43 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
 import { getNavForRole } from '@/features/nav/nav-config'
+import { LeafMarkIcon } from '@/components/ui/icons'
 
 export function AppSidebar() {
   const { user } = useAuth()
   const groups = user ? getNavForRole(user.role) : []
 
   return (
-    <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-line bg-panel">
-      <div className="flex h-12 items-center gap-2 border-b border-line px-4">
-        <span className="font-mono text-[13px] font-semibold tracking-tight text-ink">
-          E-GABAH
+    <aside className="flex h-full w-[228px] shrink-0 flex-col border-r border-line bg-panel">
+      <div className="flex h-14 items-center gap-2.5 border-b border-line px-4">
+        <span className="inline-flex size-8 items-center justify-center rounded-lg bg-brand-800 text-white">
+          <LeafMarkIcon className="size-4" />
         </span>
-        <span className="text-[10px] tracking-wide text-muted uppercase">ERP</span>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-sm font-semibold text-ink">E-Gabah</p>
+          <p className="truncate text-[11px] text-muted">ERP Penggilingan</p>
+        </div>
       </div>
 
-      <nav className="scrollbar-none flex-1 overflow-y-auto px-2 py-3">
+      <nav className="scrollbar-none flex-1 overflow-y-auto px-2.5 py-3">
         {groups.map((group) => (
-          <div key={group.id} className="mb-5">
+          <div key={group.id} className="mb-4">
             {group.label ? (
-              <p className="mb-1 px-2 text-[10px] font-medium tracking-[0.08em] text-muted uppercase">
+              <p className="mb-1.5 px-2.5 text-[10px] font-semibold tracking-[0.08em] text-muted uppercase">
                 {group.label}
               </p>
             ) : null}
-            <ul>
+            <ul className="space-y-0.5">
               {group.items.map((item) => (
                 <li key={item.id}>
                   <NavLink
                     to={item.path}
                     className={({ isActive }) =>
                       [
-                        'block border-l-2 px-2.5 py-1.5 text-[13px] transition',
+                        'block rounded-lg px-2.5 py-2 text-[13px] transition',
                         isActive
-                          ? 'border-brand-800 bg-[#ecebe7] font-semibold text-ink'
-                          : 'border-transparent font-normal text-[#3f3e3b] hover:bg-[#f0efeb]',
+                          ? 'bg-brand-100 font-semibold text-brand-900'
+                          : 'font-medium text-ink/80 hover:bg-brand-50 hover:text-brand-900',
                       ].join(' ')
                     }
                   >
@@ -46,9 +50,9 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-line px-3 py-3">
+      <div className="mx-2.5 mb-3 rounded-xl border border-brand-100 bg-brand-50/80 px-3 py-2.5">
         <p className="truncate text-[11px] text-muted">{user?.roleLabel}</p>
-        <p className="truncate font-mono text-[11px] text-ink">{user?.id}</p>
+        <p className="truncate font-mono text-[11px] text-brand-900">{user?.id}</p>
       </div>
     </aside>
   )

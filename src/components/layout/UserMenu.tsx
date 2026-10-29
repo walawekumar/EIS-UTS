@@ -37,11 +37,11 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 border border-line bg-panel px-2 py-1 text-left transition hover:bg-surface"
+        className="flex items-center gap-2 rounded-xl border border-line bg-panel py-1.5 pr-2.5 pl-1.5 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex size-7 items-center justify-center bg-brand-800 font-mono text-xs font-medium text-white">
+        <span className="flex size-8 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white">
           {user.name.charAt(0).toUpperCase()}
         </span>
         <span className="hidden leading-tight sm:block">
@@ -56,13 +56,13 @@ export function UserMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 w-44 border border-line bg-panel py-1 shadow-sm"
+          className="absolute right-0 z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
         >
           <Link
             to="/app/settings"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="block px-3 py-2 text-[13px] text-ink hover:bg-surface"
+            className="block px-3 py-2.5 text-[13px] text-ink hover:bg-brand-50"
           >
             Pengaturan
           </Link>
@@ -74,7 +74,7 @@ export function UserMenu() {
               logout()
               navigate('/login', { replace: true })
             }}
-            className="block w-full px-3 py-2 text-left text-[13px] text-ink hover:bg-surface"
+            className="block w-full px-3 py-2.5 text-left text-[13px] text-red-700 hover:bg-red-50"
           >
             Keluar
           </button>
