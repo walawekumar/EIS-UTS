@@ -16,6 +16,7 @@ import {
   addDays,
   calcWeighing,
   effectiveUnitPrice,
+  getLotQc,
   getSupplier,
   isPurchaseReceivedForAp,
   nextLotId,
@@ -442,11 +443,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         return 'Timbang hanya setelah anggaran disetujui keuangan.'
       }
       const { receiptName, ...measures } = input
+      const today = todayIso()
+      const lotId =
+        current.lotId ?? nextLotId(items, new Date(`${today}T00:00:00`))
       patch(id, (p) => ({
         stage: 'ditimbang',
+        lotId: p.lotId ?? lotId,
         weighing: {
           ...measures,
-          weighedAt: p.weighing?.weighedAt ?? todayIso(),
+          weighedAt: p.weighing?.weighedAt ?? today,
           receiptName: receiptName ?? p.weighing?.receiptName,
         },
       }))
@@ -500,12 +505,11 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (!hasProof(proof)) {
         return 'Lampirkan struk beli sebelum konfirmasi penerimaan.'
       }
-      if (current.lotId) {
-        const qc = lotQcRef.current.find((q) => q.lotId === current.lotId)
-        if (!qc) return 'QC lot belum diisi.'
-        if (!qc.passed && !qc.overrideReason) {
-          return 'QC lot belum lulus — perlu override admin.'
-        }
+      const lotId = current.lotId ?? nextLotId(items, new Date(`${today}T00:00:00`))
+      const qc = getLotQc(lotQcRef.current, lotId)
+      if (!qc) return 'QC lot belum diisi.'
+      if (!qc.passed && !qc.overrideReason) {
+        return 'QC lot belum lulus — perlu override admin.'
       }
 
       const weighing = {
@@ -519,7 +523,6 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         current.price,
         weighing.moisture,
       )
-      const lotId = current.lotId ?? nextLotId(items, new Date(`${today}T00:00:00`))
       const next: Purchase = {
         ...current,
         stage: 'menunggu_selesai',
