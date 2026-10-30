@@ -2,6 +2,39 @@ import {
   lookupCustomer,
   lookupProductBySku,
 } from '@/features/master/master-storage'
+import type { ApprovalStamp } from '@/features/workflow/approvals'
+import type { ReturnStage } from '@/features/workflow/doc-stages'
+
+export type SaleReturnLine = { sku: string; productName: string; unit: string; qty: number }
+
+export type SaleReturn = {
+  id: string
+  orderId: string
+  lines: SaleReturnLine[]
+  reason: string
+  stage: ReturnStage
+  approvals?: ApprovalStamp[]
+  createdAt: string
+  postedAt?: string
+  rejectedReason?: string
+}
+
+export function returnedQtyForOrder(
+  returns: SaleReturn[],
+  orderId: string,
+  sku: string,
+): number {
+  return returns
+    .filter((r) => r.orderId === orderId && r.stage === 'posted')
+    .flatMap((r) => r.lines)
+    .filter((l) => l.sku === sku)
+    .reduce((s, l) => s + l.qty, 0)
+}
+
+export function nextSaleReturnId(returns: SaleReturn[]): string {
+  const n = returns.length + 1
+  return `SR-${String(n).padStart(4, '0')}`
+}
 
 /** Alur: dibuat → dikirim → (tagihan / pelunasan). */
 export type OrderStage = 'dibuat' | 'dikirim'
