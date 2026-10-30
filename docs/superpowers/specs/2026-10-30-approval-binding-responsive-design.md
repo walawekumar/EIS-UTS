@@ -38,10 +38,13 @@ Jenis bukti yang dipakai:
 
 | Konteks | Field | Wajib |
 | --- | --- | --- |
-| Terima/beli barang | `purchaseProof` (struk beli) | Ya sebelum keuangan `selesai` |
+| Ajukan ke keuangan | `invoiceProof` (invoice / penawaran / proforma dari pemasok) | Ya saat `draft` → `diajukan` — supaya keuangan tahu nilai & isi sebelum approve |
+| Terima/beli barang | `purchaseProof` (struk beli final) | Ya sebelum keuangan `selesai` |
 | Transfer/mutasi bayar AP | `transferProof` | Ya saat bayar / cair |
 | Payroll cair | `transferProof` | Ya saat post/cair |
 | Timbang (sudah ada) | `weighing.receiptName` | Tetap |
+
+Catatan: `invoiceProof` ≠ `purchaseProof`. Invoice diajukan di awal (estimasi/tagihan pemasok); struk beli dilampirkan setelah barang diterima.
 
 ### Keamanan input (form kritis)
 
@@ -77,8 +80,9 @@ void: dari ditimbang | menunggu_selesai | selesai (admin|keuangan + alasan)
 
 | Aksi | Peran |
 | --- | --- |
-| Buat / edit draft, ajukan | `pembelian`, `admin` |
-| Approve / tolak anggaran | `keuangan`, `admin` |
+| Buat / edit draft | `pembelian`, `admin` |
+| Ajukan (wajib `invoiceProof` + ringkasan nilai) | `pembelian`, `admin` — tanpa invoice → blok + error jelas |
+| Approve / tolak anggaran (lihat invoice di drawer) | `keuangan`, `admin` |
 | Timbang + upload bukti timbang | `pembelian`, `admin` |
 | Konfirmasi terima + upload struk beli | `pembelian`, `admin` → status `menunggu_selesai` |
 | Nyatakan selesai (+ cek bukti, opsional bukti transfer jika lunas) | `keuangan`, `admin` |
@@ -87,6 +91,7 @@ void: dari ditimbang | menunggu_selesai | selesai (admin|keuangan + alasan)
 
 ### Efek silang
 
+- Ajukan: wajib lampiran `invoiceProof` (nama file + preview lokal). Keuangan membuka drawer dan melihat invoice sebelum approve/tolak.
 - Approve: **belum** buat AP/stok.
 - Konfirmasi terima (`menunggu_selesai`): stok in + `upsertPayable` (seperti `confirmWeighing` sekarang), tapi kas/lunas belum final sampai keuangan `selesai` bila ada settlement tunai.
 - `selesai`: kunci dokumen; bayar AP boleh paralel setelah payable ada, wajib `transferProof` saat `applyPurchasePayment`.
@@ -183,7 +188,8 @@ Update status mesin Pembelian & Payroll + aturan dual-stamp + bukti wajib.
 ## H. Acceptance criteria
 
 1. PO tidak bisa ditimbang/diterima sebelum status `disetujui` (approve oleh `keuangan` atau `admin`).
-2. Keuangan tidak bisa `selesai` tanpa struk beli terunggah.
+1b. PO tidak bisa `diajukan` tanpa `invoiceProof`; keuangan melihat invoice sebelum approve.
+2. Keuangan tidak bisa `selesai` tanpa struk beli (`purchaseProof`) terunggah.
 3. Pembayaran AP / cair payroll menolak tanpa bukti transfer (dialog custom, bukan native).
 4. Payroll cair hanya setelah stamp `admin` **dan** `keuangan` dari dua peran berbeda (satu user admin tidak double-stamp).
 5. Payroll list punya search/filter/sort/pager.
