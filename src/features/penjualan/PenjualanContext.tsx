@@ -275,6 +275,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
     removeLinkedReceivable,
     creditReceivable,
     postJournalEntry,
+    reverseJournalEntry,
     mapAccount,
     receivables,
   } = useFinanceStore()
@@ -350,6 +351,11 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         note: `Void pengiriman ${id}`,
       })
       removeLinkedReceivable(id)
+      reverseJournalEntry({ sourceKey: `so:${id}:ship` })
+      reverseJournalEntry({ sourceKey: `so:${id}:cod` })
+      for (const payment of current.payments) {
+        reverseJournalEntry({ sourceKey: `so:${id}:pay:${payment.id}` })
+      }
       setItems((list) =>
         list.map((o) =>
           o.id === id
@@ -369,7 +375,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         before: current,
       })
     },
-    [items, addMovement, removeLinkedReceivable, appendAudit],
+    [items, addMovement, removeLinkedReceivable, reverseJournalEntry, appendAudit],
   )
 
   const shipOrder = useCallback(

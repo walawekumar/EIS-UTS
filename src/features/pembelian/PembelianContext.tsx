@@ -230,6 +230,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     removeLinkedPayable,
     creditPayable,
     postJournalEntry,
+    reverseJournalEntry,
     mapAccount,
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
@@ -338,6 +339,10 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         })
       }
       removeLinkedPayable(id)
+      reverseJournalEntry({ sourceKey: `po:${id}:receive` })
+      for (const payment of current.payments) {
+        reverseJournalEntry({ sourceKey: `po:${id}:pay:${payment.id}` })
+      }
       setItems((list) =>
         list.map((p) =>
           p.id === id
@@ -357,7 +362,14 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [items, addMovement, removeLinkedPayable, appendAudit, user?.role],
+    [
+      items,
+      addMovement,
+      removeLinkedPayable,
+      reverseJournalEntry,
+      appendAudit,
+      user?.role,
+    ],
   )
 
   const submitPurchase = useCallback(

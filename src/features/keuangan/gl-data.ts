@@ -120,7 +120,7 @@ export function nextJournalId(list: JournalEntry[], date = new Date()): string {
 export function accountBalanceMap(journals: JournalEntry[]): Map<string, number> {
   const m = new Map<string, number>()
   for (const j of journals) {
-    if (j.voidedAt) continue
+    if (j.voidedAt || j.reversesId) continue
     for (const line of j.lines) {
       m.set(line.accountId, (m.get(line.accountId) ?? 0) + line.debit - line.credit)
     }

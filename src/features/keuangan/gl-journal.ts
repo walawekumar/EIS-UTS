@@ -64,13 +64,27 @@ export function postJournal(input: PostJournalInput): PostJournalResult {
   return { ok: true, entry, journals: [entry, ...input.journals] }
 }
 
+function findReverseTarget(
+  journals: JournalEntry[],
+  opts: { sourceKey?: string; id?: string },
+): JournalEntry | undefined {
+  if (opts.id) return journals.find((j) => j.id === opts.id)
+  if (!opts.sourceKey) return undefined
+  const live = journals.find(
+    (j) => j.sourceKey === opts.sourceKey && !j.voidedAt,
+  )
+  if (live) return live
+  return journals.find(
+    (j) =>
+      j.sourceKey === opts.sourceKey && j.voidedAt && j.reversedById,
+  )
+}
+
 export function reverseJournal(
   journals: JournalEntry[],
   opts: { sourceKey?: string; id?: string; createdBy: string; date: string },
 ): PostJournalResult {
-  const target = journals.find((j) =>
-    opts.id ? j.id === opts.id : j.sourceKey === opts.sourceKey && !j.voidedAt,
-  )
+  const target = findReverseTarget(journals, opts)
   if (!target) return { ok: false, error: 'Jurnal tidak ditemukan.' }
   if (target.reversedById) {
     const rev = journals.find((j) => j.id === target.reversedById)
@@ -83,6 +97,7 @@ export function reverseJournal(
     memo: l.memo,
   }))
   const revId = nextJournalId(journals)
+  const voidedAt = new Date().toISOString()
   const reverseEntry: JournalEntry = {
     id: revId,
     date: opts.date,
@@ -92,11 +107,13 @@ export function reverseJournal(
     manual: false,
     lines,
     createdBy: opts.createdBy,
-    createdAt: new Date().toISOString(),
+    createdAt: voidedAt,
     reversesId: target.id,
   }
   const updated = journals.map((j) =>
-    j.id === target.id ? { ...j, reversedById: revId } : j,
+    j.id === target.id
+      ? { ...j, reversedById: revId, voidedAt }
+      : j,
   )
   return { ok: true, entry: reverseEntry, journals: [reverseEntry, ...updated] }
 }
