@@ -15,6 +15,7 @@ import { useFinanceStore } from '@/features/keuangan/finance-store'
 import { usePembelian } from '@/features/pembelian/PembelianContext'
 import {
   formatRupiah,
+  getSupplier,
   isPurchaseReceivedForAp,
   summarize as sumPurchase,
 } from '@/features/pembelian/pembelian-data'
@@ -66,7 +67,7 @@ export function LaporanPage() {
   const purchaseByLotId = useMemo(() => {
     const map = new Map<string, (typeof purchases)[number]>()
     for (const p of purchases) {
-      if (p.lotId) map.set(p.lotId, p)
+      if (p.lotId && !p.voidedAt) map.set(p.lotId, p)
     }
     return map
   }, [purchases])
@@ -371,7 +372,9 @@ export function LaporanPage() {
                             {purchase ? (
                               <>
                                 <p className="font-medium text-ink">{purchase.id}</p>
-                                <p className="text-[11px] text-muted">{purchase.supplier}</p>
+                                <p className="text-[11px] text-muted">
+                                  {getSupplier(purchase.supplierId)?.name ?? '—'}
+                                </p>
                               </>
                             ) : (
                               '—'
