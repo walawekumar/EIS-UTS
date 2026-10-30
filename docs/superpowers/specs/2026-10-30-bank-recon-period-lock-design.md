@@ -1,7 +1,7 @@
 # Spek: Rekon bank + tutup periode (gelombang 2c)
 
 Tanggal: 2026-10-30  
-Status: draft (menunggu review user)  
+Status: approved (user: gas → plan)  
 Pra-syarat: gelombang 2a + polish + 2b (PPN/e-Faktur) sudah di `main`
 
 ## Tujuan
