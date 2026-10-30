@@ -9,7 +9,9 @@ import { TrendChart } from '@/components/dashboard/TrendChart'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import { buildLiveDashboard } from '@/features/dashboard/build-live-dashboard'
+import { buildOpsCalendarEvents } from '@/features/dashboard/calendar-events'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { usePeriodStore } from '@/features/keuangan/period-store'
 import { usePembelian } from '@/features/pembelian/PembelianContext'
 import { usePenjualan } from '@/features/penjualan/PenjualanContext'
 import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
@@ -25,12 +27,35 @@ export function DashboardPage() {
   const { user } = useAuth()
   const role = user?.role ?? 'admin'
   const { stocks } = usePersediaanStore()
-  const { purchases } = usePembelian()
+  const { purchases, lotQc } = usePembelian()
   const { orders } = usePenjualan()
   const { batches } = useProduksi()
   const { cashEntries, payables, receivables } = useFinanceStore()
+  const { locks: periodLocks } = usePeriodStore()
   const { logs } = useAuditStore()
   const [range, setRange] = useState('7d')
+
+  const calendarEvents = useMemo(
+    () =>
+      buildOpsCalendarEvents({
+        purchases,
+        orders,
+        batches,
+        lotQc,
+        payables,
+        receivables,
+        periodLocks,
+      }),
+    [
+      purchases,
+      orders,
+      batches,
+      lotQc,
+      payables,
+      receivables,
+      periodLocks,
+    ],
+  )
 
   const view = useMemo(
     () =>
@@ -87,7 +112,7 @@ export function DashboardPage() {
 
         <div className="flex min-h-0 flex-col gap-2.5">
           <div className="rounded-2xl border border-line bg-panel p-3.5 sm:p-4">
-            <MiniCalendar />
+            <MiniCalendar events={calendarEvents} />
           </div>
           <div className="flex min-h-0 flex-1 rounded-2xl border border-line bg-panel p-3.5 sm:p-4">
             <StockSnapshot title={view.stockTitle} rows={view.stockRows} />

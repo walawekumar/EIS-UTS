@@ -73,9 +73,9 @@ function formatSelected(date: Date) {
   }).format(date)
 }
 
-export function MiniCalendar() {
+export function MiniCalendar({ events }: { events: CalendarEvent[] }) {
   const today = useMemo(() => new Date(), [])
-  const eventMap = useMemo(() => buildEventMap(undefined, today), [today])
+  const eventMap = useMemo(() => buildEventMap(events), [events])
   const [cursor, setCursor] = useState(() => startOfMonth(today))
   const [selected, setSelected] = useState(today)
   const [open, setOpen] = useState(false)

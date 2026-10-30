@@ -1,3 +1,17 @@
+import {
+  isPurchaseReceivedForAp,
+  type LotQc,
+  type Purchase,
+} from '@/features/pembelian/pembelian-data'
+import type { SaleOrder } from '@/features/penjualan/penjualan-data'
+import type { ProductionBatch } from '@/features/produksi/produksi-data'
+import type {
+  PayableRow,
+  ReceivableRow,
+} from '@/features/keuangan/keuangan-data'
+import type { PeriodLock } from '@/features/keuangan/period-data'
+import { parseCashDateToIso } from '@/features/keuangan/period-helpers'
+
 export type CalendarEventTone = 'deadline' | 'ops' | 'info'
 
 export type CalendarEvent = {
@@ -5,83 +19,144 @@ export type CalendarEvent = {
   title: string
   meta: string
   tone: CalendarEventTone
-  /** offset hari relatif terhadap hari ini: 0 = hari ini, -1 kemarin, 1 besok */
-  dayOffset: number
+  /** Absolute calendar day YYYY-MM-DD */
+  date: string
 }
 
-/** Contoh agenda MVP — relatif ke tanggal hari ini agar selalu relevan */
-export const CALENDAR_EVENTS: CalendarEvent[] = [
-  {
-    id: 'e1',
-    title: 'Konfirmasi penerimaan RCV-0241',
-    meta: 'Deadline · Pembelian',
-    tone: 'deadline',
-    dayOffset: 0,
-  },
-  {
-    id: 'e2',
-    title: 'QC batch BAT-0189',
-    meta: 'Operasional · Produksi',
-    tone: 'ops',
-    dayOffset: 0,
-  },
-  {
-    id: 'e3',
-    title: 'Piutang DO-0912 jatuh tempo',
-    meta: 'Deadline · Keuangan',
-    tone: 'deadline',
-    dayOffset: 1,
-  },
-  {
-    id: 'e4',
-    title: 'Cek kapasitas Gudang A',
-    meta: 'Operasional · Gudang',
-    tone: 'ops',
-    dayOffset: 1,
-  },
-  {
-    id: 'e5',
-    title: 'Bayar utang pemasok CV Tani',
-    meta: 'Deadline · Rp 4,5 jt',
-    tone: 'deadline',
-    dayOffset: 2,
-  },
-  {
-    id: 'e6',
-    title: 'Kirim DO-0915 ke Mitra Beras',
-    meta: 'Operasional · Penjualan',
-    tone: 'ops',
-    dayOffset: 3,
-  },
-  {
-    id: 'e7',
-    title: 'Laporan rendemen mingguan',
-    meta: 'Info · Produksi',
-    tone: 'info',
-    dayOffset: -1,
-  },
-  {
-    id: 'e8',
-    title: 'Koreksi stok ADJ-0077',
-    meta: 'Deadline · Gudang',
-    tone: 'deadline',
-    dayOffset: -2,
-  },
-  {
-    id: 'e9',
-    title: 'Meeting koordinasi stok',
-    meta: 'Info · Internal',
-    tone: 'info',
-    dayOffset: 5,
-  },
-  {
-    id: 'e10',
-    title: 'Tagihan SO-1102 jatuh tempo',
-    meta: 'Deadline · Penjualan',
-    tone: 'deadline',
-    dayOffset: 7,
-  },
-]
+export type OpsCalendarInput = {
+  purchases: Purchase[]
+  orders: SaleOrder[]
+  batches: ProductionBatch[]
+  lotQc: LotQc[]
+  payables: PayableRow[]
+  receivables: ReceivableRow[]
+  periodLocks: PeriodLock[]
+}
+
+function isoDay(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const t = raw.trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10)
+  return parseCashDateToIso(t)
+}
+
+/** Bangun agenda dashboard dari data operasional (bukan hardcode). */
+export function buildOpsCalendarEvents(
+  input: OpsCalendarInput,
+): CalendarEvent[] {
+  const out: CalendarEvent[] = []
+
+  for (const p of input.purchases) {
+    if (p.voidedAt) continue
+    const due = isoDay(p.dueDate)
+    if (due) {
+      out.push({
+        id: `po-due-${p.id}`,
+        title: `Jatuh tempo PO ${p.id}`,
+        meta: 'Deadline · Pembelian',
+        tone: 'deadline',
+        date: due,
+      })
+    }
+    if (p.lotId && isPurchaseReceivedForAp(p.stage)) {
+      const qc = input.lotQc.find((q) => q.lotId === p.lotId)
+      if (!qc) {
+        const d = isoDay(p.date) ?? due
+        if (d) {
+          out.push({
+            id: `qc-pending-${p.lotId}`,
+            title: `QC lot ${p.lotId}`,
+            meta: 'Operasional · Pembelian',
+            tone: 'ops',
+            date: d,
+          })
+        }
+      }
+    }
+  }
+
+  for (const o of input.orders) {
+    if (o.voidedAt) continue
+    const due = isoDay(o.dueDate)
+    if (due) {
+      out.push({
+        id: `so-due-${o.id}`,
+        title: `Jatuh tempo SO ${o.id}`,
+        meta: 'Deadline · Penjualan',
+        tone: 'deadline',
+        date: due,
+      })
+    }
+  }
+
+  for (const b of input.batches) {
+    if (b.stage === 'done' || b.stage === 'void') continue
+    const d = isoDay(b.date)
+    if (d) {
+      out.push({
+        id: `batch-${b.id}`,
+        title: `Batch ${b.id} berjalan`,
+        meta: 'Operasional · Produksi',
+        tone: 'ops',
+        date: d,
+      })
+    }
+  }
+
+  for (const row of input.payables) {
+    if (row.status === 'paid') continue
+    const due = isoDay(row.dueDate)
+    if (due) {
+      out.push({
+        id: `ap-${row.id}`,
+        title: `Utang ${row.supplier}`,
+        meta: `Deadline · ${row.invoice}`,
+        tone: 'deadline',
+        date: due,
+      })
+    }
+  }
+
+  for (const row of input.receivables) {
+    if (row.status === 'paid') continue
+    const due = isoDay(row.dueDate)
+    if (due) {
+      out.push({
+        id: `ar-${row.id}`,
+        title: `Piutang ${row.customer}`,
+        meta: `Deadline · ${row.invoice}`,
+        tone: 'deadline',
+        date: due,
+      })
+    }
+  }
+
+  for (const lock of input.periodLocks) {
+    if (!lock.active) continue
+    out.push({
+      id: `lock-start-${lock.id}`,
+      title: `Periode terkunci ${lock.kind === 'month' && lock.yearMonth ? lock.yearMonth : lock.startDate}`,
+      meta: 'Info · Tutup buku',
+      tone: 'info',
+      date: lock.startDate,
+    })
+    if (lock.endDate !== lock.startDate) {
+      out.push({
+        id: `lock-end-${lock.id}`,
+        title: `Akhir kunci ${lock.endDate}`,
+        meta: 'Info · Tutup buku',
+        tone: 'info',
+        date: lock.endDate,
+      })
+    }
+  }
+
+  return out.sort((a, b) => {
+    const d = a.date.localeCompare(b.date)
+    if (d !== 0) return d
+    return a.id.localeCompare(b.id)
+  })
+}
 
 export function dateKey(date: Date): string {
   const y = date.getFullYear()
@@ -91,20 +166,14 @@ export function dateKey(date: Date): string {
 }
 
 export function buildEventMap(
-  events: CalendarEvent[] = CALENDAR_EVENTS,
-  base = new Date(),
+  events: CalendarEvent[],
 ): Map<string, CalendarEvent[]> {
   const map = new Map<string, CalendarEvent[]>()
-  const start = new Date(base.getFullYear(), base.getMonth(), base.getDate())
-
   for (const event of events) {
-    const date = new Date(start)
-    date.setDate(start.getDate() + event.dayOffset)
-    const key = dateKey(date)
+    const key = event.date
     const list = map.get(key) ?? []
     list.push(event)
     map.set(key, list)
   }
-
   return map
 }

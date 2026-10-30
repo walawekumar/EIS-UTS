@@ -12,6 +12,7 @@ import {
   FinanceTr,
 } from '@/components/keuangan/FinanceTable'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { FinanceWorkflowSteps } from '@/components/keuangan/FinanceWorkflowSteps'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
@@ -94,6 +95,13 @@ export function RekonBankPage() {
     [lines, activeSessionId],
   )
   const summary = useMemo(() => sessionSummary(sessionLines), [sessionLines])
+
+  const workflowStep = useMemo(() => {
+    if (!activeSession) return 'session'
+    if (sessionLines.length === 0) return 'import'
+    if (summary.unmatched > 0) return 'match'
+    return 'done'
+  }, [activeSession, sessionLines.length, summary.unmatched])
 
   const cashOptions = useMemo(() => {
     if (!activeSession) return []
@@ -179,39 +187,76 @@ export function RekonBankPage() {
           <FinanceToast message={toast} />
         </div>
 
-        <div className="mb-3 space-y-1.5">
-          <p className="text-[12px] font-medium text-ink">Sesi aktif</p>
-          <div className="flex items-center gap-2">
-            <Select
-              label="Sesi aktif"
-              hideLabel
-              className="min-w-0 max-w-xs flex-1 sm:max-w-sm"
-              value={(activeSessionId ?? '') as string}
-              options={
-                sessions.length > 0
-                  ? sessions.map((s) => ({
-                      value: s.id,
-                      label: sessionLabel(s),
-                    }))
-                  : [{ value: '', label: 'Belum ada sesi' }]
-              }
-              placeholder="Pilih sesi"
-              onChange={(id) => setActiveSessionId(id || null)}
-            />
+        <FinanceWorkflowSteps
+          steps={[
+            {
+              id: 'session',
+              label: 'Sesi',
+              done: Boolean(activeSession),
+              current: workflowStep === 'session',
+            },
+            {
+              id: 'import',
+              label: 'Import CSV',
+              done: sessionLines.length > 0,
+              current: workflowStep === 'import',
+            },
+            {
+              id: 'match',
+              label: 'Match',
+              done: sessionLines.length > 0 && summary.unmatched === 0,
+              current: workflowStep === 'match',
+            },
+            {
+              id: 'done',
+              label: 'Ringkas',
+              done: workflowStep === 'done',
+              current: workflowStep === 'done',
+            },
+          ]}
+        />
+
+        {sessions.length === 0 ? (
+          <div className="mb-3 rounded-xl border border-dashed border-line bg-surface/60 px-4 py-6 text-center">
+            <p className="text-[13px] font-medium text-ink">Belum ada sesi rekon</p>
+            <p className="mt-1 text-[12px] text-muted">
+              Buat sesi untuk rentang tanggal statement bank, lalu import CSV
+              mutasi.
+            </p>
             <button
               type="button"
-              className="inline-flex h-11 shrink-0 items-center rounded-xl bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink/90"
+              className="mt-3 inline-flex h-10 items-center rounded-xl bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink/90"
               onClick={() => setCreateOpen(true)}
             >
-              Sesi baru
+              Buat sesi pertama
             </button>
           </div>
-          {sessions.length === 0 ? (
-            <p className="text-[11px] text-muted">
-              Buat sesi rekon untuk rentang tanggal statement bank.
-            </p>
-          ) : null}
-        </div>
+        ) : (
+          <div className="mb-3 space-y-1.5">
+            <p className="text-[12px] font-medium text-ink">Sesi aktif</p>
+            <div className="flex items-center gap-2">
+              <Select
+                label="Sesi aktif"
+                hideLabel
+                className="min-w-0 max-w-xs flex-1 sm:max-w-sm"
+                value={(activeSessionId ?? '') as string}
+                options={sessions.map((s) => ({
+                  value: s.id,
+                  label: sessionLabel(s),
+                }))}
+                placeholder="Pilih sesi"
+                onChange={(id) => setActiveSessionId(id || null)}
+              />
+              <button
+                type="button"
+                className="inline-flex h-11 shrink-0 items-center rounded-xl bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink/90"
+                onClick={() => setCreateOpen(true)}
+              >
+                Sesi baru
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeSession ? (
           <>

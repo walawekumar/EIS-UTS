@@ -13,6 +13,7 @@ import {
   FinanceTr,
 } from '@/components/keuangan/FinanceTable'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { FinanceWorkflowSteps } from '@/components/keuangan/FinanceWorkflowSteps'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
   DetailDrawer,
@@ -248,6 +249,16 @@ export function PeriodePage() {
   }
 
   const manageLocks = canManageLocks(user?.role)
+  const activeLockCount = sortedLocks.filter((l) => l.active).length
+  const pendingUnlockCount = unlockRequests.filter(
+    (r) => r.status === 'pending',
+  ).length
+  const periodStep =
+    sortedLocks.length === 0
+      ? 'lock'
+      : pendingUnlockCount > 0
+        ? 'unlock'
+        : 'impact'
 
   return (
     <div className="space-y-2.5">
@@ -262,6 +273,51 @@ export function PeriodePage() {
           </div>
           <FinanceToast message={toast} />
         </div>
+
+        <FinanceWorkflowSteps
+          steps={[
+            {
+              id: 'lock',
+              label: 'Kunci',
+              done: sortedLocks.length > 0,
+              current: periodStep === 'lock',
+            },
+            {
+              id: 'impact',
+              label: 'Dampak role',
+              done: activeLockCount > 0,
+              current: periodStep === 'impact',
+            },
+            {
+              id: 'unlock',
+              label: 'Unlock',
+              done: false,
+              current: periodStep === 'unlock',
+            },
+          ]}
+        />
+
+        <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
+          <StatusPill
+            label={`Aktif: ${activeLockCount}`}
+            tone={activeLockCount > 0 ? 'warn' : 'muted'}
+          />
+          <StatusPill
+            label={`Unlock pending: ${pendingUnlockCount}`}
+            tone={pendingUnlockCount > 0 ? 'neutral' : 'muted'}
+          />
+          <StatusPill label={`Total kunci: ${sortedLocks.length}`} tone="good" />
+        </div>
+
+        {sortedLocks.length === 0 && manageLocks ? (
+          <div className="mb-4 rounded-xl border border-dashed border-line bg-surface/60 px-4 py-5 text-center">
+            <p className="text-[13px] font-medium text-ink">Belum ada kunci periode</p>
+            <p className="mt-1 text-[12px] text-muted">
+              Buat kunci bulan atau rentang di bawah untuk memblokir posting di
+              tanggal terkunci.
+            </p>
+          </div>
+        ) : null}
 
         {manageLocks ? (
           <div className="mb-4 rounded-xl border border-line/80 bg-surface p-3">
