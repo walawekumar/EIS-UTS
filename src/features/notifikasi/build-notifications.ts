@@ -1,6 +1,7 @@
 import type { AuditLog } from '@/features/audit/audit-data'
 import type { PayableRow, ReceivableRow } from '@/features/keuangan/keuangan-data'
 import type { Purchase } from '@/features/pembelian/pembelian-data'
+import type { PayrollRun } from '@/features/payroll/payroll-data'
 import type { ProductionBatch } from '@/features/produksi/produksi-data'
 import type { StockRow } from '@/features/persediaan/persediaan-data'
 import { isLowStock } from '@/features/persediaan/persediaan-data'
@@ -19,6 +20,7 @@ type Input = {
   receivables: ReceivableRow[]
   purchases: Purchase[]
   batches: ProductionBatch[]
+  payrollRuns: PayrollRun[]
   audit: AuditLog[]
   dismissed: Set<string>
 }
@@ -109,6 +111,30 @@ export function buildNotifications(input: Input): AppNotification[] {
       href: `/app/pembelian/penerimaan?dok=${encodeURIComponent(p.id)}`,
       unread: !input.dismissed.has(id),
     })
+  }
+
+  for (const run of input.payrollRuns) {
+    if (run.status === 'menunggu_approve') {
+      const id = `pr-appr-${run.id}`
+      items.push({
+        id,
+        title: 'Payroll menunggu approve',
+        meta: `${run.id} · ${run.period}`,
+        href: `/app/keuangan/payroll?dok=${encodeURIComponent(run.id)}`,
+        unread: !input.dismissed.has(id),
+      })
+      continue
+    }
+    if (run.status === 'siap_cair') {
+      const id = `pr-cair-${run.id}`
+      items.push({
+        id,
+        title: 'Payroll siap cair',
+        meta: `${run.id} · ${run.period}`,
+        href: `/app/keuangan/payroll?dok=${encodeURIComponent(run.id)}`,
+        unread: !input.dismissed.has(id),
+      })
+    }
   }
 
   for (const b of input.batches) {
