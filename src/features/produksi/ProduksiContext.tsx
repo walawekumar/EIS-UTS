@@ -17,14 +17,18 @@ import {
   type Purchase,
 } from '@/features/pembelian/pembelian-data'
 import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
+import { useFinanceStore } from '@/features/keuangan/finance-store'
+import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
   berasQty,
   computeLotCost,
+  lotCostTotal,
   nextBatchId,
   nextPackRunId,
   resolveLotIdFromBatch,
   sumPackRunOutQty,
+  WIP_LOCATION,
   type BatchLine,
   type LotCost,
   type NewBatchInput,
@@ -65,6 +69,61 @@ function grainValueForPurchase(purchase: Purchase): number {
 
 function monthKey(isoDate: string): string {
   return isoDate.slice(0, 7)
+}
+
+function journalDateFromIso(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+function postPairJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    amount: number
+    debitKey: AccountMapKey
+    creditKey: AccountMapKey
+    debitMemo?: string
+    creditMemo?: string
+  },
+): void {
+  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
+  if (!Number.isFinite(amount) || amount <= 0) return
+  const debitId = mapAccount(debitKey)
+  const creditId = mapAccount(creditKey)
+  if (debitId === creditId) return
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines: [
+      {
+        accountId: debitId,
+        debit: amount,
+        credit: 0,
+        memo: input.debitMemo ?? memo,
+      },
+      {
+        accountId: creditId,
+        debit: 0,
+        credit: amount,
+        memo: input.creditMemo ?? memo,
+      },
+    ],
+  })
+}
+
+function grainValueForBatch(batch: ProductionBatch): number {
+  const lotId = resolveLotIdFromBatch(batch)
+  if (!lotId) return 0
+  const { purchases } = pembelianRepository.load()
+  const purchase = purchases.find((p) => p.lotId === lotId && !p.voidedAt)
+  if (!purchase) return 0
+  return grainValueForPurchase(purchase)
 }
 
 function proportionalOpsForBatch(
@@ -123,14 +182,14 @@ type ProduksiContextValue = {
 
 const ProduksiContext = createContext<ProduksiContextValue | null>(null)
 
-function postStock(
+/** Legacy: gabah langsung dari sumber + output (batch tanpa WIP start). */
+function postLegacyCompleteStock(
   batch: ProductionBatch,
   addMovement: ReturnType<typeof usePersediaanStore>['addMovement'],
   reverse: boolean,
 ) {
   const signNote = reverse ? 'Void' : 'Output'
 
-  // Gabah keluar dari lokasi sumber (atau masuk kembali saat void)
   if (reverse) {
     addMovement({
       type: 'in',
@@ -155,6 +214,67 @@ function postStock(
     })
   }
 
+  postBatchOutputStock(batch, addMovement, reverse, batch.processLocation, signNote)
+}
+
+function postStartWipStock(
+  batch: ProductionBatch,
+  addMovement: ReturnType<typeof usePersediaanStore>['addMovement'],
+  reverse: boolean,
+) {
+  const signNote = reverse ? 'Void start' : 'Start WIP'
+  if (reverse) {
+    addMovement({
+      type: 'out',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: WIP_LOCATION,
+      toLocation: '—',
+      note: `${signNote} ${batch.id} — tarik dari WIP`,
+    })
+    addMovement({
+      type: 'in',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: '—',
+      toLocation: batch.fromLocation,
+      note: `${signNote} ${batch.id} — kembalikan gabah`,
+    })
+  } else {
+    addMovement({
+      type: 'out',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: batch.fromLocation,
+      toLocation: WIP_LOCATION,
+      note: `Start ${batch.id} — gabah ke WIP`,
+    })
+    addMovement({
+      type: 'in',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: '—',
+      toLocation: WIP_LOCATION,
+      note: `Start ${batch.id} — gabah di WIP`,
+    })
+  }
+}
+
+function postBatchOutputStock(
+  batch: ProductionBatch,
+  addMovement: ReturnType<typeof usePersediaanStore>['addMovement'],
+  reverse: boolean,
+  fromLocation: string,
+  signNote: string,
+) {
   for (const line of batch.outputs) {
     if (!line.qty || line.qty <= 0) continue
     if (reverse) {
@@ -175,11 +295,44 @@ function postStock(
         productName: line.productName,
         unit: line.unit,
         qty: line.qty,
-        fromLocation: batch.processLocation,
+        fromLocation,
         toLocation: batch.toLocation,
         note: `Output produksi ${batch.id}`,
       })
     }
+  }
+}
+
+function postCompleteWipStock(
+  batch: ProductionBatch,
+  addMovement: ReturnType<typeof usePersediaanStore>['addMovement'],
+  reverse: boolean,
+) {
+  const signNote = reverse ? 'Void' : 'Output'
+  if (reverse) {
+    postBatchOutputStock(batch, addMovement, true, WIP_LOCATION, signNote)
+    addMovement({
+      type: 'in',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: '—',
+      toLocation: WIP_LOCATION,
+      note: `${signNote} ${batch.id} — kembalikan ke WIP`,
+    })
+  } else {
+    addMovement({
+      type: 'out',
+      sku: batch.inputSku,
+      productName: batch.inputName,
+      unit: batch.inputUnit,
+      qty: batch.inputQty,
+      fromLocation: WIP_LOCATION,
+      toLocation: '—',
+      note: `Complete ${batch.id} — konsumsi WIP`,
+    })
+    postBatchOutputStock(batch, addMovement, false, WIP_LOCATION, signNote)
   }
 }
 
@@ -260,6 +413,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { appendAudit } = useAuditStore()
   const { stocks, addMovement } = usePersediaanStore()
+  const { postJournalEntry, reverseJournalEntry, mapAccount } = useFinanceStore()
   const boot = produksiRepository.load()
   const [items, setItems] = useState<ProductionBatch[]>(() => boot.batches)
   const [packRuns, setPackRuns] = useState<PackRun[]>(() => boot.packRuns)
@@ -409,20 +563,38 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
 
   const startBatch = useCallback(
     (id: string) => {
+      const current = items.find((b) => b.id === id)
+      if (!current || current.stage !== 'approved') return
+      if (current.wipStockPosted) return
+
+      const available = stockOnHand(stocks, current.inputSku, current.fromLocation)
+      if (current.inputQty > available) return
+
+      postStartWipStock(current, addMovement, false)
+      const wipGrainValue = grainValueForBatch(current)
+      const startedAt = new Date().toISOString()
+      postPairJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(startedAt),
+        memo: `Start batch ${current.id}`,
+        sourceKey: `batch:${current.id}:start`,
+        amount: wipGrainValue,
+        debitKey: 'wip',
+        creditKey: 'inventoryGabah',
+      })
+
       patch(
         id,
-        (b) => {
-          if (b.stage !== 'approved') return b
-          return {
-            ...b,
-            stage: 'processing',
-            startedAt: new Date().toISOString(),
-          }
-        },
-        { action: 'start' },
+        () => ({
+          ...current,
+          stage: 'processing',
+          startedAt,
+          wipStockPosted: true,
+          wipGrainValue,
+        }),
+        { action: 'start', note: 'Gabah ke WIP' },
       )
     },
-    [patch],
+    [items, stocks, addMovement, postJournalEntry, mapAccount, patch],
   )
 
   const persistLotCostForBatch = useCallback(
@@ -490,7 +662,11 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (current.inputQty <= 0 || !current.outputs.some((o) => o.qty > 0)) return
 
       if (!current.stockPosted) {
-        postStock(current, addMovement, false)
+        if (current.wipStockPosted) {
+          postCompleteWipStock(current, addMovement, false)
+        } else {
+          postLegacyCompleteStock(current, addMovement, false)
+        }
       }
 
       const completedAt = new Date().toISOString()
@@ -512,8 +688,65 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       persistLotCostForBatch(doneBatch, batchesForCosting, {
         method: 'proportional',
       })
+
+      const lotId = resolveLotIdFromBatch(doneBatch)
+      if (lotId) {
+        const { purchases } = pembelianRepository.load()
+        const purchase = purchases.find(
+          (p) => p.lotId === lotId && !p.voidedAt,
+        )
+        if (purchase) {
+          const grainValue = grainValueForPurchase(purchase)
+          const allocatedOps = proportionalOpsForBatch(doneBatch, batchesForCosting)
+          const snapshot = computeLotCost({
+            lotId,
+            batchId: doneBatch.id,
+            grainValue,
+            allocatedOps,
+            berasQty: berasQty(doneBatch),
+            method: 'proportional',
+          })
+          const totalCost = lotCostTotal(snapshot)
+          const wipGrain =
+            doneBatch.wipGrainValue ?? grainValueForBatch(doneBatch)
+          const journalDate = journalDateFromIso(completedAt)
+          const memo = `Complete batch ${doneBatch.id}`
+          const lines = [
+            {
+              accountId: mapAccount('inventoryBeras'),
+              debit: totalCost,
+              credit: 0,
+              memo,
+            },
+            {
+              accountId: mapAccount('wip'),
+              debit: 0,
+              credit: wipGrain,
+              memo: `${memo} — WIP grain`,
+            },
+          ]
+          if (allocatedOps > 0) {
+            lines.push({
+              accountId: mapAccount('mfgOverhead'),
+              debit: 0,
+              credit: allocatedOps,
+              memo: `${memo} — alokasi ops`,
+            })
+          }
+          if (totalCost > 0) {
+            postJournalEntry({
+              date: journalDate,
+              memo,
+              sourceKey: `batch:${doneBatch.id}:done`,
+              sourceType: 'auto',
+              manual: false,
+              lines,
+            })
+          }
+        }
+      }
     },
-    [items, addMovement, patch, persistLotCostForBatch],
+    [items, addMovement, patch, persistLotCostForBatch, postJournalEntry, mapAccount],
   )
 
   const voidBatch = useCallback(
@@ -523,8 +756,17 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (current.stage === 'void' || current.stage === 'draft') return
 
       if (current.stockPosted) {
-        postStock(current, addMovement, true)
+        if (current.wipStockPosted) {
+          postCompleteWipStock(current, addMovement, true)
+        } else {
+          postLegacyCompleteStock(current, addMovement, true)
+        }
+      } else if (current.wipStockPosted) {
+        postStartWipStock(current, addMovement, true)
       }
+
+      reverseJournalEntry({ sourceKey: `batch:${id}:done` })
+      reverseJournalEntry({ sourceKey: `batch:${id}:start` })
 
       patch(
         id,
@@ -534,11 +776,13 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
           voidedAt: new Date().toISOString(),
           voidReason: reason || 'Dibatalkan',
           stockPosted: false,
+          wipStockPosted: false,
+          wipGrainValue: undefined,
         }),
         { action: 'void', note: reason },
       )
     },
-    [items, addMovement, patch],
+    [items, addMovement, patch, reverseJournalEntry],
   )
 
   const deleteBatch = useCallback(
@@ -649,6 +893,21 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
 
       postPackStock(toPost, batch, addMovement, false)
       const postedAt = new Date().toISOString()
+      const lotCost = lotCosts.find((c) => c.batchId === batch.id)
+      const packAmount =
+        lotCost && lotCost.costPerKgBeras > 0
+          ? lotCost.costPerKgBeras * totalOut
+          : 0
+      postPairJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(postedAt),
+        memo: `Pack ${toPost.id} · ${batch.id}`,
+        sourceKey: `pack:${toPost.id}:post`,
+        amount: packAmount,
+        debitKey: 'inventoryBeras',
+        creditKey: 'inventoryBeras',
+        debitMemo: `Pack in · ${toPost.sourceSku}`,
+        creditMemo: `Pack out · ${toPost.sourceSku}`,
+      })
       const posted = { ...toPost, stage: 'posted' as const, postedAt }
       setPackRuns((list) =>
         list.map((r) => (r.id === id ? posted : r)),
@@ -664,7 +923,17 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       publishSync('produksi', id)
       return undefined
     },
-    [packRuns, items, stocks, addMovement, appendAudit, user?.role],
+    [
+      packRuns,
+      items,
+      stocks,
+      lotCosts,
+      addMovement,
+      appendAudit,
+      postJournalEntry,
+      mapAccount,
+      user?.role,
+    ],
   )
 
   const voidPackRun = useCallback(
@@ -689,6 +958,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       }
 
       postPackStock(current, batch, addMovement, true)
+      reverseJournalEntry({ sourceKey: `pack:${id}:post` })
       const voidedAt = new Date().toISOString()
       setPackRuns((list) =>
         list.map((r) => (r.id === id ? { ...r, voidedAt } : r)),
@@ -703,7 +973,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       publishSync('produksi', id)
       return undefined
     },
-    [packRuns, items, stocks, addMovement, appendAudit, user?.role],
+    [packRuns, items, stocks, addMovement, appendAudit, reverseJournalEntry, user?.role],
   )
 
   const value = useMemo(

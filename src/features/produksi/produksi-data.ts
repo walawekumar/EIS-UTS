@@ -46,7 +46,14 @@ export type ProductionBatch = {
   voidedAt?: string
   voidReason?: string
   stockPosted: boolean
+  /** Gabah dipindah ke lokasi WIP saat start */
+  wipStockPosted?: boolean
+  /** Nilai gabah (grain) saat start — untuk jurnal WIP */
+  wipGrainValue?: number
 }
+
+/** Lokasi stok WIP produksi (qty gabah in-process) */
+export const WIP_LOCATION = 'WIP'
 
 export type NewBatchInput = {
   date: string
@@ -198,6 +205,10 @@ export type LotCost = {
   costPerKgBeras: number
   method: 'manual' | 'proportional'
   at: string
+}
+
+export function lotCostTotal(cost: Pick<LotCost, 'grainValue' | 'allocatedOps'>): number {
+  return cost.grainValue + cost.allocatedOps
 }
 
 export function computeLotCost(input: {
