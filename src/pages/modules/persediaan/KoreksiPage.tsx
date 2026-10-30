@@ -25,6 +25,7 @@ import {
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -163,7 +164,7 @@ export function KoreksiPage() {
       beforeQty: selected.qty,
       afterQty: qty,
       reason: reason.trim(),
-      receiptName: receipt?.name,
+      receiptName: receiptPersistRef(receipt),
     })
     if (err) {
       setToast(err)

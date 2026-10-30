@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   SEED_BATCHES,
   type LotCost,
@@ -44,14 +45,8 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const produksiRepository = {
-  load(): ProduksiSnapshot {
-    return normalize(inner.load())
-  },
-  save(data: ProduksiSnapshot) {
-    inner.save(normalize(data))
-  },
-  clear() {
-    inner.clear()
-  },
-}
+export const produksiRepository = createCloudBackedRepository({
+  key: 'produksi',
+  local: inner,
+  normalize,
+})

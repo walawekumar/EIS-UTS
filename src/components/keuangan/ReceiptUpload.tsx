@@ -1,11 +1,29 @@
-import { useId, useRef, type ChangeEvent, type DragEvent } from 'react'
+import {
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from 'react'
+import {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+} from '@/lib/cloudinary-upload'
 
 export type ReceiptValue = {
   name: string
   size: number
   previewUrl: string
   mime: string
+  /** Cloudinary (atau remote) URL bila upload berhasil. */
+  url?: string
 } | null
+
+/** Nilai yang disimpan ke snapshot / DB. */
+export function receiptPersistRef(value: ReceiptValue): string | undefined {
+  if (!value) return undefined
+  return value.url ?? value.name
+}
 
 type ReceiptUploadProps = {
   value: ReceiptValue
@@ -34,15 +52,18 @@ export function ReceiptUpload({
   const id = useId()
   const galleryRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   function clear() {
     revoke(value?.previewUrl)
     onChange(null)
+    setUploadError(null)
     if (galleryRef.current) galleryRef.current.value = ''
     if (cameraRef.current) cameraRef.current.value = ''
   }
 
-  function applyFile(file: File | undefined) {
+  async function applyFile(file: File | undefined) {
     if (!file) return
     const okType =
       ACCEPT.split(',').includes(file.type) ||
@@ -50,32 +71,57 @@ export function ReceiptUpload({
       file.type === 'application/pdf'
     if (!okType) {
       onChange(null)
+      setUploadError('Tipe file tidak didukung.')
       return
     }
     if (file.size > MAX_BYTES) {
       onChange(null)
+      setUploadError('File melebihi 3 MB.')
       return
     }
     revoke(value?.previewUrl)
+    setUploadError(null)
     const previewUrl = URL.createObjectURL(file)
-    onChange({
+    const local: NonNullable<ReceiptValue> = {
       name: file.name || `bukti-${Date.now()}.jpg`,
       size: file.size,
       previewUrl,
       mime: file.type || 'image/jpeg',
-    })
+    }
+    onChange(local)
+
+    if (!isCloudinaryConfigured()) return
+
+    setUploading(true)
+    try {
+      const remote = await uploadToCloudinary(file)
+      revoke(previewUrl)
+      onChange({
+        ...local,
+        previewUrl: remote.url,
+        url: remote.url,
+        size: remote.bytes || local.size,
+      })
+    } catch (e) {
+      setUploadError(
+        e instanceof Error ? e.message : 'Upload gagal; memakai salinan lokal.',
+      )
+    } finally {
+      setUploading(false)
+    }
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    applyFile(event.target.files?.[0])
+    void applyFile(event.target.files?.[0])
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
-    applyFile(event.dataTransfer.files?.[0])
+    void applyFile(event.dataTransfer.files?.[0])
   }
 
   const isImage = Boolean(value?.mime.startsWith('image/'))
+  const showError = error || uploadError
 
   return (
     <div>
@@ -100,27 +146,38 @@ export function ReceiptUpload({
                 PDF
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-ink">{value.name}</p>
+                <p className="truncate text-[13px] font-medium text-ink">
+                  {value.name}
+                </p>
                 <p className="font-mono text-[11px] text-muted">
                   {(value.size / 1024).toFixed(0)} KB
+                  {value.url ? ' · cloud' : ''}
                 </p>
               </div>
             </div>
           )}
           <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
-            <p className="min-w-0 truncate text-[12px] text-muted">{value.name}</p>
+            <p className="min-w-0 truncate text-[12px] text-muted">
+              {uploading
+                ? 'Mengunggah ke Cloudinary…'
+                : value.url
+                  ? 'Tersimpan di cloud'
+                  : value.name}
+            </p>
             <div className="flex shrink-0 gap-1">
               <button
                 type="button"
+                disabled={uploading}
                 onClick={() => galleryRef.current?.click()}
-                className="rounded-lg px-2 py-1 text-[12px] font-medium text-brand-800 transition hover:bg-brand-50"
+                className="rounded-lg px-2 py-1 text-[12px] font-medium text-brand-800 transition hover:bg-brand-50 disabled:opacity-50"
               >
                 Ganti
               </button>
               <button
                 type="button"
+                disabled={uploading}
                 onClick={clear}
-                className="rounded-lg px-2 py-1 text-[12px] font-medium text-red-700 transition hover:bg-red-50"
+                className="rounded-lg px-2 py-1 text-[12px] font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
               >
                 Hapus
               </button>
@@ -133,7 +190,7 @@ export function ReceiptUpload({
           onDrop={onDrop}
           className={[
             'rounded-xl border border-dashed px-3 py-4 text-center transition',
-            error
+            showError
               ? 'border-red-300 bg-red-50/40'
               : 'border-line bg-surface/50 hover:border-brand-300',
           ].join(' ')}
@@ -181,7 +238,9 @@ export function ReceiptUpload({
         onChange={onInputChange}
       />
 
-      {error ? <p className="mt-1.5 text-xs text-red-600">{error}</p> : null}
+      {showError ? (
+        <p className="mt-1.5 text-xs text-red-600">{showError}</p>
+      ) : null}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   INITIAL_PURCHASES,
   migratePurchaseStage,
@@ -45,7 +46,6 @@ function isValid(value: unknown): value is PembelianSnapshot {
   if (!value || typeof value !== 'object') return false
   const v = value as PembelianSnapshot
   return v.version === 1 && Array.isArray(v.purchases)
-  // returns/lotQc optional on disk → normalize fills []
 }
 
 const inner = createLocalRepository({
@@ -54,14 +54,8 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const pembelianRepository = {
-  load(): PembelianSnapshot {
-    return normalize(inner.load())
-  },
-  save(data: PembelianSnapshot) {
-    inner.save(normalize(data))
-  },
-  clear() {
-    inner.clear()
-  },
-}
+export const pembelianRepository = createCloudBackedRepository({
+  key: 'pembelian',
+  local: inner,
+  normalize,
+})

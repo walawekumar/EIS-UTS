@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   SEED_PAYROLL,
   normalizePayrollRun,
@@ -38,14 +39,8 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const payrollRepository = {
-  load(): PayrollSnapshot {
-    return normalize(inner.load())
-  },
-  save(data: PayrollSnapshot) {
-    inner.save(normalize(data))
-  },
-  clear() {
-    inner.clear()
-  },
-}
+export const payrollRepository = createCloudBackedRepository({
+  key: 'payroll',
+  local: inner,
+  normalize,
+})

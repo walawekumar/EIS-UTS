@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   INITIAL_ORDERS,
   type SaleOrder,
@@ -44,14 +45,8 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const penjualanRepository = {
-  load(): PenjualanSnapshot {
-    return normalize(inner.load())
-  },
-  save(data: PenjualanSnapshot) {
-    inner.save(normalize(data))
-  },
-  clear() {
-    inner.clear()
-  },
-}
+export const penjualanRepository = createCloudBackedRepository({
+  key: 'penjualan',
+  local: inner,
+  normalize,
+})

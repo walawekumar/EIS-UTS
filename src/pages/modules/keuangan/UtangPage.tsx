@@ -24,6 +24,7 @@ import {
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -160,7 +161,7 @@ export function UtangPage() {
       invoice: payTarget.invoice,
       party: payTarget.supplier,
       note: payNote,
-      receiptName: payReceipt?.name,
+      receiptName: receiptPersistRef(payReceipt),
     })
     if (err) {
       setPayError(err)

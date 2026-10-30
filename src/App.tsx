@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AppRouter } from '@/app/router'
 import { AuditProvider } from '@/features/audit/audit-store'
 import { AuthProvider } from '@/features/auth/AuthContext'
+import { OpsCloudGate } from '@/features/cloud/OpsCloudGate'
 import { FinanceProvider } from '@/features/keuangan/finance-store'
 import { BankProvider } from '@/features/keuangan/bank-store'
 import { PeriodProvider } from '@/features/keuangan/period-store'
@@ -20,32 +21,34 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <AuditProvider>
-        <MasterProvider>
-          <FinanceProvider>
-            <PeriodProvider>
-              <BankProvider>
-                <TaxProvider>
-                  <ExpenseTaxBridge />
-                  <PayrollProvider>
-                    <PersediaanProvider>
-                      <ProduksiProvider>
-                        <PembelianProvider>
-                          <PenjualanProvider>
-                            <BrowserRouter>
-                              <AppRouter />
-                            </BrowserRouter>
-                          </PenjualanProvider>
-                        </PembelianProvider>
-                      </ProduksiProvider>
-                    </PersediaanProvider>
-                  </PayrollProvider>
-                </TaxProvider>
-              </BankProvider>
-            </PeriodProvider>
-          </FinanceProvider>
-        </MasterProvider>
-      </AuditProvider>
+      <OpsCloudGate>
+        <AuditProvider>
+          <MasterProvider>
+            <FinanceProvider>
+              <PeriodProvider>
+                <BankProvider>
+                  <TaxProvider>
+                    <ExpenseTaxBridge />
+                    <PayrollProvider>
+                      <PersediaanProvider>
+                        <ProduksiProvider>
+                          <PembelianProvider>
+                            <PenjualanProvider>
+                              <BrowserRouter>
+                                <AppRouter />
+                              </BrowserRouter>
+                            </PenjualanProvider>
+                          </PembelianProvider>
+                        </ProduksiProvider>
+                      </PersediaanProvider>
+                    </PayrollProvider>
+                  </TaxProvider>
+                </BankProvider>
+              </PeriodProvider>
+            </FinanceProvider>
+          </MasterProvider>
+        </AuditProvider>
+      </OpsCloudGate>
     </AuthProvider>
   )
 }

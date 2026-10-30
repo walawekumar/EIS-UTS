@@ -31,6 +31,7 @@ import {
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -216,7 +217,7 @@ export function MutasiPage() {
             ? selectedStock.location
             : form.toLocation,
       note: form.note.trim(),
-      receiptName: receipt?.name,
+      receiptName: receiptPersistRef(receipt),
     })
     setFormOpen(false)
     setReceipt(null)

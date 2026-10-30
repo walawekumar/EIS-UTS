@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import type { AuditLog } from '@/features/audit/audit-data'
 
 export type AuditSnapshot = {
@@ -21,8 +22,13 @@ function isValid(value: unknown): value is AuditSnapshot {
   return v.version === 1 && Array.isArray(v.logs)
 }
 
-export const auditRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.audit.v1',
   seed,
   isValid,
+})
+
+export const auditRepository = createCloudBackedRepository({
+  key: 'audit',
+  local: inner,
 })

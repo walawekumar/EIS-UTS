@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   EMPTY_PERIOD_SNAPSHOT,
   type PeriodSnapshot,
@@ -23,8 +24,13 @@ function isValid(value: unknown): value is PeriodSnapshot {
   )
 }
 
-export const periodRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.period.v1',
   seed,
   isValid,
+})
+
+export const periodRepository = createCloudBackedRepository({
+  key: 'period',
+  local: inner,
 })

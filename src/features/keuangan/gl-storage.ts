@@ -1,5 +1,6 @@
 // src/features/keuangan/gl-storage.ts
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   DEFAULT_ACCOUNT_MAP,
   SEED_ACCOUNTS,
@@ -46,8 +47,15 @@ export function normalizeGlSnapshot(snap: GlSnapshot): GlSnapshot {
   }
 }
 
-export const glRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.gl.v1',
   seed,
   isValid,
 })
+
+export const glRepository = createCloudBackedRepository({
+  key: 'gl',
+  local: inner,
+  normalize: normalizeGlSnapshot,
+})
+

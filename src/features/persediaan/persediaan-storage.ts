@@ -1,7 +1,6 @@
 /**
- * Persistence adapter untuk modul Persediaan.
- * Sekarang: localStorage via createLocalRepository.
- * Nanti: ganti body load/save tanpa ubah store/UI.
+ * Persistence adapter lokal untuk modul Persediaan.
+ * Cloud: lihat persediaan-cloud.ts (dipakai store bila Supabase dikonfigurasi).
  */
 import { createLocalRepository } from '@/lib/create-local-repository'
 import {
