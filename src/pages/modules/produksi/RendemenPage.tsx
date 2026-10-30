@@ -5,12 +5,13 @@ import {
 } from '@/features/produksi/ProduksiContext'
 
 export function RendemenPage() {
-  const { batches } = useProduksi()
+  const { batches, lotCosts } = useProduksi()
   const { selectedId, select, goTo } = useSelectedBatch()
 
   return (
     <RendemenView
       batches={batches}
+      lotCosts={lotCosts}
       selectedId={selectedId}
       onSelect={select}
       onGoToBatch={(id) => goTo('batch', id)}

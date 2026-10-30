@@ -32,6 +32,7 @@ import { ReturPage as PenjualanReturPage } from '@/pages/modules/penjualan/Retur
 import { ProduksiPage } from '@/pages/modules/ProduksiPage'
 import { BatchPage } from '@/pages/modules/produksi/BatchPage'
 import { InputOutputPage } from '@/pages/modules/produksi/InputOutputPage'
+import { PackingPage } from '@/pages/modules/produksi/PackingPage'
 import { RendemenPage } from '@/pages/modules/produksi/RendemenPage'
 
 export function AppRouter() {
@@ -131,6 +132,7 @@ export function AppRouter() {
               <Route index element={<BatchPage />} />
               <Route path="input-output" element={<InputOutputPage />} />
               <Route path="rendemen" element={<RendemenPage />} />
+              <Route path="packing" element={<PackingPage />} />
             </Route>
           </Route>
 

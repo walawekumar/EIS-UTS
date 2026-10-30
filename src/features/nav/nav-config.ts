@@ -109,6 +109,12 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/produksi/rendemen',
         roles: ['admin', 'produksi'],
       },
+      {
+        id: 'batch-packing',
+        label: 'Packing',
+        path: '/app/produksi/packing',
+        roles: ['admin', 'produksi'],
+      },
     ],
   },
   {

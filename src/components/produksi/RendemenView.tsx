@@ -23,22 +23,26 @@ import {
 } from '@/components/ops/DetailDrawer'
 import { StageLabel } from '@/components/produksi/StatusLabel'
 import { EyeIcon } from '@/components/ui/icons'
+import { Switch } from '@/components/ui/Switch'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import { formatRupiah } from '@/features/pembelian/pembelian-data'
 import {
   actualRendemen,
   berasQty,
   formatDate,
   formatQty,
+  type LotCost,
   type ProductionBatch,
 } from '@/features/produksi/produksi-data'
 import { usePageSize } from '@/features/settings/usePageSize'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 
-type SortKey = 'id' | 'date' | 'target' | 'actual' | 'delta'
+type SortKey = 'id' | 'date' | 'target' | 'actual' | 'delta' | 'cost'
 type Filter = 'semua' | 'done' | 'open'
 
 type Props = {
   batches: ProductionBatch[]
+  lotCosts: LotCost[]
   selectedId: string | null
   onSelect: (id: string | null) => void
   onGoToBatch: (id: string) => void
@@ -83,6 +87,7 @@ function buildStats(batches: ProductionBatch[]): MetricCardData[] {
 
 export function RendemenView({
   batches,
+  lotCosts,
   selectedId,
   onSelect,
   onGoToBatch,
@@ -94,8 +99,18 @@ export function RendemenView({
     key: 'date',
     dir: 'desc',
   })
+  const [rankByCost, setRankByCost] = useState(false)
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<ProductionBatch | null>(null)
+
+  const costByBatch = useMemo(() => {
+    const map = new Map<string, LotCost>()
+    for (const row of lotCosts) {
+      const prev = map.get(row.batchId)
+      if (!prev || row.at.localeCompare(prev.at) > 0) map.set(row.batchId, row)
+    }
+    return map
+  }, [lotCosts])
 
   const stats = useMemo(() => buildStats(batches), [batches])
 
@@ -118,14 +133,24 @@ export function RendemenView({
         v.toLowerCase().includes(q),
       )
     })
-    return sortBy(base, sort, {
+    const sorted = sortBy(base, sort, {
       id: (b) => b.id,
       date: (b) => b.date,
       target: (b) => b.targetRendemen,
       actual: (b) => actualRendemen(b),
       delta: (b) => actualRendemen(b) - b.targetRendemen,
+      cost: (b) => costByBatch.get(b.id)?.costPerKgBeras ?? Number.POSITIVE_INFINITY,
     })
-  }, [batches, search, filter, sort])
+    if (!rankByCost) return sorted
+    return [...sorted].sort((a, b) => {
+      const ca = costByBatch.get(a.id)?.costPerKgBeras
+      const cb = costByBatch.get(b.id)?.costPerKgBeras
+      if (ca == null && cb == null) return 0
+      if (ca == null) return 1
+      if (cb == null) return -1
+      return ca - cb
+    })
+  }, [batches, search, filter, sort, rankByCost, costByBatch])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
@@ -162,6 +187,18 @@ export function RendemenView({
           onFilterChange={setFilter}
         />
 
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+          <Switch
+            id="rendemen-rank-cost"
+            label="Urutkan biaya termurah"
+            checked={rankByCost}
+            onChange={(v) => {
+              setRankByCost(v)
+              setPage(1)
+            }}
+          />
+        </div>
+
         <FinanceTable>
           <FinanceThead>
             <FinanceTh className="w-10">#</FinanceTh>
@@ -185,16 +222,24 @@ export function RendemenView({
               sort={sort}
               onSort={handleSort}
             />
+            <FinanceSortTh
+              label="Cost/kg beras"
+              sortKey="cost"
+              sort={sort}
+              onSort={handleSort}
+              align="right"
+            />
             <FinanceTh>Status</FinanceTh>
             <FinanceTh align="center">Aksi</FinanceTh>
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
-              <FinanceEmptyRow colSpan={8} message="Tidak ada data." />
+              <FinanceEmptyRow colSpan={9} message="Tidak ada data." />
             ) : (
               rows.map((row, index) => {
                 const actual = actualRendemen(row)
                 const delta = actual - row.targetRendemen
+                const cost = costByBatch.get(row.id)
                 return (
                   <FinanceTr key={row.id}>
                     <FinanceTd muted>
@@ -212,6 +257,11 @@ export function RendemenView({
                         label={`${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pp`}
                         tone={delta >= 0 ? 'good' : 'warn'}
                       />
+                    </FinanceTd>
+                    <FinanceTd mono align="right">
+                      {cost && cost.costPerKgBeras > 0
+                        ? formatRupiah(cost.costPerKgBeras)
+                        : '—'}
                     </FinanceTd>
                     <FinanceTd>
                       <StageLabel stage={row.stage} />
@@ -286,6 +336,12 @@ export function RendemenView({
                   'Δ vs target',
                   `${(actualRendemen(detail) - detail.targetRendemen).toFixed(1)} poin`,
                 ],
+                (() => {
+                  const lot = costByBatch.get(detail.id)
+                  return lot && lot.costPerKgBeras > 0
+                    ? (['Cost/kg beras', formatRupiah(lot.costPerKgBeras)] as const)
+                    : null
+                })(),
               ]}
             />
           </DrawerSection>
