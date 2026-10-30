@@ -13,7 +13,9 @@ import { useAuth } from '@/features/auth/AuthContext'
 import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import type { JournalLine } from '@/features/keuangan/gl-data'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
-import { lookupCustomer, lookupProductBySku } from '@/features/master/master-storage'
+import { lookupCustomer } from '@/features/master/master-storage'
+import { cogsAmountForLot } from '@/features/penjualan/cogs-from-lot'
+import { useProduksi } from '@/features/produksi/ProduksiContext'
 import {
   addDays,
   getCustomer,
@@ -49,10 +51,9 @@ function journalDateFromIso(iso: string): string {
   return iso.slice(0, 10)
 }
 
-function unitCostForSku(sku: string): number {
-  const cost = lookupProductBySku(sku)?.costPrice ?? 0
-  return Number.isFinite(cost) && cost > 0 ? cost : 0
-}
+export type PenjualanActionResult =
+  | { ok: false; error: string }
+  | { ok: true; journalError?: string }
 
 function postPenjualanPairJournal(
   postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
@@ -65,10 +66,10 @@ function postPenjualanPairJournal(
     debitKey: AccountMapKey
     creditKey: AccountMapKey
   },
-): void {
+): string | undefined {
   const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return
-  postJournalEntry({
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -101,9 +102,9 @@ function postPenjualanShipJournal(
     revenue: number
     cogsAmount: number
   },
-): void {
+): string | undefined {
   const { date, memo, sourceKey, revenue, cogsAmount } = input
-  if (!Number.isFinite(revenue) || revenue <= 0) return
+  if (!Number.isFinite(revenue) || revenue <= 0) return undefined
   const lines: JournalLine[] = [
     {
       accountId: mapAccount('ar'),
@@ -134,7 +135,7 @@ function postPenjualanShipJournal(
       },
     )
   }
-  postJournalEntry({
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -154,9 +155,9 @@ function postPenjualanReturnJournal(
     credit: number
     cogsAmount: number
   },
-): void {
+): string | undefined {
   const { date, memo, sourceKey, credit, cogsAmount } = input
-  if (!Number.isFinite(credit) || credit <= 0) return
+  if (!Number.isFinite(credit) || credit <= 0) return undefined
   const lines: JournalLine[] = [
     {
       accountId: mapAccount('salesReturn'),
@@ -187,7 +188,7 @@ function postPenjualanReturnJournal(
       },
     )
   }
-  postJournalEntry({
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -254,14 +255,14 @@ type PenjualanContextValue = {
   createOrder: (data: NewSaleOrder) => string
   deleteOrder: (id: string) => void
   voidOrder: (id: string, reason: string) => void
-  shipOrder: (id: string, input: DeliveryInput) => string | null
+  shipOrder: (id: string, input: DeliveryInput) => PenjualanActionResult
   addPayment: (id: string, payment: Omit<Payment, 'id'>) => void
   returns: SaleReturn[]
   createSaleReturn: (input: SaleReturnInput) => string | undefined
   submitSaleReturn: (id: string) => string | undefined
   approveSaleReturn: (id: string) => string | undefined
   rejectSaleReturn: (id: string, reason: string) => string | undefined
-  postSaleReturn: (id: string) => string | undefined
+  postSaleReturn: (id: string) => PenjualanActionResult
 }
 
 const PenjualanContext = createContext<PenjualanContextValue | null>(null)
@@ -281,6 +282,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
+  const { lotCosts } = useProduksi()
   const initialSnapshot = useMemo(() => penjualanRepository.load(), [])
   const [items, setItems] = useState<SaleOrder[]>(() => initialSnapshot.orders)
   const [returns, setReturns] = useState<SaleReturn[]>(() => initialSnapshot.returns)
@@ -379,12 +381,17 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const shipOrder = useCallback(
-    (id: string, input: DeliveryInput): string | null => {
+    (id: string, input: DeliveryInput): PenjualanActionResult => {
       const today = todayIso()
       const termDays = getPaymentTermDays()
       const location = readAppSettings().stock.defaultLocation
       const current = items.find((o) => o.id === id)
-      if (!current || current.voidedAt) return 'Order tidak ditemukan'
+      if (!current || current.voidedAt) {
+        return { ok: false, error: 'Order tidak ditemukan' }
+      }
+
+      const cogs = cogsAmountForLot(lotCosts, input.lotId, current.qty)
+      if (!cogs.ok) return { ok: false, error: cogs.error }
 
       const total = current.qty * current.price
       const isPaid = input.settlement === 'lunas'
@@ -401,7 +408,10 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
             )
             .reduce((s, r) => s + (r.amount - r.paid), 0)
           if (openAr + total > limit) {
-            return `Melebihi limit kredit (${limit.toLocaleString('id-ID')}). Outstanding ${openAr.toLocaleString('id-ID')}`
+            return {
+              ok: false,
+              error: `Melebihi limit kredit (${limit.toLocaleString('id-ID')}). Outstanding ${openAr.toLocaleString('id-ID')}`,
+            }
           }
         }
       }
@@ -422,6 +432,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       const next: SaleOrder = {
         ...current,
         stage: 'dikirim',
+        lotId: input.lotId,
         delivery: {
           shippedAt: today,
           vehicle: input.vehicle,
@@ -450,16 +461,15 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         paid: isPaid ? total : 0,
       })
 
-      const unitCost = unitCostForSku(next.sku)
-      const cogsAmount = unitCost > 0 ? next.qty * unitCost : 0
-      postPenjualanShipJournal(postJournalEntry, mapAccount, {
+      const shipJeErr = postPenjualanShipJournal(postJournalEntry, mapAccount, {
         date: today,
         memo: `Pengiriman penjualan ${next.id} · ${party}`,
         sourceKey: `so:${next.id}:ship`,
         revenue: total,
-        cogsAmount,
+        cogsAmount: cogs.amount,
       })
 
+      let codJeErr: string | undefined
       if (isPaid) {
         addCashEntry({
           direction: 'in',
@@ -468,7 +478,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
           amount: total,
           receiptName: input.payReceiptName,
         })
-        postPenjualanPairJournal(postJournalEntry, mapAccount, {
+        codJeErr = postPenjualanPairJournal(postJournalEntry, mapAccount, {
           date: today,
           memo: `Pelunasan COD ${next.id} · ${party}`,
           sourceKey: `so:${next.id}:cod`,
@@ -495,12 +505,14 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: input.settlement,
       })
-      return null
+      const journalError = shipJeErr ?? codJeErr
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [
       addCashEntry,
       addMovement,
       items,
+      lotCosts,
       upsertReceivableFromSale,
       postJournalEntry,
       mapAccount,
@@ -711,20 +723,40 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const postSaleReturn = useCallback(
-    (id: string): string | undefined => {
+    (id: string): PenjualanActionResult => {
       if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
-        return 'Hanya keuangan atau admin yang dapat memposting retur.'
+        return {
+          ok: false,
+          error: 'Hanya keuangan atau admin yang dapat memposting retur.',
+        }
       }
       const current = returns.find((r) => r.id === id)
-      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (!current) {
+        return { ok: false, error: 'Dokumen retur tidak ditemukan.' }
+      }
       if (current.stage !== 'disetujui') {
-        return 'Hanya retur disetujui yang dapat diposting.'
+        return { ok: false, error: 'Hanya retur disetujui yang dapat diposting.' }
       }
       const order = items.find((o) => o.id === current.orderId)
-      if (!order) return 'Order penjualan tidak ditemukan.'
-      if (order.voidedAt) return 'Order penjualan sudah dibatalkan.'
+      if (!order) {
+        return { ok: false, error: 'Order penjualan tidak ditemukan.' }
+      }
+      if (order.voidedAt) {
+        return { ok: false, error: 'Order penjualan sudah dibatalkan.' }
+      }
       const qtyError = returnQtyError(order, current.lines, returns)
-      if (qtyError) return qtyError
+      if (qtyError) return { ok: false, error: qtyError }
+
+      if (!order.lotId) {
+        return {
+          ok: false,
+          error:
+            'Order belum punya lot costing; tidak bisa post retur dengan COGS LotCost.',
+        }
+      }
+      const retQty = current.lines.reduce((s, l) => s + l.qty, 0)
+      const cogs = cogsAmountForLot(lotCosts, order.lotId, retQty)
+      if (!cogs.ok) return { ok: false, error: cogs.error }
 
       const unitPrice = order.price
       const credit = current.lines.reduce(
@@ -749,16 +781,12 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         })
       }
       creditReceivable(order.id, credit)
-      const cogsAmount = current.lines.reduce(
-        (sum, line) => sum + line.qty * unitCostForSku(line.sku),
-        0,
-      )
-      postPenjualanReturnJournal(postJournalEntry, mapAccount, {
+      const journalError = postPenjualanReturnJournal(postJournalEntry, mapAccount, {
         date: journalDateFromIso(postedAt),
         memo: `Retur penjualan ${current.id} · ${order.id}`,
         sourceKey: `sr:${current.id}:post`,
         credit,
-        cogsAmount,
+        cogsAmount: cogs.amount,
       })
       setReturns((list) =>
         list.map((r) =>
@@ -771,11 +799,12 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         entityId: current.id,
         note: `Retur ${order.id}`,
       })
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [
       items,
       returns,
+      lotCosts,
       addMovement,
       creditReceivable,
       postJournalEntry,

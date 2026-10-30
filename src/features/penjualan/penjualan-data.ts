@@ -97,11 +97,14 @@ export type SaleOrder = {
   payments: Payment[]
   voidedAt?: string
   voidReason?: string
+  /** Lot costing giling — diisi saat kirim. */
+  lotId?: string
 }
 
 export type NewSaleOrder = Omit<SaleOrder, 'id' | 'stage' | 'payments' | 'delivery' | 'dueDate'>
 
 export type DeliveryInput = {
+  lotId: string
   vehicle?: string
   driver?: string
   note?: string

@@ -33,6 +33,8 @@ import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import type { PenjualanActionResult } from '@/features/penjualan/PenjualanContext'
+import { useProduksi } from '@/features/produksi/ProduksiContext'
 import {
   PAYMENT_METHOD_LABEL,
   SETTLEMENT_LABEL,
@@ -85,7 +87,7 @@ type PengirimanViewProps = {
   orders: SaleOrder[]
   selectedId: string | null
   onSelect: (id: string | null) => void
-  onShip: (id: string, input: DeliveryInput) => string | void | null
+  onShip: (id: string, input: DeliveryInput) => PenjualanActionResult
   onGoTo: (tab: 'tagihan', id: string) => void
 }
 
@@ -97,6 +99,18 @@ export function PengirimanView({
   onGoTo,
 }: PengirimanViewProps) {
   const PAGE_SIZE = usePageSize()
+  const { lotCosts } = useProduksi()
+  const lotOptions = useMemo(
+    () =>
+      lotCosts
+        .filter((l) => l.costPerKgBeras > 0)
+        .map((l) => ({
+          value: l.lotId,
+          label: l.lotId,
+          description: `${formatRupiah(l.costPerKgBeras)}/kg · batch ${l.batchId}`,
+        })),
+    [lotCosts],
+  )
   const waiting = useMemo(() => orders.filter((o) => o.stage === 'dibuat'), [orders])
   const shipped = useMemo(
     () => orders.filter((o) => o.stage === 'dikirim' && o.delivery?.shippedAt),
@@ -128,6 +142,8 @@ export function PengirimanView({
   const [shipReceiptError, setShipReceiptError] = useState<string>()
   const [payReceiptError, setPayReceiptError] = useState<string>()
   const [settlementError, setSettlementError] = useState<string>()
+  const [lotId, setLotId] = useState('')
+  const [lotError, setLotError] = useState<string>()
 
   const stats: MetricCardData[] = [
     {
@@ -222,6 +238,8 @@ export function PengirimanView({
     setShipReceiptError(undefined)
     setPayReceiptError(undefined)
     setSettlementError(undefined)
+    setLotId('')
+    setLotError(undefined)
     onSelect(o.id)
   }
 
@@ -247,9 +265,14 @@ export function PengirimanView({
       setSettlementError('Isi catatan kredit (mis. tempo 7 hari / PO pelanggan)')
       ok = false
     }
+    if (!lotId.trim()) {
+      setLotError('Pilih lot costing untuk COGS pengiriman')
+      ok = false
+    }
     if (!ok) return
 
     const input: DeliveryInput = {
+      lotId: lotId.trim(),
       vehicle: vehicle.trim() || undefined,
       driver: driver.trim() || undefined,
       note: note.trim() || undefined,
@@ -258,16 +281,20 @@ export function PengirimanView({
       payMethod: settlement === 'lunas' ? payMethod : undefined,
       payReceiptName: settlement === 'lunas' ? payReceipt!.name : undefined,
     }
-    const err = onShip(work.id, input)
-    if (err) {
-      setToast(err)
+    const result = onShip(work.id, input)
+    if (!result.ok) {
+      setToast(result.error)
       return
     }
-    setToast(
-      settlement === 'lunas'
-        ? `${work.id} dikirim · lunas · nota ${payReceipt!.name}`
-        : `${work.id} dikirim · kredit / tempo`,
-    )
+    if (result.journalError) {
+      setToast(`Dikirim, tetapi jurnal gagal: ${result.journalError}`)
+    } else {
+      setToast(
+        settlement === 'lunas'
+          ? `${work.id} dikirim · lunas · nota ${payReceipt!.name}`
+          : `${work.id} dikirim · kredit / tempo`,
+      )
+    }
     closeWork()
   }
 
@@ -491,6 +518,25 @@ export function PengirimanView({
             />
 
             <Select
+              label="Lot costing (COGS)"
+              requiredMark
+              value={lotId}
+              placeholder={
+                lotOptions.length > 0
+                  ? 'Pilih lot giling'
+                  : 'Belum ada LotCost dengan cost/kg > 0'
+              }
+              options={lotOptions}
+              onChange={(v) => {
+                setLotId(v)
+                setLotError(undefined)
+              }}
+            />
+            {lotError ? (
+              <p className="text-[12px] text-red-700">{lotError}</p>
+            ) : null}
+
+            <Select
               label="Cara bayar saat kirim"
               requiredMark
               value={settlement}
@@ -674,6 +720,7 @@ function ShipDetailDrawer({
               ? ['Surat jalan', o.delivery.receiptName]
               : null,
             o.delivery?.note ? ['Catatan', o.delivery.note] : null,
+            o.lotId ? ['Lot costing', o.lotId] : null,
           ]}
         />
       </DrawerSection>

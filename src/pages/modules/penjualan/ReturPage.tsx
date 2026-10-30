@@ -375,9 +375,17 @@ export function ReturPage() {
         onClose={() => setPostOpen(false)}
         onConfirm={() => {
           if (!active) return
-          const err = postSaleReturn(active.id)
+          const result = postSaleReturn(active.id)
           setPostOpen(false)
-          setToast(err ?? `${active.id} diposting`)
+          if (!result.ok) {
+            setToast(result.error)
+            return
+          }
+          if (result.journalError) {
+            setToast(`Diposting, tetapi jurnal gagal: ${result.journalError}`)
+          } else {
+            setToast(`${active.id} diposting`)
+          }
         }}
       />
 
@@ -593,9 +601,20 @@ function ReturnDrawer({
             }}
           />
           {order ? (
-            <p className="text-[12px] text-muted">
-              {order.productName} · {order.sku} · sisa {formatQty(remaining, order.unit)}
-            </p>
+            <div className="space-y-1">
+              <p className="text-[12px] text-muted">
+                {order.productName} · {order.sku} · sisa {formatQty(remaining, order.unit)}
+              </p>
+              {order.lotId ? (
+                <p className="text-[12px] text-muted">
+                  Lot costing SO: <span className="font-medium text-ink">{order.lotId}</span>
+                </p>
+              ) : (
+                <p className="text-[12px] text-amber-800">
+                  Order belum punya lot costing — posting retur COGS akan ditolak.
+                </p>
+              )}
+            </div>
           ) : null}
           <label className="block">
             <span className="mb-1.5 block text-[13px] font-medium text-ink">
@@ -626,6 +645,10 @@ function ReturnDrawer({
             <DrawerFacts
               items={[
                 ['Order', row.orderId],
+                (() => {
+                  const linked = orders.find((o) => o.id === row.orderId)
+                  return linked?.lotId ? ['Lot costing SO', linked.lotId] : null
+                })(),
                 ['Qty', formatQty(lineQty(row), row.lines[0]?.unit ?? 'kg')],
                 ['Alasan', row.reason],
                 row.rejectedReason ? ['Ditolak', row.rejectedReason] : null,

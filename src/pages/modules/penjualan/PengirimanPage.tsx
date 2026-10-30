@@ -11,9 +11,9 @@ export function PengirimanPage() {
       selectedId={selectedId}
       onSelect={select}
       onShip={(id, input) => {
-        const err = shipOrder(id, input)
-        if (!err) select(id)
-        return err
+        const result = shipOrder(id, input)
+        if (result.ok) select(id)
+        return result
       }}
       onGoTo={goTo}
     />
