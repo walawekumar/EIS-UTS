@@ -23,9 +23,11 @@ import {
   canVoidPurchase,
   summarize,
   todayIso,
+  type LotQc,
   type NewPayment,
   type NewPurchase,
   type Purchase,
+  type PurchaseReturn,
   type WeighingInput,
 } from '@/features/pembelian/pembelian-data'
 import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
@@ -90,17 +92,20 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
-  const [items, setItems] = useState<Purchase[]>(
-    () => pembelianRepository.load().purchases,
-  )
+  const initialSnapshot = useMemo(() => pembelianRepository.load(), [])
+  const [items, setItems] = useState<Purchase[]>(() => initialSnapshot.purchases)
+  const [returns] = useState<PurchaseReturn[]>(() => initialSnapshot.returns)
+  const [lotQc] = useState<LotQc[]>(() => initialSnapshot.lotQc)
 
   useEffect(() => {
     pembelianRepository.save({
       version: 1,
       purchases: items,
+      returns,
+      lotQc,
       updatedAt: new Date().toISOString(),
     })
-  }, [items])
+  }, [items, returns, lotQc])
 
   const purchases = useMemo(
     () =>
