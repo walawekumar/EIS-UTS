@@ -24,7 +24,7 @@ import {
   removeFailedPost,
   reverseJournal,
 } from '@/features/keuangan/gl-journal'
-import { glRepository } from '@/features/keuangan/gl-storage'
+import { glRepository, normalizeGlSnapshot } from '@/features/keuangan/gl-storage'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
   formatDateId,
@@ -234,7 +234,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const actor = user?.name ?? 'Pengguna'
 
   const boot = keuanganRepository.load()
-  const glBoot = glRepository.load()
+  const glBoot = normalizeGlSnapshot(glRepository.load())
   const [cashEntries, setCashEntries] = useState<CashEntry[]>(() => [
     ...boot.cashEntries,
   ])

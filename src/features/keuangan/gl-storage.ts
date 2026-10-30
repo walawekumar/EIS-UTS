@@ -30,6 +30,22 @@ function isValid(value: unknown): value is GlSnapshot {
   )
 }
 
+export function normalizeGlSnapshot(snap: GlSnapshot): GlSnapshot {
+  const byId = new Map(snap.accounts.map((a) => [a.id, a]))
+  for (const a of SEED_ACCOUNTS) {
+    if (!byId.has(a.id)) byId.set(a.id, structuredClone(a))
+  }
+  const accountMap = { ...DEFAULT_ACCOUNT_MAP, ...snap.accountMap }
+  for (const key of Object.keys(DEFAULT_ACCOUNT_MAP) as (keyof typeof DEFAULT_ACCOUNT_MAP)[]) {
+    if (!accountMap[key]) accountMap[key] = DEFAULT_ACCOUNT_MAP[key]
+  }
+  return {
+    ...snap,
+    accounts: [...byId.values()],
+    accountMap,
+  }
+}
+
 export const glRepository = createLocalRepository({
   key: 'egabah.gl.v1',
   seed,

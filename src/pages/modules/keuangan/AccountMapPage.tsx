@@ -25,6 +25,8 @@ const MAP_KEY_LABEL: Record<AccountMapKey, string> = {
   payroll: 'Beban gaji',
   mfgOverhead: 'Overhead produksi',
   openingEquity: 'Modal / saldo awal',
+  ppnOut: 'PPN keluaran',
+  ppnIn: 'PPN masukan',
 }
 
 function accountOptionLabel(a: Account): string {

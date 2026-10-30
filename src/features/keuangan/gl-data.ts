@@ -26,6 +26,8 @@ export type AccountMapKey =
   | 'payroll'
   | 'mfgOverhead'
   | 'openingEquity'
+  | 'ppnOut'
+  | 'ppnIn'
 
 export type AccountMap = Record<AccountMapKey, string> // accountId
 
@@ -77,6 +79,8 @@ export const SEED_ACCOUNTS: Account[] = [
   { id: 'acc-wip', code: '1-1350', name: 'Persediaan WIP', type: 'asset', isPostable: true, active: true, system: true },
   { id: 'acc-inv-beras', code: '1-1400', name: 'Persediaan Beras', type: 'asset', isPostable: true, active: true, system: true },
   { id: 'acc-ap', code: '2-1100', name: 'Utang Usaha', type: 'liability', isPostable: true, active: true, system: true },
+  { id: 'acc-ppn-out', code: '2-1200', name: 'PPN Keluaran', type: 'liability', isPostable: true, active: true, system: true },
+  { id: 'acc-ppn-in', code: '1-1500', name: 'PPN Masukan', type: 'asset', isPostable: true, active: true, system: true },
   { id: 'acc-equity', code: '3-1100', name: 'Modal / Saldo Awal', type: 'equity', isPostable: true, active: true, system: true },
   { id: 'acc-sales', code: '4-1100', name: 'Penjualan', type: 'revenue', isPostable: true, active: true, system: true },
   { id: 'acc-sales-ret', code: '4-1200', name: 'Retur Penjualan', type: 'revenue', isPostable: true, active: true, system: true },
@@ -100,6 +104,8 @@ export const DEFAULT_ACCOUNT_MAP: AccountMap = {
   payroll: 'acc-payroll',
   mfgOverhead: 'acc-mfg',
   openingEquity: 'acc-equity',
+  ppnOut: 'acc-ppn-out',
+  ppnIn: 'acc-ppn-in',
 }
 
 export function nextJournalId(list: JournalEntry[], date = new Date()): string {
