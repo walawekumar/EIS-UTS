@@ -15,6 +15,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Git worktrees / SDD scratch
+.worktrees/
+.superpowers/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
