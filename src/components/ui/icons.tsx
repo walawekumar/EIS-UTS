@@ -61,6 +61,14 @@ export function ChevronDownIcon(props: IconProps) {
   )
 }
 
+export function MenuIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  )
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -83,6 +91,15 @@ export function LeafMarkIcon(props: IconProps) {
     <svg {...base({ ...props, strokeWidth: 1.6 })}>
       <path d="M12 21c7-3 9-9 8-15-6-1-12 2-15 8 3 1 5.5 3.5 7 7Z" />
       <path d="M9 14c2-1.5 4.5-2.5 7.5-3" />
+    </svg>
+  )
+}
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.6A1.5 1.5 0 0 1 10.5 4h3a1.5 1.5 0 0 1 1.2.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-8Z" />
+      <circle cx="12" cy="12.5" r="3.25" />
     </svg>
   )
 }

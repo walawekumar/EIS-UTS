@@ -79,7 +79,7 @@ function FilterDropdown<T extends string>({
   const selected = options.find((o) => o.value === value) ?? options[0]
 
   return (
-    <div ref={rootRef} className="relative w-full shrink-0 sm:w-48">
+    <div ref={rootRef} className="relative w-full shrink-0 sm:w-auto sm:min-w-[11rem]">
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
@@ -90,7 +90,7 @@ function FilterDropdown<T extends string>({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={[
-          'flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-white px-3.5 text-left text-[14px] transition',
+          'flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-panel px-3 text-left text-[13px] transition',
           open
             ? 'border-brand-600 ring-2 ring-brand-100'
             : 'border-line hover:border-brand-300',
@@ -99,7 +99,7 @@ function FilterDropdown<T extends string>({
         <span className="truncate text-ink">{selected.label}</span>
         <ChevronDownIcon
           className={[
-            'size-4 shrink-0 text-muted transition',
+            'size-3.5 shrink-0 text-muted transition',
             open ? 'rotate-180' : '',
           ].join(' ')}
         />
@@ -108,7 +108,7 @@ function FilterDropdown<T extends string>({
       {open ? (
         <div
           role="listbox"
-          className="absolute right-0 z-20 mt-1.5 w-full overflow-hidden rounded-xl border border-line bg-white py-1 shadow-md"
+          className="absolute right-0 z-20 mt-1.5 w-full overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
         >
           {options.map((opt) => {
             const active = opt.value === value
@@ -123,7 +123,7 @@ function FilterDropdown<T extends string>({
                   setOpen(false)
                 }}
                 className={[
-                  'block w-full px-3.5 py-2.5 text-left text-[14px] transition',
+                  'block w-full px-3 py-2 text-left text-[13px] transition',
                   active
                     ? 'bg-brand-50 font-medium text-brand-900'
                     : 'text-ink hover:bg-brand-50/70',
@@ -161,7 +161,7 @@ function DateRangeDropdown({
     : 'Tanggal'
 
   return (
-    <div ref={rootRef} className="relative w-full shrink-0 sm:w-48">
+    <div ref={rootRef} className="relative w-full shrink-0 sm:w-auto sm:min-w-[11rem]">
       <button
         id={id}
         type="button"
@@ -169,7 +169,7 @@ function DateRangeDropdown({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={[
-          'flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-white px-3.5 text-left text-[14px] transition',
+          'flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-panel px-3 text-left text-[13px] transition',
           open || active
             ? 'border-brand-600 ring-2 ring-brand-100'
             : 'border-line hover:border-brand-300',
@@ -180,7 +180,7 @@ function DateRangeDropdown({
         </span>
         <ChevronDownIcon
           className={[
-            'size-4 shrink-0 text-muted transition',
+            'size-3.5 shrink-0 text-muted transition',
             open ? 'rotate-180' : '',
           ].join(' ')}
         />
@@ -190,29 +190,29 @@ function DateRangeDropdown({
         <div
           role="dialog"
           aria-label="Filter tanggal"
-          className="absolute right-0 z-20 mt-1.5 w-[min(100vw-2rem,17rem)] rounded-xl border border-line bg-white p-3 shadow-md"
+          className="absolute right-0 z-20 mt-1.5 w-[min(100vw-2rem,15.5rem)] rounded-xl border border-line bg-panel p-2.5 shadow-md"
         >
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium tracking-wide text-muted uppercase">
+              <span className="mb-1 block text-[10px] font-medium tracking-wide text-muted uppercase">
                 Dari
               </span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => onDateFromChange(e.target.value)}
-                className="h-10 w-full rounded-xl border border-line bg-white px-3 text-[13px] text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+                className="h-9 w-full rounded-xl border border-line bg-panel px-2.5 text-[13px] text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium tracking-wide text-muted uppercase">
+              <span className="mb-1 block text-[10px] font-medium tracking-wide text-muted uppercase">
                 Sampai
               </span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => onDateToChange(e.target.value)}
-                className="h-10 w-full rounded-xl border border-line bg-white px-3 text-[13px] text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+                className="h-9 w-full rounded-xl border border-line bg-panel px-2.5 text-[13px] text-ink outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
               />
             </label>
             {active ? (
@@ -222,7 +222,7 @@ function DateRangeDropdown({
                   onDateFromChange('')
                   onDateToChange('')
                 }}
-                className="h-9 w-full rounded-xl text-[13px] font-medium text-muted transition hover:bg-brand-50 hover:text-ink"
+                className="h-8 w-full rounded-xl text-[12px] font-medium text-muted transition hover:bg-brand-50 hover:text-ink"
               >
                 Reset tanggal
               </button>
@@ -262,13 +262,13 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
   const hasDates = Boolean(onDateFromChange && onDateToChange)
 
   return (
-    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="mb-3.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-2">
         <label className="relative block min-w-0 flex-1">
           <span className="sr-only">Cari</span>
           <svg
             viewBox="0 0 24 24"
-            className="pointer-events-none absolute top-1/2 left-3.5 size-[18px] -translate-y-1/2 text-muted"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.75"
@@ -282,7 +282,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
-            className="h-10 w-full rounded-xl border border-line bg-white py-2 pr-3 pl-10 text-[14px] text-ink outline-none placeholder:text-muted/70 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+            className="h-10 w-full rounded-xl border border-line bg-surface/40 py-2 pr-3 pl-9 text-[13px] text-ink outline-none placeholder:text-muted/70 transition focus:border-brand-600 focus:bg-panel focus:ring-2 focus:ring-brand-100"
           />
         </label>
 
@@ -317,7 +317,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           <button
             type="button"
             onClick={onSecondaryAction}
-            className="h-10 rounded-xl border border-line px-4 text-[14px] font-medium text-ink transition hover:bg-brand-50"
+            className="h-10 rounded-xl border border-line px-4 text-[13px] font-medium text-ink transition hover:bg-brand-50"
           >
             {secondaryActionLabel}
           </button>
@@ -326,7 +326,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           <button
             type="button"
             onClick={onAction}
-            className="h-10 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            className="h-10 rounded-xl bg-brand-800 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-900"
           >
             {actionLabel}
           </button>

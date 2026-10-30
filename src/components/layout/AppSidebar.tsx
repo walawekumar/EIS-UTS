@@ -3,12 +3,23 @@ import { useAuth } from '@/features/auth/AuthContext'
 import { getNavForRole } from '@/features/nav/nav-config'
 import { LeafMarkIcon } from '@/components/ui/icons'
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  mobileOpen?: boolean
+  onNavigate?: () => void
+}
+
+export function AppSidebar({ mobileOpen = false, onNavigate }: AppSidebarProps) {
   const { user } = useAuth()
   const groups = user ? getNavForRole(user.role) : []
 
   return (
-    <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-line bg-panel">
+    <aside
+      className={[
+        'flex h-full w-[240px] shrink-0 flex-col border-r border-line bg-panel',
+        'fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out md:static md:z-auto md:translate-x-0',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
+    >
       <div className="flex h-14 items-center gap-2.5 border-b border-line px-4">
         <span className="inline-flex size-8 items-center justify-center rounded-lg bg-brand-800 text-white">
           <LeafMarkIcon className="size-4" />
@@ -43,16 +54,17 @@ export function AppSidebar() {
                     <NavLink
                       to={item.path}
                       end={item.path.split('/').length <= 3}
+                      onClick={onNavigate}
                       className={({ isActive }) =>
                         [
-                          'block rounded-lg px-2.5 py-1.5 text-[13px] transition',
+                          'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition',
                           isActive
                             ? 'bg-brand-100 font-semibold text-brand-900'
                             : 'font-medium text-ink/75 hover:bg-brand-50 hover:text-brand-900',
                         ].join(' ')
                       }
                     >
-                      {item.label}
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     </NavLink>
                   </li>
                 ))}
