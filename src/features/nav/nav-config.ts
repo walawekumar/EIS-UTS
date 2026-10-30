@@ -205,6 +205,19 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/keuangan/e-faktur',
         roles: ['admin', 'keuangan'],
       },
+      {
+        id: 'periode',
+        label: 'Periode',
+        path: '/app/keuangan/periode',
+        roles: [
+          'admin',
+          'keuangan',
+          'pembelian',
+          'penjualan',
+          'produksi',
+          'gudang',
+        ],
+      },
     ],
   },
   {

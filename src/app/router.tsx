@@ -10,6 +10,7 @@ import { AccountMapPage } from '@/pages/modules/keuangan/AccountMapPage'
 import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
 import { CoaPage } from '@/pages/modules/keuangan/CoaPage'
 import { EFakturPage } from '@/pages/modules/keuangan/EFakturPage'
+import { PeriodePage } from '@/pages/modules/keuangan/PeriodePage'
 import { JurnalPage } from '@/pages/modules/keuangan/JurnalPage'
 import { KasPage } from '@/pages/modules/keuangan/KasPage'
 import { PayrollPage } from '@/pages/modules/keuangan/PayrollPage'
@@ -179,6 +180,7 @@ export function AppRouter() {
             <Route path="akun-map" element={<AccountMapPage />} />
             <Route path="jurnal" element={<JurnalPage />} />
             <Route path="e-faktur" element={<EFakturPage />} />
+            <Route path="periode" element={<PeriodePage />} />
             <Route
               path="utang-piutang"
               element={<Navigate to="/app/keuangan/utang" replace />}
