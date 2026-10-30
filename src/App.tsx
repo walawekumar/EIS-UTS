@@ -4,6 +4,7 @@ import { AppRouter } from '@/app/router'
 import { AuditProvider } from '@/features/audit/audit-store'
 import { AuthProvider } from '@/features/auth/AuthContext'
 import { FinanceProvider } from '@/features/keuangan/finance-store'
+import { TaxProvider } from '@/features/keuangan/tax-store'
 import { MasterProvider } from '@/features/master/master-store'
 import { PembelianProvider } from '@/features/pembelian/PembelianContext'
 import { PenjualanProvider } from '@/features/penjualan/PenjualanContext'
@@ -20,19 +21,21 @@ export default function App() {
       <AuditProvider>
         <MasterProvider>
           <FinanceProvider>
-            <PayrollProvider>
-              <PersediaanProvider>
-                <ProduksiProvider>
-                  <PembelianProvider>
-                    <PenjualanProvider>
-                      <BrowserRouter>
-                        <AppRouter />
-                      </BrowserRouter>
-                    </PenjualanProvider>
-                  </PembelianProvider>
-                </ProduksiProvider>
-              </PersediaanProvider>
-            </PayrollProvider>
+            <TaxProvider>
+              <PayrollProvider>
+                <PersediaanProvider>
+                  <ProduksiProvider>
+                    <PembelianProvider>
+                      <PenjualanProvider>
+                        <BrowserRouter>
+                          <AppRouter />
+                        </BrowserRouter>
+                      </PenjualanProvider>
+                    </PembelianProvider>
+                  </ProduksiProvider>
+                </PersediaanProvider>
+              </PayrollProvider>
+            </TaxProvider>
           </FinanceProvider>
         </MasterProvider>
       </AuditProvider>
