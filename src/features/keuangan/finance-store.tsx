@@ -192,6 +192,43 @@ function prependCash(
   return [entry, ...list]
 }
 
+function postAutoPairJournal(
+  postJournalEntry: (input: PostJournalEntryInput) => string | undefined,
+  mapAccount: (key: AccountMapKey) => string,
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    amount: number
+    debitKey: AccountMapKey
+    creditKey: AccountMapKey
+  },
+): void {
+  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
+  if (!Number.isFinite(amount) || amount <= 0) return
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines: [
+      {
+        accountId: mapAccount(debitKey),
+        debit: amount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount(creditKey),
+        debit: 0,
+        credit: amount,
+        memo,
+      },
+    ],
+  })
+}
+
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const actor = user?.name ?? 'Pengguna'
@@ -318,62 +355,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           receiptName,
         }),
       )
-    },
-    [actor],
-  )
-
-  const addExpense = useCallback(
-    (input: AddExpenseInput) => {
-      setExpenses((list) => {
-        const entry: ExpenseRow = {
-          id: `e-${Date.now()}`,
-          date: formatDateId(),
-          reference: nextExpenseRef(list),
-          category: input.category,
-          description: input.description,
-          amount: input.amount,
-          status: input.status,
-          actor,
-          receiptName: input.receiptName,
-        }
-        if (input.status === 'posted') {
-          setCashEntries((cash) =>
-            prependCash(cash, {
-              direction: 'out',
-              category: 'Operasional',
-              description: `Biaya ${entry.reference} · ${entry.description}`,
-              amount: entry.amount,
-              actor,
-              receiptName: entry.receiptName,
-            }),
-          )
-        }
-        return [entry, ...list]
-      })
-    },
-    [actor],
-  )
-
-  const setExpenseStatus = useCallback(
-    (id: string, status: ExpenseStatus) => {
-      setExpenses((list) => {
-        const prev = list.find((e) => e.id === id)
-        if (prev && prev.status !== 'posted' && status === 'posted') {
-          setCashEntries((cash) =>
-            prependCash(cash, {
-              direction: 'out',
-              category: 'Operasional',
-              description: `Biaya ${prev.reference} · ${prev.description}`,
-              amount: prev.amount,
-              actor,
-              receiptName: prev.receiptName,
-            }),
-          )
-        }
-        return list.map((item) =>
-          item.id === id ? { ...item, status } : item,
-        )
-      })
     },
     [actor],
   )
@@ -675,6 +656,86 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       })
     },
     [postJournalEntry],
+  )
+
+  const addExpense = useCallback(
+    (input: AddExpenseInput) => {
+      const id = `e-${Date.now()}`
+      setExpenses((list) => {
+        const entry: ExpenseRow = {
+          id,
+          date: formatDateId(),
+          reference: nextExpenseRef(list),
+          category: input.category,
+          description: input.description,
+          amount: input.amount,
+          status: input.status,
+          actor,
+          receiptName: input.receiptName,
+        }
+        if (input.status === 'posted') {
+          setCashEntries((cash) =>
+            prependCash(cash, {
+              direction: 'out',
+              category: 'Operasional',
+              description: `Biaya ${entry.reference} · ${entry.description}`,
+              amount: entry.amount,
+              actor,
+              receiptName: entry.receiptName,
+            }),
+          )
+        }
+        return [entry, ...list]
+      })
+      if (input.status === 'posted') {
+        const memo = `Biaya operasional · ${input.description}`
+        postAutoPairJournal(postJournalEntry, mapAccount, {
+          date: todayGlDate(),
+          memo,
+          sourceKey: `ex:${id}:post`,
+          amount: input.amount,
+          debitKey: 'expenseOps',
+          creditKey: 'cash',
+        })
+      }
+    },
+    [actor, postJournalEntry, mapAccount],
+  )
+
+  const setExpenseStatus = useCallback(
+    (id: string, status: ExpenseStatus) => {
+      setExpenses((list) => {
+        const prev = list.find((e) => e.id === id)
+        if (!prev) return list
+        if (prev.status !== 'posted' && status === 'posted') {
+          setCashEntries((cash) =>
+            prependCash(cash, {
+              direction: 'out',
+              category: 'Operasional',
+              description: `Biaya ${prev.reference} · ${prev.description}`,
+              amount: prev.amount,
+              actor,
+              receiptName: prev.receiptName,
+            }),
+          )
+          const memo = `Biaya ${prev.reference} · ${prev.description}`
+          postAutoPairJournal(postJournalEntry, mapAccount, {
+            date: todayGlDate(),
+            memo,
+            sourceKey: `ex:${id}:post`,
+            amount: prev.amount,
+            debitKey: 'expenseOps',
+            creditKey: 'cash',
+          })
+        } else if (prev.status === 'posted' && status !== 'posted') {
+          reverseJournalEntry({ sourceKey: `ex:${id}:post` })
+        }
+        return list.map((item) =>
+          item.id === id ? { ...item, status } : item,
+        )
+      })
+    },
+    [actor, postJournalEntry, mapAccount, reverseJournalEntry],
   )
 
   const value = useMemo(

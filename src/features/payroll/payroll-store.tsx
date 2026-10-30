@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
+import { type AccountMapKey } from '@/features/keuangan/gl-data'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import {
   nextPayrollId,
@@ -58,10 +59,56 @@ function stamp(role: 'admin' | 'keuangan', name: string): ApprovalStamp {
   }
 }
 
+function todayGlDate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function postPayrollJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    amount: number
+    debitKey: AccountMapKey
+    creditKey: AccountMapKey
+  },
+): void {
+  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
+  if (!Number.isFinite(amount) || amount <= 0) return
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines: [
+      {
+        accountId: mapAccount(debitKey),
+        debit: amount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount(creditKey),
+        debit: 0,
+        credit: amount,
+        memo,
+      },
+    ],
+  })
+}
+
 export function PayrollProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { appendAudit } = useAuditStore()
-  const { addCashEntry } = useFinanceStore()
+  const { addCashEntry, postJournalEntry, reverseJournalEntry, mapAccount } =
+    useFinanceStore()
   const [runs, setRuns] = useState<PayrollRun[]>(
     () => payrollRepository.load().runs,
   )
@@ -272,6 +319,14 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
             : r,
         ),
       )
+      postPayrollJournal(postJournalEntry, mapAccount, {
+        date: todayGlDate(),
+        memo: `Payroll ${current.period} · ${current.id}`,
+        sourceKey: `payrun:${id}:post`,
+        amount: total,
+        debitKey: 'payroll',
+        creditKey: 'cash',
+      })
       appendAudit({
         action: 'post',
         entity: 'expense',
@@ -280,7 +335,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [runs, user?.role, addCashEntry, appendAudit],
+    [runs, user?.role, addCashEntry, postJournalEntry, mapAccount, appendAudit],
   )
 
   const voidRun = useCallback(
@@ -294,6 +349,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
           description: `Void gaji ${current.period} · ${current.id}`,
           amount: runTotal(current),
         })
+        reverseJournalEntry({ sourceKey: `payrun:${id}:post` })
       }
       setRuns((list) =>
         list.map((r) =>
@@ -309,7 +365,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         note: 'Void payroll',
       })
     },
-    [runs, addCashEntry, appendAudit],
+    [runs, addCashEntry, reverseJournalEntry, appendAudit],
   )
 
   const deleteRun = useCallback(
