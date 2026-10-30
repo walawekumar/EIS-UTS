@@ -26,10 +26,13 @@ import {
 } from '@/features/keuangan/gl-journal'
 import { glRepository, normalizeGlSnapshot } from '@/features/keuangan/gl-storage'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
+import { computePpn } from '@/features/keuangan/tax-compute'
+import type { PpnRate, PriceMode, TaxDoc } from '@/features/keuangan/tax-data'
 import {
   formatDateId,
   nextCashRef,
   nextExpenseRef,
+  resolveExpenseTaxDefaults,
   resolvePayableStatus,
   resolveReceivableStatus,
   type CashDirection,
@@ -63,7 +66,19 @@ type AddExpenseInput = {
   amount: number
   status: 'draft' | 'posted'
   receiptName?: string
+  ppnRate?: PpnRate
+  priceMode?: PriceMode
 }
+
+/** Registered from BiayaPage (inside TaxProvider) for expense tax docs. */
+export const expenseTaxBridge: {
+  recordTaxDoc:
+    | ((
+        input: Omit<TaxDoc, 'id' | 'createdAt' | 'voidedAt'> & { id?: string },
+      ) => TaxDoc)
+    | null
+  voidTaxForSource: ((sourceType: 'expense', sourceId: string) => void) | null
+} = { recordTaxDoc: null, voidTaxForSource: null }
 
 type UpsertPayableInput = {
   sourceId: string
@@ -192,40 +207,81 @@ function prependCash(
   return [entry, ...list]
 }
 
-function postAutoPairJournal(
+function resolveExpensePostTax(
+  row: Pick<ExpenseRow, 'ppnRate' | 'priceMode'>,
+  input?: { ppnRate?: PpnRate; priceMode?: PriceMode },
+): { ppnRate: PpnRate; priceMode: PriceMode } {
+  if (input?.ppnRate != null && input.priceMode != null) {
+    return { ppnRate: input.ppnRate, priceMode: input.priceMode }
+  }
+  if (row.ppnRate != null && row.priceMode != null) {
+    return { ppnRate: row.ppnRate, priceMode: row.priceMode }
+  }
+  return resolveExpenseTaxDefaults({})
+}
+
+function postExpenseJournal(
   postJournalEntry: (input: PostJournalEntryInput) => string | undefined,
   mapAccount: (key: AccountMapKey) => string,
   input: {
     date: string
     memo: string
     sourceKey: string
-    amount: number
-    debitKey: AccountMapKey
-    creditKey: AccountMapKey
+    dpp: number
+    ppn: number
+    total: number
   },
 ): string | undefined {
-  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  const { date, memo, sourceKey, dpp, ppn, total } = input
+  if (!Number.isFinite(total) || total <= 0) return undefined
+  const lines: JournalLine[] = [
+    {
+      accountId: mapAccount('expenseOps'),
+      debit: dpp,
+      credit: 0,
+      memo,
+    },
+  ]
+  if (ppn > 0) {
+    lines.push({
+      accountId: mapAccount('ppnIn'),
+      debit: ppn,
+      credit: 0,
+      memo,
+    })
+  }
+  lines.push({
+    accountId: mapAccount('cash'),
+    debit: 0,
+    credit: total,
+    memo,
+  })
   return postJournalEntry({
     date,
     memo,
     sourceKey,
     sourceType: 'auto',
     manual: false,
-    lines: [
-      {
-        accountId: mapAccount(debitKey),
-        debit: amount,
-        credit: 0,
-        memo,
-      },
-      {
-        accountId: mapAccount(creditKey),
-        debit: 0,
-        credit: amount,
-        memo,
-      },
-    ],
+    lines,
+  })
+}
+
+function recordExpenseTaxDoc(
+  expenseId: string,
+  description: string,
+  tax: { ppnRate: PpnRate; priceMode: PriceMode },
+  calc: { dpp: number; ppn: number; total: number },
+): void {
+  expenseTaxBridge.recordTaxDoc?.({
+    sourceType: 'expense',
+    sourceId: expenseId,
+    date: todayGlDate(),
+    ppnRate: tax.ppnRate,
+    priceMode: tax.priceMode,
+    dpp: calc.dpp,
+    ppn: calc.ppn,
+    total: calc.total,
+    note: description,
   })
 }
 
@@ -661,6 +717,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const addExpense = useCallback(
     (input: AddExpenseInput): string | undefined => {
       const id = `e-${Date.now()}`
+      const tax = resolveExpensePostTax({}, input)
+      const calc =
+        input.status === 'posted'
+          ? computePpn({
+              subtotal: input.amount,
+              rate: tax.ppnRate,
+              priceMode: tax.priceMode,
+            })
+          : null
+      const cashOut = calc?.total ?? input.amount
       setExpenses((list) => {
         const entry: ExpenseRow = {
           id,
@@ -672,6 +738,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           status: input.status,
           actor,
           receiptName: input.receiptName,
+          ppnRate: tax.ppnRate,
+          priceMode: tax.priceMode,
+          ...(calc
+            ? {
+                dpp: calc.dpp,
+                ppn: calc.ppn,
+                totalWithTax: calc.total,
+              }
+            : {}),
         }
         if (input.status === 'posted') {
           setCashEntries((cash) =>
@@ -679,7 +754,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
               direction: 'out',
               category: 'Operasional',
               description: `Biaya ${entry.reference} · ${entry.description}`,
-              amount: entry.amount,
+              amount: cashOut,
               actor,
               receiptName: entry.receiptName,
             }),
@@ -687,15 +762,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         }
         return [entry, ...list]
       })
-      if (input.status === 'posted') {
+      if (input.status === 'posted' && calc) {
+        recordExpenseTaxDoc(id, input.description, tax, calc)
         const memo = `Biaya operasional · ${input.description}`
-        return postAutoPairJournal(postJournalEntry, mapAccount, {
+        return postExpenseJournal(postJournalEntry, mapAccount, {
           date: todayGlDate(),
           memo,
           sourceKey: `ex:${id}:post`,
-          amount: input.amount,
-          debitKey: 'expenseOps',
-          creditKey: 'cash',
+          dpp: calc.dpp,
+          ppn: calc.ppn,
+          total: calc.total,
         })
       }
       return undefined
@@ -710,36 +786,59 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         const prev = list.find((e) => e.id === id)
         if (!prev) return list
         if (prev.status !== 'posted' && status === 'posted') {
+          const tax = resolveExpensePostTax(prev)
+          const calc = computePpn({
+            subtotal: prev.amount,
+            rate: tax.ppnRate,
+            priceMode: tax.priceMode,
+          })
           setCashEntries((cash) =>
             prependCash(cash, {
               direction: 'out',
               category: 'Operasional',
               description: `Biaya ${prev.reference} · ${prev.description}`,
-              amount: prev.amount,
+              amount: calc.total,
               actor,
               receiptName: prev.receiptName,
             }),
           )
+          recordExpenseTaxDoc(id, prev.description, tax, calc)
           const memo = `Biaya ${prev.reference} · ${prev.description}`
-          journalError = postAutoPairJournal(postJournalEntry, mapAccount, {
+          journalError = postExpenseJournal(postJournalEntry, mapAccount, {
             date: todayGlDate(),
             memo,
             sourceKey: `ex:${id}:post`,
-            amount: prev.amount,
-            debitKey: 'expenseOps',
-            creditKey: 'cash',
+            dpp: calc.dpp,
+            ppn: calc.ppn,
+            total: calc.total,
           })
-        } else if (prev.status === 'posted' && status !== 'posted') {
+          return list.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status,
+                  ppnRate: tax.ppnRate,
+                  priceMode: tax.priceMode,
+                  dpp: calc.dpp,
+                  ppn: calc.ppn,
+                  totalWithTax: calc.total,
+                }
+              : item,
+          )
+        }
+        if (prev.status === 'posted' && status !== 'posted') {
+          const cashAmount = prev.totalWithTax ?? prev.amount
           setCashEntries((cash) =>
             prependCash(cash, {
               direction: 'in',
               category: 'Operasional',
               description: `Void biaya ${prev.reference} · ${prev.description}`,
-              amount: prev.amount,
+              amount: cashAmount,
               actor,
               receiptName: prev.receiptName,
             }),
           )
+          expenseTaxBridge.voidTaxForSource?.('expense', id)
           journalError = reverseJournalEntry({
             sourceKey: `ex:${id}:post`,
           })

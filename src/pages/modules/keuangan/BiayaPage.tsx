@@ -37,13 +37,20 @@ import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { printBukti } from '@/components/keuangan/print-bukti'
-import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
+import {
+  expenseTaxBridge,
+  useFinanceStore,
+} from '@/features/keuangan/finance-store'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_STATUS_LABEL,
   buildBiayaStats,
   formatIdr,
   parseIdrInput,
+  resolveExpenseTaxDefaults,
   type ExpenseRow,
   type ExpenseStatus,
 } from '@/features/keuangan/keuangan-data'
@@ -103,6 +110,10 @@ const EMPTY_FORM: FormState = {
 export function BiayaPage() {
   const PAGE_SIZE = usePageSize()
   const { expenses, addExpense, setExpenseStatus } = useFinanceStore()
+  const { recordTaxDoc, voidTaxForSource, settings } = useTaxStore()
+  const taxDefaults = resolveExpenseTaxDefaults(settings)
+  const [ppnRate, setPpnRate] = useState<PpnRate>(taxDefaults.ppnRate)
+  const [priceMode, setPriceMode] = useState<PriceMode>(taxDefaults.priceMode)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -166,7 +177,19 @@ export function BiayaPage() {
     return () => window.clearTimeout(t)
   }, [toast])
 
+  useEffect(() => {
+    expenseTaxBridge.recordTaxDoc = recordTaxDoc
+    expenseTaxBridge.voidTaxForSource = voidTaxForSource
+    return () => {
+      expenseTaxBridge.recordTaxDoc = null
+      expenseTaxBridge.voidTaxForSource = null
+    }
+  }, [recordTaxDoc, voidTaxForSource])
+
   function openForm() {
+    const defaults = resolveExpenseTaxDefaults(settings)
+    setPpnRate(defaults.ppnRate)
+    setPriceMode(defaults.priceMode)
     setForm(EMPTY_FORM)
     setReceipt(null)
     setErrors({})
@@ -191,6 +214,8 @@ export function BiayaPage() {
       amount: parseIdrInput(form.amount),
       status: form.status,
       receiptName: receipt?.name,
+      ppnRate,
+      priceMode,
     })
     setFormOpen(false)
     setReceipt(null)
@@ -463,6 +488,15 @@ export function BiayaPage() {
               <p className="font-mono text-[11px] text-muted">
                 = {formatIdr(parseIdrInput(form.amount))}
               </p>
+            ) : null}
+            {parseIdrInput(form.amount) > 0 ? (
+              <TaxPostFields
+                subtotal={parseIdrInput(form.amount)}
+                rate={ppnRate}
+                priceMode={priceMode}
+                onRateChange={setPpnRate}
+                onModeChange={setPriceMode}
+              />
             ) : null}
             <TextField
               id="biaya-desc"

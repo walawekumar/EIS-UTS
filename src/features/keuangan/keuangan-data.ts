@@ -1,4 +1,6 @@
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import type { PpnRate, PriceMode, TaxSnapshotFields } from '@/features/keuangan/tax-data'
+import { readAppSettings } from '@/features/settings/app-settings'
 
 export type CashDirection = 'in' | 'out'
 
@@ -55,6 +57,25 @@ export type ExpenseRow = {
   status: ExpenseStatus
   actor: string
   receiptName?: string
+} & TaxSnapshotFields
+
+export type ExpensePostTax = {
+  ppnRate: PpnRate
+  priceMode: PriceMode
+}
+
+/** Tax settings first, then app finance.ppnRate, then 11% exclusive. */
+export function resolveExpenseTaxDefaults(settings: {
+  defaultRate?: number
+  defaultPriceMode?: string
+}): ExpensePostTax {
+  const stored = settings.defaultRate
+  const appRate = readAppSettings().finance.ppnRate
+  const raw = stored === 0 || stored === 11 ? stored : appRate
+  const ppnRate: PpnRate = raw === 0 ? 0 : 11
+  const priceMode: PriceMode =
+    settings.defaultPriceMode === 'inclusive' ? 'inclusive' : 'exclusive'
+  return { ppnRate, priceMode }
 }
 
 /** @deprecated gunakan MetricCardData — dipertahankan agar import lama tidak pecah */
