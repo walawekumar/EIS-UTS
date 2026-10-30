@@ -57,7 +57,7 @@ type PembelianContextValue = {
   purchases: Purchase[]
   createPurchase: (data: NewPurchase) => string
   deletePurchase: (id: string) => void
-  voidPurchase: (id: string, reason: string) => void
+  voidPurchase: (id: string, reason: string) => string | undefined
   submitPurchase: (id: string) => string | undefined
   approvePurchase: (id: string) => string | undefined
   rejectPurchase: (id: string, reason: string) => string | undefined
@@ -154,10 +154,16 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   }, [appendAudit])
 
   const voidPurchase = useCallback(
-    (id: string, reason: string) => {
+    (id: string, reason: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
+        return 'Hanya keuangan atau admin yang dapat membatalkan pembelian.'
+      }
       const current = items.find((p) => p.id === id)
-      if (!current || current.voidedAt) return
-      if (!canVoidPurchase(current.stage)) return
+      if (!current) return 'Dokumen pembelian tidak ditemukan.'
+      if (current.voidedAt) return 'Dokumen sudah dibatalkan.'
+      if (!canVoidPurchase(current.stage)) {
+        return 'Pembelian pada tahap ini tidak dapat dibatalkan.'
+      }
       const calc = current.weighing
         ? calcWeighing(current.grain, current.weighing)
         : null
@@ -193,8 +199,9 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: reason,
       })
+      return undefined
     },
-    [items, addMovement, removeLinkedPayable, appendAudit],
+    [items, addMovement, removeLinkedPayable, appendAudit, user?.role],
   )
 
   const submitPurchase = useCallback(
@@ -316,6 +323,9 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
 
   const saveWeighing = useCallback(
     (id: string, input: WeighingInput): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
+        return 'Hanya petugas pembelian atau admin yang dapat menimbang.'
+      }
       const current = items.find((p) => p.id === id)
       if (!current) return 'Dokumen pembelian tidak ditemukan.'
       if (current.stage !== 'disetujui' && current.stage !== 'ditimbang') {
@@ -332,11 +342,14 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       }))
       return undefined
     },
-    [items, patch],
+    [items, patch, user?.role],
   )
 
   const confirmWeighing = useCallback(
     (id: string, input: WeighingInput): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
+        return 'Hanya petugas pembelian atau admin yang dapat mengonfirmasi timbang.'
+      }
       const today = todayIso()
       const termDays = getPaymentTermDays()
       const dueDate = addDays(today, termDays)
@@ -406,7 +419,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [addMovement, items, upsertPayableFromPurchase, appendAudit],
+    [addMovement, items, upsertPayableFromPurchase, appendAudit, user?.role],
   )
 
   const addPayment = useCallback(
@@ -419,6 +432,10 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       }
       const current = items.find((p) => p.id === id)
       if (!current) return 'Dokumen pembelian tidak ditemukan.'
+      if (current.voidedAt) return 'Dokumen sudah dibatalkan.'
+      if (current.stage !== 'menunggu_selesai' && current.stage !== 'selesai') {
+        return 'Pembayaran hanya setelah penerimaan dikonfirmasi.'
+      }
       const payId = nextPaymentId(items)
       const receiptName =
         payment.receiptName ??
