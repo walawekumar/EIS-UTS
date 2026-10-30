@@ -6,7 +6,9 @@ import { LoginPage } from '@/pages/LoginPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DashboardPage } from '@/pages/modules/DashboardPage'
 import { AuditPage } from '@/pages/modules/AuditPage'
+import { AccountMapPage } from '@/pages/modules/keuangan/AccountMapPage'
 import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
+import { CoaPage } from '@/pages/modules/keuangan/CoaPage'
 import { KasPage } from '@/pages/modules/keuangan/KasPage'
 import { PayrollPage } from '@/pages/modules/keuangan/PayrollPage'
 import { PiutangPage } from '@/pages/modules/keuangan/PiutangPage'
@@ -171,6 +173,8 @@ export function AppRouter() {
             <Route path="piutang" element={<PiutangPage />} />
             <Route path="biaya" element={<BiayaPage />} />
             <Route path="payroll" element={<PayrollPage />} />
+            <Route path="coa" element={<CoaPage />} />
+            <Route path="akun-map" element={<AccountMapPage />} />
             <Route
               path="utang-piutang"
               element={<Navigate to="/app/keuangan/utang" replace />}

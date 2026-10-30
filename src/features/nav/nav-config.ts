@@ -181,6 +181,18 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/keuangan/payroll',
         roles: ['admin', 'keuangan'],
       },
+      {
+        id: 'coa',
+        label: 'Bagan Akun',
+        path: '/app/keuangan/coa',
+        roles: ['admin', 'keuangan'],
+      },
+      {
+        id: 'akun-map',
+        label: 'Pemetaan Akun',
+        path: '/app/keuangan/akun-map',
+        roles: ['admin', 'keuangan'],
+      },
     ],
   },
   {
