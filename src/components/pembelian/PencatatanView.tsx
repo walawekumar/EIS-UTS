@@ -1,32 +1,130 @@
-import { useMemo, useState } from 'react'
-import { GrainLabel, StageLabel } from '@/components/pembelian/StatusLabel'
+import { useEffect, useMemo, useState } from 'react'
+import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
+import { FinancePager } from '@/components/keuangan/FinancePager'
+import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
-  EmptyState,
-  FilterPills,
-  SearchInput,
-  panelClass,
-  primaryBtn,
-  secondaryBtn,
-  sectionLabel,
-} from '@/components/pembelian/Toolbar'
+  FinanceEmptyRow,
+  FinanceSortTh,
+  FinanceTable,
+  FinanceTd,
+  FinanceTh,
+  FinanceThead,
+  FinanceTr,
+  rowNumber,
+  sortBy,
+  toggleSort,
+  type SortState,
+} from '@/components/keuangan/FinanceTable'
+import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { printBukti } from '@/components/keuangan/print-bukti'
+import { StatusPill } from '@/components/keuangan/StatusPill'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
+import { EyeIcon } from '@/components/ui/icons'
+import type { MetricCardData } from '@/features/dashboard/dashboard-data'
 import {
   GRAIN_STANDARD,
+  STAGE_LABEL,
+  canHardDeletePurchase,
   formatDate,
   formatKg,
-  formatNumber,
   formatRupiah,
+  formatRupiahShort,
   getSupplier,
+  isPurchaseAwaitingWeigh,
+  isPurchaseReceivedForAp,
   summarize,
+  type GrainType,
   type Purchase,
   type PurchaseStage,
 } from '@/features/pembelian/pembelian-data'
+import { usePageSize } from '@/features/settings/usePageSize'
 
-type StageFilter = 'semua' | PurchaseStage
+const STAGE_FILTER_VALUES = [
+  'draft',
+  'diajukan',
+  'disetujui',
+  'ditolak',
+  'ditimbang',
+  'menunggu_selesai',
+  'selesai',
+] as const satisfies readonly PurchaseStage[]
+
+const FILTERS = [
+  { value: 'semua' as const, label: 'Semua status' },
+  ...STAGE_FILTER_VALUES.map((value) => ({
+    value,
+    label: STAGE_LABEL[value],
+  })),
+]
+
+const GRAIN_FILTERS = [
+  { value: 'semua' as const, label: 'Semua jenis' },
+  { value: 'GKP' as const, label: 'GKP' },
+  { value: 'GKG' as const, label: 'GKG' },
+]
+
+type StageFilter = (typeof FILTERS)[number]['value']
+type GrainFilter = (typeof GRAIN_FILTERS)[number]['value']
+type SortKey = 'id' | 'supplier' | 'date' | 'value' | 'stage'
+
+const STAGE_TONE: Record<PurchaseStage, 'neutral' | 'warn' | 'good'> = {
+  draft: 'neutral',
+  diajukan: 'neutral',
+  disetujui: 'neutral',
+  ditolak: 'warn',
+  ditimbang: 'warn',
+  menunggu_selesai: 'warn',
+  selesai: 'good',
+}
+
+function buildStats(purchases: Purchase[]): MetricCardData[] {
+  const waiting = purchases.filter((p) => isPurchaseAwaitingWeigh(p.stage))
+  const confirm = purchases.filter((p) => p.stage === 'ditimbang')
+  const openValue = [...waiting, ...confirm].reduce(
+    (s, p) => s + summarize(p).estimatedValue,
+    0,
+  )
+  return [
+    {
+      label: 'Total dokumen',
+      value: String(purchases.length),
+      delta: `${purchases.length} dok`,
+      positive: true,
+      spark: [5, 6, 6, 7, 8, 8, 9],
+    },
+    {
+      label: 'Belum ditimbang',
+      value: String(waiting.length),
+      delta: waiting.length > 0 ? 'Antre' : 'Kosong',
+      positive: waiting.length === 0,
+      spark: [3, 3, 2, 3, 2, 2, 3],
+    },
+    {
+      label: 'Menunggu konfirmasi',
+      value: String(confirm.length),
+      delta: confirm.length > 0 ? 'Perlu aksi' : '0',
+      positive: confirm.length === 0,
+      spark: [1, 2, 1, 2, 2, 1, 2],
+    },
+    {
+      label: 'Nilai terbuka',
+      value: formatRupiahShort(openValue),
+      delta: `${waiting.length + confirm.length} dok`,
+      positive: openValue === 0,
+      spark: [40, 45, 42, 48, 50, 52, 49],
+    },
+  ]
+}
 
 type PencatatanViewProps = {
   purchases: Purchase[]
   selectedId: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onGoTo: (tab: 'penerimaan' | 'pembayaran', id: string) => void
@@ -40,160 +138,319 @@ export function PencatatanView({
   onDelete,
   onGoTo,
 }: PencatatanViewProps) {
-  const [query, setQuery] = useState('')
-  const [stage, setStage] = useState<StageFilter>('semua')
+  const PAGE_SIZE = usePageSize()
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<StageFilter>('semua')
+  const [grainFilter, setGrainFilter] = useState<GrainFilter>('semua')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sort, setSort] = useState<SortState<SortKey> | null>({
+    key: 'date',
+    dir: 'desc',
+  })
+  const [page, setPage] = useState(1)
+  const [toast, setToast] = useState<string | null>(null)
+  const [detail, setDetail] = useState<Purchase | null>(null)
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return purchases
-      .filter((p) => stage === 'semua' || p.stage === stage)
-      .filter((p) => {
-        if (!q) return true
-        const s = getSupplier(p.supplierId)
-        return [p.id, s?.name, s?.village, p.vehicle].some((v) => v?.toLowerCase().includes(q))
-      })
-  }, [purchases, query, stage])
+  const stats = useMemo(() => buildStats(purchases), [purchases])
 
-  const count = (s: PurchaseStage) => purchases.filter((p) => p.stage === s).length
-  const selected = rows.find((p) => p.id === selectedId) ?? rows[0] ?? null
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = purchases.filter((p) => {
+      if (filter !== 'semua' && p.stage !== filter) return false
+      if (grainFilter !== 'semua' && p.grain !== (grainFilter as GrainType))
+        return false
+      if (dateFrom && p.date < dateFrom) return false
+      if (dateTo && p.date > dateTo) return false
+      if (!q) return true
+      const s = getSupplier(p.supplierId)
+      return [p.id, s?.name, s?.village, p.vehicle, p.grain].some((v) =>
+        v?.toLowerCase().includes(q),
+      )
+    })
+    return sortBy(base, sort, {
+      id: (p) => p.id,
+      supplier: (p) => getSupplier(p.supplierId)?.name ?? '',
+      date: (p) => p.date,
+      value: (p) =>
+        isPurchaseReceivedForAp(p.stage)
+          ? summarize(p).total
+          : summarize(p).estimatedValue,
+      stage: (p) => p.stage,
+    })
+  }, [purchases, search, filter, grainFilter, dateFrom, dateTo, sort])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const rows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  useEffect(() => {
+    if (!selectedId) return
+    const found = purchases.find((p) => p.id === selectedId)
+    if (found) setDetail(found)
+  }, [selectedId, purchases])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2400)
+    return () => window.clearTimeout(t)
+  }, [toast])
+
+  function handleSort(key: SortKey) {
+    setSort((prev) => toggleSort(prev, key))
+    setPage(1)
+  }
+
+  function openDetail(p: Purchase) {
+    setDetail(p)
+    onSelect(p.id)
+  }
+
+  function closeDetail() {
+    setDetail(null)
+    onSelect(null)
+  }
 
   return (
-    <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <section className={[panelClass, 'p-4 sm:p-5'].join(' ')}>
+    <div className="space-y-2.5">
+      <FinanceStatGrid stats={stats} />
+
+      <section className="rounded-2xl border border-line bg-panel p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="text-[14px] font-semibold text-ink">Catatan pembelian gabah</h2>
+            <h2 className="text-[14px] font-semibold text-ink">Catatan pembelian</h2>
             <p className="mt-0.5 text-[12px] text-muted">
-              Setiap gabah yang dibeli dicatat dulu dengan taksiran berat dan harga sepakat.
+              Catat pembelian gabah — lanjut ke penerimaan dan pembayaran
             </p>
           </div>
-          <button type="button" onClick={onCreate} className={primaryBtn}>
-            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Catat pembelian
-          </button>
+          <FinanceToast message={toast} />
         </div>
 
-        <div className="mb-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <SearchInput value={query} onChange={setQuery} placeholder="Cari dokumen, pemasok, no. polisi…" />
-          <FilterPills
-            value={stage}
-            onChange={setStage}
-            options={[
-              { id: 'semua', label: 'Semua', count: purchases.length },
-              { id: 'dicatat', label: 'Belum ditimbang', count: count('dicatat') },
-              { id: 'ditimbang', label: 'Menunggu konfirmasi', count: count('ditimbang') },
-              { id: 'diterima', label: 'Diterima', count: count('diterima') },
-            ]}
-          />
-        </div>
+        <FinanceFilterBar
+          search={search}
+          onSearchChange={(v) => {
+            setSearch(v)
+            setPage(1)
+          }}
+          searchPlaceholder="Cari dokumen, pemasok, no. polisi…"
+          filter={filter}
+          filterOptions={FILTERS}
+          onFilterChange={(v) => {
+            setFilter(v)
+            setPage(1)
+          }}
+          secondaryFilter={grainFilter}
+          secondaryFilterOptions={GRAIN_FILTERS}
+          onSecondaryFilterChange={(v) => {
+            setGrainFilter(v)
+            setPage(1)
+          }}
+          secondaryFilterLabel="Jenis gabah"
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(v) => {
+            setDateFrom(v)
+            setPage(1)
+          }}
+          onDateToChange={(v) => {
+            setDateTo(v)
+            setPage(1)
+          }}
+          actionLabel="+ Catat pembelian"
+          onAction={onCreate}
+        />
 
-        {rows.length === 0 ? (
-          <EmptyState title="Tidak ada catatan yang cocok" hint="Ubah filter atau kata kunci pencarian." />
-        ) : (
-          <div className="scrollbar-none overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-ink/20 text-[11px] tracking-wide text-muted uppercase">
-                  <th className="py-2 pr-3 pl-2 font-medium">Dokumen</th>
-                  <th className="py-2 pr-3 font-medium">Pemasok</th>
-                  <th className="py-2 pr-3 font-medium">Jenis</th>
-                  <th className="py-2 pr-3 text-right font-medium">Karung</th>
-                  <th className="py-2 pr-3 text-right font-medium">Taksiran</th>
-                  <th className="py-2 pr-3 text-right font-medium">Harga/kg</th>
-                  <th className="py-2 pr-3 text-right font-medium">Nilai</th>
-                  <th className="py-2 pr-2 font-medium">Tahap</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p) => {
-                  const s = summarize(p)
-                  const supplier = getSupplier(p.supplierId)
-                  const active = p.id === selected?.id
-                  return (
-                    <tr
-                      key={p.id}
-                      tabIndex={0}
-                      aria-selected={active}
-                      onClick={() => onSelect(p.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          onSelect(p.id)
-                        }
-                      }}
-                      className={[
-                        'cursor-pointer border-b border-line outline-none transition last:border-0 focus-visible:bg-brand-50',
-                        active ? 'bg-brand-50' : 'hover:bg-surface',
-                      ].join(' ')}
-                    >
-                      <td className="py-2.5 pr-3 pl-2">
-                        <span className={['num block', active ? 'font-semibold text-brand-900' : 'text-ink'].join(' ')}>
-                          {p.id}
-                        </span>
-                        <span className="num block text-[11px] text-muted">{formatDate(p.date)}</span>
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <span className="block max-w-[190px] truncate text-ink">{supplier?.name}</span>
-                        <span className="block max-w-[190px] truncate text-[11px] text-muted">{supplier?.village}</span>
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <GrainLabel grain={p.grain} />
-                      </td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">{p.sacks}</td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">{formatKg(p.estimatedKg)}</td>
-                      <td className="num py-2.5 pr-3 text-right text-muted">{formatNumber(p.price)}</td>
-                      <td className="num py-2.5 pr-3 text-right text-ink">
-                        {p.stage === 'diterima' ? (
-                          formatRupiah(s.total)
+        <FinanceTable minWidth="860px">
+          <FinanceThead>
+            <FinanceTh className="w-12">No</FinanceTh>
+            <FinanceSortTh label="Dokumen" sortKey="id" sort={sort} onSort={handleSort} />
+            <FinanceSortTh
+              label="Pemasok"
+              sortKey="supplier"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceTh>Jenis</FinanceTh>
+            <FinanceSortTh
+              label="Tanggal"
+              sortKey="date"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceSortTh
+              label="Nilai"
+              sortKey="value"
+              sort={sort}
+              onSort={handleSort}
+              align="right"
+            />
+            <FinanceSortTh
+              label="Status"
+              sortKey="stage"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceTh align="center" className="w-28">
+              Aksi
+            </FinanceTh>
+          </FinanceThead>
+          <tbody>
+            {rows.length === 0 ? (
+              <FinanceEmptyRow colSpan={8} message="Tidak ada catatan yang cocok." />
+            ) : (
+              rows.map((p, index) => {
+                const s = summarize(p)
+                const supplier = getSupplier(p.supplierId)
+                const value = isPurchaseReceivedForAp(p.stage)
+                  ? s.total
+                  : s.estimatedValue
+                return (
+                  <FinanceTr key={p.id}>
+                    <FinanceTd mono muted>
+                      {rowNumber(safePage, PAGE_SIZE, index)}
+                    </FinanceTd>
+                    <FinanceTd mono className="font-medium">
+                      {p.id}
+                      <span className="mt-0.5 block font-sans text-[11px] font-normal text-muted">
+                        {p.sacks} karung · ±{formatKg(p.estimatedKg)}
+                      </span>
+                    </FinanceTd>
+                    <FinanceTd className="font-medium">
+                      {supplier?.name}
+                      <span className="mt-0.5 block text-[11px] font-normal text-muted">
+                        {supplier?.village}
+                      </span>
+                    </FinanceTd>
+                    <FinanceTd mono muted>
+                      {p.grain}
+                    </FinanceTd>
+                    <FinanceTd mono muted>
+                      {formatDate(p.date)}
+                    </FinanceTd>
+                    <FinanceTd mono align="right" className="font-medium whitespace-nowrap">
+                      {formatRupiah(value)}
+                    </FinanceTd>
+                    <FinanceTd>
+                      <StatusPill label={STAGE_LABEL[p.stage]} tone={STAGE_TONE[p.stage]} />
+                    </FinanceTd>
+                    <FinanceTd align="center">
+                      <div className="inline-flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => openDetail(p)}
+                          className="rounded-xl p-2 text-muted transition hover:bg-brand-50 hover:text-brand-800"
+                          aria-label={`Detail ${p.id}`}
+                          title="Detail"
+                        >
+                          <EyeIcon className="size-[18px]" />
+                        </button>
+                        {!isPurchaseReceivedForAp(p.stage) ? (
+                          <button
+                            type="button"
+                            onClick={() => onGoTo('penerimaan', p.id)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            Timbang
+                          </button>
                         ) : (
-                          <span className="text-muted" title="Nilai taksiran">
-                            ± {formatRupiah(s.estimatedValue)}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onGoTo('pembayaran', p.id)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            Bayar
+                          </button>
                         )}
-                      </td>
-                      <td className="py-2.5 pr-2">
-                        <StageLabel stage={p.stage} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      </div>
+                    </FinanceTd>
+                  </FinanceTr>
+                )
+              })
+            )}
+          </tbody>
+        </FinanceTable>
+
+        <FinancePager
+          page={safePage}
+          pageCount={pageCount}
+          total={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       </section>
 
-      <aside className={[panelClass, 'p-4 lg:sticky lg:top-0'].join(' ')}>
-        {selected ? (
-          <PurchaseRecordDetail purchase={selected} onDelete={onDelete} onGoTo={onGoTo} />
-        ) : (
-          <EmptyState title="Belum ada catatan" hint="Klik “Catat pembelian” untuk memulai." />
-        )}
-      </aside>
+      {detail ? (
+        <PurchaseDetailDrawer
+          purchase={detail}
+          onClose={closeDetail}
+          onPrint={() => {
+            if (!printPurchase(detail)) setToast('Izinkan popup untuk mencetak')
+          }}
+          onDelete={() => {
+            onDelete(detail.id)
+            closeDetail()
+            setToast(`${detail.id} dibatalkan`)
+          }}
+          onGoTo={(tab) => {
+            closeDetail()
+            onGoTo(tab, detail.id)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
-function PurchaseRecordDetail({
+function printPurchase(p: Purchase) {
+  const supplier = getSupplier(p.supplierId)
+  const s = summarize(p)
+  const value = isPurchaseReceivedForAp(p.stage) ? s.total : s.estimatedValue
+  return printBukti(
+    `Bukti pembelian ${p.id}`,
+    [
+      { label: 'Nilai', value: formatRupiah(value) },
+      { label: 'Pemasok', value: supplier?.name ?? '—' },
+      { label: 'No. dokumen', value: p.id },
+      { label: 'Tanggal', value: formatDate(p.date) },
+      { label: 'Status', value: STAGE_LABEL[p.stage] },
+      { label: 'Gabah', value: `${p.grain} · ${GRAIN_STANDARD[p.grain].label}` },
+      { label: 'Karung', value: `${p.sacks} karung` },
+      s.weighing
+        ? { label: 'Netto', value: formatKg(s.weighing.netto) }
+        : { label: 'Taksiran', value: formatKg(p.estimatedKg) },
+    ],
+    { subtitle: supplier?.name, module: 'Pembelian' },
+  )
+}
+
+function PurchaseDetailDrawer({
   purchase: p,
+  onClose,
+  onPrint,
   onDelete,
   onGoTo,
 }: {
   purchase: Purchase
-  onDelete: (id: string) => void
-  onGoTo: (tab: 'penerimaan' | 'pembayaran', id: string) => void
+  onClose: () => void
+  onPrint: () => void
+  onDelete: () => void
+  onGoTo: (tab: 'penerimaan' | 'pembayaran') => void
 }) {
   const s = summarize(p)
   const supplier = getSupplier(p.supplierId)
   const lastPayment = p.payments.at(-1)
 
   const steps = [
-    { label: 'Pembelian dicatat', meta: formatDate(p.date, { day: 'numeric', month: 'long' }), done: true },
+    {
+      label: 'Pembelian dicatat',
+      meta: formatDate(p.date, { day: 'numeric', month: 'long' }),
+      done: true,
+    },
     {
       label: 'Gabah ditimbang',
-      meta: p.weighing ? `${formatDate(p.weighing.weighedAt)} · ${formatKg(s.weighing?.weighed ?? 0)}` : 'Menunggu gabah datang',
+      meta: p.weighing
+        ? `${formatDate(p.weighing.weighedAt)} · ${formatKg(s.weighing?.weighed ?? 0)}${p.weighing.receiptName ? ` · ${p.weighing.receiptName}` : ''}`
+        : 'Menunggu di Penerimaan',
       done: Boolean(p.weighing),
     },
     {
@@ -201,14 +458,14 @@ function PurchaseRecordDetail({
       meta: p.weighing?.confirmedAt
         ? `${formatDate(p.weighing.confirmedAt)} · netto ${formatKg(s.weighing?.netto ?? 0)}`
         : 'Belum dikonfirmasi',
-      done: p.stage === 'diterima',
+      done: isPurchaseReceivedForAp(p.stage),
     },
     {
       label: 'Pemasok dibayar lunas',
       meta:
         s.payment === 'lunas' && lastPayment
-          ? formatDate(lastPayment.date, { day: 'numeric', month: 'long' })
-          : p.stage === 'diterima'
+          ? `${formatDate(lastPayment.date)}${lastPayment.receiptName ? ` · ${lastPayment.receiptName}` : ''}`
+          : isPurchaseReceivedForAp(p.stage)
             ? `Sisa ${formatRupiah(s.outstanding)}`
             : 'Setelah berat dikonfirmasi',
       done: s.payment === 'lunas',
@@ -217,105 +474,119 @@ function PurchaseRecordDetail({
   const current = steps.findIndex((step) => !step.done)
 
   return (
-    <section>
-      <div className="flex items-start justify-between gap-2 border-b border-line pb-3">
-        <div className="min-w-0">
-          <p className={sectionLabel}>Catatan pembelian</p>
-          <h3 className="num mt-1 text-[15px] font-semibold text-ink">{p.id}</h3>
-          <p className="mt-0.5 text-[12px] text-muted">
-            {formatDate(p.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <StageLabel stage={p.stage} />
-      </div>
-
-      <div className="border-b border-line py-3">
-        <p className="text-[13px] font-medium text-ink">{supplier?.name}</p>
-        <p className="text-[12px] text-muted">{supplier?.village}</p>
-      </div>
-
-      <dl className="divide-y divide-line text-[13px]">
-        {[
-          ['Jenis gabah', `${p.grain} · ${GRAIN_STANDARD[p.grain].label}`],
-          ['Jumlah karung', `${p.sacks} karung`],
-          ['Taksiran berat', formatKg(p.estimatedKg)],
-          ['Harga sepakat', `${formatRupiah(p.price)}/kg`],
-          ['Nilai taksiran', formatRupiah(s.estimatedValue)],
-          ...(p.vehicle ? [['Kendaraan', p.vehicle]] : []),
-        ].map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-3 py-2">
-            <dt className="shrink-0 text-muted">{label}</dt>
-            <dd className="num truncate text-right text-ink">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {p.note ? (
-        <p className="mt-1 rounded-xl bg-surface px-3 py-2 text-[12px] text-ink">{p.note}</p>
-      ) : null}
-
-      <p className={[sectionLabel, 'mt-4 mb-2'].join(' ')}>Alur dokumen</p>
-      <ol>
-        {steps.map((step, i) => {
-          const isCurrent = i === current
-          return (
-            <li key={step.label} className="relative flex gap-3 pb-3 last:pb-0">
-              {i < steps.length - 1 ? (
-                <span
-                  className={[
-                    'absolute top-6 bottom-0 left-[11px] w-px',
-                    step.done ? 'bg-brand-300' : 'bg-line',
-                  ].join(' ')}
-                />
-              ) : null}
-              <span
-                className={[
-                  'relative flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-                  step.done
-                    ? 'bg-brand-700 text-white'
-                    : isCurrent
-                      ? 'border-2 border-brand-600 bg-white text-brand-800'
-                      : 'border border-line bg-white text-muted',
-                ].join(' ')}
-              >
-                {step.done ? (
-                  <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="m5 12 4.5 4.5L19 7" />
-                  </svg>
-                ) : (
-                  i + 1
-                )}
-              </span>
-              <div className="min-w-0 pt-0.5">
-                <p className={['text-[13px]', step.done || isCurrent ? 'font-medium text-ink' : 'text-muted'].join(' ')}>
-                  {step.label}
-                </p>
-                <p className="num text-[11px] text-muted">{step.meta}</p>
-              </div>
-            </li>
-          )
-        })}
-      </ol>
-
-      <div className="mt-4 grid gap-2">
-        {p.stage !== 'diterima' ? (
-          <button type="button" className={primaryBtn} onClick={() => onGoTo('penerimaan', p.id)}>
-            {p.stage === 'dicatat' ? 'Timbang di penerimaan' : 'Konfirmasi berat'} →
-          </button>
-        ) : (
-          <button type="button" className={primaryBtn} onClick={() => onGoTo('pembayaran', p.id)}>
-            Lihat status pembayaran →
-          </button>
-        )}
-        {p.stage === 'dicatat' ? (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={p.id}
+      subtitle={`${supplier?.name ?? '—'} · ${formatDate(p.date, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })}`}
+      badge={<StatusPill label={STAGE_LABEL[p.stage]} tone={STAGE_TONE[p.stage]} />}
+      footer={
+        <>
           <button
             type="button"
-            className={[secondaryBtn, 'text-red-700 hover:border-red-200 hover:bg-red-50 hover:text-red-800'].join(' ')}
-            onClick={() => onDelete(p.id)}
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
           >
-            Batalkan catatan
+            Cetak bukti
           </button>
-        ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              onGoTo(isPurchaseReceivedForAp(p.stage) ? 'pembayaran' : 'penerimaan')
+            }
+            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            {isPurchaseReceivedForAp(p.stage)
+              ? 'Lihat pembayaran →'
+              : isPurchaseAwaitingWeigh(p.stage)
+                ? 'Lanjut timbang →'
+                : 'Konfirmasi berat →'}
+          </button>
+          {canHardDeletePurchase(p.stage) ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+            >
+              Batalkan catatan
+            </button>
+          ) : null}
+        </>
+      }
+    >
+      <DrawerHero
+        label={isPurchaseReceivedForAp(p.stage) ? 'Nilai final' : 'Nilai taksiran'}
+        amount={formatRupiah(
+          isPurchaseReceivedForAp(p.stage) ? s.total : s.estimatedValue,
+        )}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[13px] font-medium text-ink">{supplier?.name}</p>
+        <p className="mt-0.5 text-[12px] text-muted">{supplier?.village}</p>
       </div>
-    </section>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Jenis gabah', `${p.grain} · ${GRAIN_STANDARD[p.grain].label}`],
+            ['Jumlah karung', `${p.sacks} karung`],
+            ['Taksiran berat', formatKg(p.estimatedKg)],
+            ['Harga sepakat', `${formatRupiah(p.price)}/kg`],
+            p.vehicle ? ['Kendaraan', p.vehicle] : null,
+            p.weighing?.receiptName ? ['Bukti timbang', p.weighing.receiptName] : null,
+            p.note ? ['Catatan', p.note] : null,
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Alur dokumen">
+        <ol>
+          {steps.map((step, i) => {
+            const isCurrent = i === current
+            return (
+              <li key={step.label} className="relative flex gap-3 pb-3 last:pb-0">
+                {i < steps.length - 1 ? (
+                  <span
+                    className={[
+                      'absolute top-7 bottom-0 left-[11px] w-px',
+                      step.done ? 'bg-brand-300' : 'bg-line',
+                    ].join(' ')}
+                  />
+                ) : null}
+                <span
+                  className={[
+                    'relative flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                    step.done
+                      ? 'bg-brand-700 text-white'
+                      : isCurrent
+                        ? 'border-2 border-brand-600 bg-white text-brand-800'
+                        : 'border border-line bg-white text-muted',
+                  ].join(' ')}
+                >
+                  {step.done ? '✓' : i + 1}
+                </span>
+                <div className="min-w-0 pt-0.5">
+                  <p
+                    className={[
+                      'text-[13px]',
+                      step.done || isCurrent ? 'font-medium text-ink' : 'text-muted',
+                    ].join(' ')}
+                  >
+                    {step.label}
+                  </p>
+                  <p className="num mt-0.5 text-[11px] text-muted">{step.meta}</p>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </DrawerSection>
+    </DetailDrawer>
   )
 }

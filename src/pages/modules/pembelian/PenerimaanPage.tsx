@@ -2,10 +2,10 @@ import { PenerimaanView } from '@/components/pembelian/PenerimaanView'
 import { usePembelian, useSelectedDoc } from '@/features/pembelian/PembelianContext'
 
 export function PenerimaanPage() {
-  const { purchases, saveWeighing, confirmWeighing } = usePembelian()
+  const { purchases, saveWeighing, confirmWeighing, voidPurchase } =
+    usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
 
-  // Kunci pilihan setelah aksi, karena dokumen pindah kelompok antrean
   return (
     <PenerimaanView
       purchases={purchases}
@@ -18,6 +18,10 @@ export function PenerimaanPage() {
       onConfirm={(id, input) => {
         confirmWeighing(id, input)
         select(id)
+      }}
+      onVoid={(id, reason) => {
+        voidPurchase(id, reason)
+        select(null)
       }}
       onGoTo={goTo}
     />

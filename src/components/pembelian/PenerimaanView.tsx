@@ -1,16 +1,42 @@
-import { useState } from 'react'
-import { StageLabel } from '@/components/pembelian/StatusLabel'
+import { useEffect, useMemo, useState } from 'react'
+import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
+import { DetailFields, FinanceModal } from '@/components/keuangan/FinanceModal'
+import { FinancePager } from '@/components/keuangan/FinancePager'
+import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
-  EmptyState,
-  panelClass,
-  primaryBtn,
-  secondaryBtn,
-  sectionLabel,
-} from '@/components/pembelian/Toolbar'
+  ReceiptUpload,
+  type ReceiptValue,
+} from '@/components/keuangan/ReceiptUpload'
+import {
+  FinanceEmptyRow,
+  FinanceSortTh,
+  FinanceTable,
+  FinanceTd,
+  FinanceTh,
+  FinanceThead,
+  FinanceTr,
+  rowNumber,
+  sortBy,
+  toggleSort,
+  type SortState,
+} from '@/components/keuangan/FinanceTable'
+import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { printBukti } from '@/components/keuangan/print-bukti'
+import { StatusPill } from '@/components/keuangan/StatusPill'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
+import { PromptDialog } from '@/components/ui/ConfirmDialog'
+import { EyeIcon } from '@/components/ui/icons'
 import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
+import type { MetricCardData } from '@/features/dashboard/dashboard-data'
 import {
   GRAIN_STANDARD,
+  STAGE_LABEL,
   TARA_PER_SACK,
   VARIANCE_TOLERANCE,
   calcWeighing,
@@ -21,16 +47,43 @@ import {
   formatRupiah,
   getSupplier,
   parseNumber,
+  canVoidPurchase,
+  isPurchaseAwaitingWeigh,
+  isPurchaseReceivedForAp,
+  summarize,
+  type GrainType,
   type Purchase,
   type WeighingInput,
 } from '@/features/pembelian/pembelian-data'
+import { usePageSize } from '@/features/settings/usePageSize'
+
+const FILTERS = [
+  { value: 'konfirmasi' as const, label: 'Menunggu konfirmasi' },
+  { value: 'antre' as const, label: 'Antre timbang' },
+  { value: 'selesai' as const, label: 'Sudah dikonfirmasi' },
+  { value: 'semua' as const, label: 'Semua status' },
+]
+
+const GRAIN_FILTERS = [
+  { value: 'semua' as const, label: 'Semua jenis' },
+  { value: 'GKP' as const, label: 'GKP' },
+  { value: 'GKG' as const, label: 'GKG' },
+]
+
+type QueueFilter = (typeof FILTERS)[number]['value']
+type GrainFilter = (typeof GRAIN_FILTERS)[number]['value']
+type SortKey = 'id' | 'supplier' | 'grain' | 'date' | 'estimated' | 'stage'
+type MeasureKey = 'bruto' | 'tara' | 'moisture' | 'impurity'
+type FormState = Record<MeasureKey, string>
+type FormErrors = Partial<Record<MeasureKey, string>>
 
 type PenerimaanViewProps = {
   purchases: Purchase[]
   selectedId: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   onSaveWeighing: (id: string, input: WeighingInput) => void
   onConfirm: (id: string, input: WeighingInput) => void
+  onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
 }
 
@@ -40,142 +93,493 @@ export function PenerimaanView({
   onSelect,
   onSaveWeighing,
   onConfirm,
+  onVoid,
   onGoTo,
 }: PenerimaanViewProps) {
-  const waiting = purchases.filter((p) => p.stage === 'dicatat')
-  const weighed = purchases.filter((p) => p.stage === 'ditimbang')
-  const recent = purchases
-    .filter((p) => p.stage === 'diterima' && p.weighing?.confirmedAt)
-    .sort((a, b) => (b.weighing?.confirmedAt ?? '').localeCompare(a.weighing?.confirmedAt ?? ''))
-    .slice(0, 4)
+  const PAGE_SIZE = usePageSize()
+  const waiting = useMemo(
+    () => purchases.filter((p) => isPurchaseAwaitingWeigh(p.stage)),
+    [purchases],
+  )
+  const weighed = useMemo(
+    () => purchases.filter((p) => p.stage === 'ditimbang'),
+    [purchases],
+  )
+  const confirmed = useMemo(
+    () => purchases.filter((p) => isPurchaseReceivedForAp(p.stage)),
+    [purchases],
+  )
 
-  const pool = [...weighed, ...waiting, ...recent]
-  const selected = pool.find((p) => p.id === selectedId) ?? pool[0] ?? null
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<QueueFilter>(
+    weighed.length > 0 ? 'konfirmasi' : waiting.length > 0 ? 'antre' : 'selesai',
+  )
+  const [grainFilter, setGrainFilter] = useState<GrainFilter>('semua')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sort, setSort] = useState<SortState<SortKey> | null>({
+    key: 'date',
+    dir: 'desc',
+  })
+  const [page, setPage] = useState(1)
+  const [toast, setToast] = useState<string | null>(null)
+  const [work, setWork] = useState<Purchase | null>(null)
+  const [detail, setDetail] = useState<Purchase | null>(null)
+
+  const stats: MetricCardData[] = [
+    {
+      label: 'Antre timbang',
+      value: String(waiting.length),
+      delta: waiting.length > 0 ? 'Belum ditimbang' : 'Kosong',
+      positive: waiting.length === 0,
+      spark: [2, 3, 2, 3, 2, 2, 3],
+    },
+    {
+      label: 'Menunggu konfirmasi',
+      value: String(weighed.length),
+      delta: weighed.length > 0 ? 'Perlu setuju' : '0',
+      positive: weighed.length === 0,
+      spark: [1, 2, 1, 2, 2, 1, 2],
+    },
+    {
+      label: 'Sudah dikonfirmasi',
+      value: String(confirmed.length),
+      delta: 'Siap bayar',
+      positive: true,
+      spark: [1, 1, 2, 2, 3, 3, 4],
+    },
+    {
+      label: 'Total dokumen',
+      value: String(purchases.length),
+      delta: 'Semua tahap',
+      positive: true,
+      spark: [6, 7, 7, 8, 8, 9, 9],
+    },
+  ]
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = purchases.filter((p) => {
+      if (filter === 'antre' && !isPurchaseAwaitingWeigh(p.stage)) return false
+      if (filter === 'konfirmasi' && p.stage !== 'ditimbang') return false
+      if (filter === 'selesai' && !isPurchaseReceivedForAp(p.stage)) return false
+      if (grainFilter !== 'semua' && p.grain !== (grainFilter as GrainType))
+        return false
+      if (dateFrom && p.date < dateFrom) return false
+      if (dateTo && p.date > dateTo) return false
+      if (!q) return true
+      const s = getSupplier(p.supplierId)
+      return [p.id, s?.name, p.grain, p.vehicle].some((v) =>
+        v?.toLowerCase().includes(q),
+      )
+    })
+    return sortBy(base, sort, {
+      id: (p) => p.id,
+      supplier: (p) => getSupplier(p.supplierId)?.name ?? '',
+      grain: (p) => p.grain,
+      date: (p) => p.weighing?.confirmedAt ?? p.weighing?.weighedAt ?? p.date,
+      estimated: (p) => p.estimatedKg,
+      stage: (p) => p.stage,
+    })
+  }, [purchases, search, filter, grainFilter, dateFrom, dateTo, sort])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const rows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  function handleSort(key: SortKey) {
+    setSort((prev) => toggleSort(prev, key))
+    setPage(1)
+  }
+
+  useEffect(() => {
+    if (!selectedId) return
+    const found = purchases.find((p) => p.id === selectedId)
+    if (found && !isPurchaseReceivedForAp(found.stage)) openWork(found)
+  }, [selectedId, purchases])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2400)
+    return () => window.clearTimeout(t)
+  }, [toast])
+
+  function openWork(p: Purchase) {
+    setWork(p)
+    onSelect(p.id)
+  }
+
+  function closeWork() {
+    setWork(null)
+    onSelect(null)
+  }
 
   return (
-    <div className="grid items-start gap-2.5 lg:grid-cols-[300px_minmax(0,1fr)]">
-      <aside className={[panelClass, 'p-4'].join(' ')}>
-        <QueueGroup
-          title="Menunggu konfirmasi berat"
-          hint="Sudah ditimbang, perlu disetujui"
-          items={weighed}
-          selectedId={selected?.id}
-          onSelect={onSelect}
-        />
-        <QueueGroup
-          title="Antre timbang"
-          hint="Gabah datang, belum ditimbang"
-          items={waiting}
-          selectedId={selected?.id}
-          onSelect={onSelect}
-        />
-        <QueueGroup
-          title="Baru dikonfirmasi"
-          items={recent}
-          selectedId={selected?.id}
-          onSelect={onSelect}
-          compact
-        />
-      </aside>
+    <div className="space-y-2.5">
+      <FinanceStatGrid stats={stats} />
 
-      <section className={[panelClass, 'p-4 sm:p-5'].join(' ')}>
-        {selected ? (
-          <WeighingPanel
-            key={selected.id}
-            purchase={selected}
-            onSave={(input) => onSaveWeighing(selected.id, input)}
-            onConfirm={(input) => onConfirm(selected.id, input)}
-            onGoToPayment={() => onGoTo('pembayaran', selected.id)}
-          />
-        ) : (
-          <EmptyState
-            title="Tidak ada gabah yang perlu ditimbang"
-            hint="Catat pembelian baru dulu di halaman Pencatatan pembelian."
-          />
-        )}
+      <section className="rounded-2xl border border-line bg-panel p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-[14px] font-semibold text-ink">Penerimaan & timbang</h2>
+            <p className="mt-0.5 text-[12px] text-muted">
+              Timbang gabah datang dan konfirmasi berat bersama pemasok
+            </p>
+          </div>
+          <FinanceToast message={toast} />
+        </div>
+
+        <FinanceFilterBar
+          search={search}
+          onSearchChange={(v) => {
+            setSearch(v)
+            setPage(1)
+          }}
+          searchPlaceholder="Cari dokumen, pemasok, nopol…"
+          filter={filter}
+          filterOptions={FILTERS}
+          onFilterChange={(v) => {
+            setFilter(v)
+            setPage(1)
+          }}
+          secondaryFilter={grainFilter}
+          secondaryFilterOptions={GRAIN_FILTERS}
+          onSecondaryFilterChange={(v) => {
+            setGrainFilter(v)
+            setPage(1)
+          }}
+          secondaryFilterLabel="Jenis gabah"
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(v) => {
+            setDateFrom(v)
+            setPage(1)
+          }}
+          onDateToChange={(v) => {
+            setDateTo(v)
+            setPage(1)
+          }}
+        />
+
+        <FinanceTable minWidth="820px">
+          <FinanceThead>
+            <FinanceTh className="w-12">No</FinanceTh>
+            <FinanceSortTh label="Dokumen" sortKey="id" sort={sort} onSort={handleSort} />
+            <FinanceSortTh
+              label="Pemasok"
+              sortKey="supplier"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceSortTh
+              label="Gabah"
+              sortKey="grain"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceSortTh
+              label="Tanggal"
+              sortKey="date"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceSortTh
+              label="Taksiran"
+              sortKey="estimated"
+              sort={sort}
+              onSort={handleSort}
+              align="right"
+            />
+            <FinanceSortTh
+              label="Status"
+              sortKey="stage"
+              sort={sort}
+              onSort={handleSort}
+            />
+            <FinanceTh align="center" className="w-32">
+              Aksi
+            </FinanceTh>
+          </FinanceThead>
+          <tbody>
+            {rows.length === 0 ? (
+              <FinanceEmptyRow colSpan={8} message="Tidak ada dokumen yang cocok." />
+            ) : (
+              rows.map((p, index) => {
+                const supplier = getSupplier(p.supplierId)
+                const dateShow =
+                  p.weighing?.confirmedAt ?? p.weighing?.weighedAt ?? p.date
+                return (
+                  <FinanceTr key={p.id}>
+                    <FinanceTd mono muted>
+                      {rowNumber(safePage, PAGE_SIZE, index)}
+                    </FinanceTd>
+                    <FinanceTd mono className="font-medium">
+                      {p.id}
+                      <span className="mt-0.5 block font-sans text-[11px] font-normal text-muted">
+                        {p.sacks} karung
+                      </span>
+                    </FinanceTd>
+                    <FinanceTd className="font-medium">{supplier?.name}</FinanceTd>
+                    <FinanceTd mono muted>
+                      {p.grain}
+                    </FinanceTd>
+                    <FinanceTd mono muted>
+                      {formatDate(dateShow)}
+                    </FinanceTd>
+                    <FinanceTd mono align="right">
+                      {formatKg(p.estimatedKg)}
+                    </FinanceTd>
+                    <FinanceTd>
+                      <StatusPill
+                        label={STAGE_LABEL[p.stage]}
+                        tone={
+                          isPurchaseReceivedForAp(p.stage)
+                            ? 'good'
+                            : p.stage === 'ditimbang'
+                              ? 'warn'
+                              : 'neutral'
+                        }
+                      />
+                    </FinanceTd>
+                    <FinanceTd align="center">
+                      <div className="inline-flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDetail(p)}
+                          className="rounded-xl p-2 text-muted transition hover:bg-brand-50 hover:text-brand-800"
+                          aria-label={`Detail ${p.id}`}
+                          title="Detail"
+                        >
+                          <EyeIcon className="size-[18px]" />
+                        </button>
+                        {isPurchaseReceivedForAp(p.stage) ? (
+                          <button
+                            type="button"
+                            onClick={() => onGoTo('pembayaran', p.id)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            Bayar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openWork(p)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            {isPurchaseAwaitingWeigh(p.stage) ? 'Timbang' : 'Konfirmasi'}
+                          </button>
+                        )}
+                      </div>
+                    </FinanceTd>
+                  </FinanceTr>
+                )
+              })
+            )}
+          </tbody>
+        </FinanceTable>
+
+        <FinancePager
+          page={safePage}
+          pageCount={pageCount}
+          total={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       </section>
+
+      {detail ? (
+        <ReceiveDetailDrawer
+          purchase={detail}
+          onClose={() => setDetail(null)}
+          onPrint={() => {
+            if (!printReceive(detail)) setToast('Izinkan popup untuk mencetak')
+          }}
+          onVoid={onVoid}
+        />
+      ) : null}
+
+      {work ? (
+        <WeighingModal
+          key={work.id}
+          purchase={work}
+          onClose={closeWork}
+          onSave={(input) => {
+            onSaveWeighing(work.id, input)
+            setToast(
+              `${work.id} hasil timbang disimpan${
+                input.receiptName ? ` · bukti ${input.receiptName}` : ''
+              }`,
+            )
+          }}
+          onConfirm={(input) => {
+            onConfirm(work.id, input)
+            setToast(
+              `${work.id} berat dikonfirmasi${
+                input.receiptName ? ` · bukti ${input.receiptName}` : ''
+              }`,
+            )
+            closeWork()
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
-function QueueGroup({
-  title,
-  hint,
-  items,
-  selectedId,
-  onSelect,
-  compact = false,
-}: {
-  title: string
-  hint?: string
-  items: Purchase[]
-  selectedId?: string
-  onSelect: (id: string) => void
-  compact?: boolean
-}) {
-  return (
-    <div className="mb-4 last:mb-0">
-      <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-line pb-1.5">
-        <p className={sectionLabel}>{title}</p>
-        <span className="num text-[11px] text-muted">{items.length}</span>
-      </div>
-      {hint && items.length === 0 ? <p className="py-2 text-[12px] text-muted">Kosong — {hint.toLowerCase()}.</p> : null}
-      <ul className="space-y-1.5">
-        {items.map((p) => {
-          const supplier = getSupplier(p.supplierId)
-          const active = p.id === selectedId
-          return (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(p.id)}
-                className={[
-                  'w-full rounded-xl border px-3 text-left transition',
-                  compact ? 'py-2' : 'py-2.5',
-                  active
-                    ? 'border-brand-300 bg-brand-50'
-                    : 'border-line hover:border-brand-200 hover:bg-surface',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={['num text-[12px]', active ? 'font-semibold text-brand-900' : 'text-ink'].join(' ')}>
-                    {p.id}
-                  </span>
-                  <span className="num text-[11px] text-muted">{formatDate(p.date)}</span>
-                </div>
-                <p className="mt-0.5 truncate text-[13px] font-medium text-ink">{supplier?.name}</p>
-                {!compact ? (
-                  <p className="num mt-0.5 truncate text-[11px] text-muted">
-                    {p.grain} · {p.sacks} karung · ± {formatKg(p.estimatedKg)}
-                    {p.vehicle ? ` · ${p.vehicle}` : ''}
-                  </p>
-                ) : null}
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
+function printReceive(p: Purchase) {
+  const supplier = getSupplier(p.supplierId)
+  const s = summarize(p)
+  const std = GRAIN_STANDARD[p.grain]
+  return printBukti(
+    `Bukti penerimaan ${p.id}`,
+    [
+      {
+        label: 'Nilai',
+        value: formatRupiah(
+          isPurchaseReceivedForAp(p.stage) ? s.total : s.estimatedValue,
+        ),
+      },
+      { label: 'Pemasok', value: supplier?.name ?? '—' },
+      { label: 'No. dokumen', value: p.id },
+      { label: 'Tanggal', value: formatDate(p.date) },
+      { label: 'Status', value: STAGE_LABEL[p.stage] },
+      { label: 'Gabah', value: `${p.grain} · ${std.label}` },
+      s.weighing
+        ? { label: 'Netto', value: formatKg(s.weighing.netto) }
+        : { label: 'Taksiran', value: formatKg(p.estimatedKg) },
+    ],
+    { subtitle: supplier?.name, module: 'Pembelian · Penerimaan' },
   )
 }
 
-type FormState = Record<keyof WeighingInput, string>
-type FormErrors = Partial<Record<keyof WeighingInput, string>>
-
-function WeighingPanel({
+function ReceiveDetailDrawer({
   purchase: p,
-  onSave,
-  onConfirm,
-  onGoToPayment,
+  onClose,
+  onPrint,
+  onVoid,
 }: {
   purchase: Purchase
+  onClose: () => void
+  onPrint: () => void
+  onVoid?: (id: string, reason: string) => void
+}) {
+  const supplier = getSupplier(p.supplierId)
+  const s = summarize(p)
+  const std = GRAIN_STANDARD[p.grain]
+  const [voidPromptOpen, setVoidPromptOpen] = useState(false)
+
+  return (
+    <>
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={p.id}
+      subtitle={`${supplier?.name ?? '—'} · ${formatDate(p.date, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      })}`}
+      badge={
+        <StatusPill
+          label={p.voidedAt ? 'Void' : STAGE_LABEL[p.stage]}
+          tone={
+            p.voidedAt
+              ? 'muted'
+              : isPurchaseReceivedForAp(p.stage)
+                ? 'good'
+                : p.stage === 'ditimbang'
+                  ? 'warn'
+                  : 'neutral'
+          }
+        />
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            Cetak bukti
+          </button>
+          {canVoidPurchase(p.stage) && !p.voidedAt && onVoid ? (
+            <button
+              type="button"
+              onClick={() => setVoidPromptOpen(true)}
+              className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+            >
+              Void (balik stok & utang)
+            </button>
+          ) : null}
+          {p.lotId ? (
+            <p className="text-center text-[11px] text-muted">Lot: {p.lotId}</p>
+          ) : null}
+        </>
+      }
+    >
+      <DrawerHero
+        label={isPurchaseReceivedForAp(p.stage) ? 'Nilai final' : 'Nilai taksiran'}
+        amount={formatRupiah(
+          isPurchaseReceivedForAp(p.stage) ? s.total : s.estimatedValue,
+        )}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[13px] font-medium text-ink">{supplier?.name}</p>
+        <p className="mt-0.5 text-[12px] text-muted">{supplier?.village}</p>
+      </div>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Gabah', `${p.grain} · ${std.label}`],
+            ['Karung', `${p.sacks} karung`],
+            ['Taksiran', formatKg(p.estimatedKg)],
+            s.weighing
+              ? ['Netto', formatKg(s.weighing.netto)]
+              : null,
+            p.vehicle ? ['Kendaraan', p.vehicle] : null,
+            p.weighing?.receiptName
+              ? ['Bukti timbang', p.weighing.receiptName]
+              : null,
+            p.note ? ['Catatan', p.note] : null,
+          ]}
+        />
+      </DrawerSection>
+    </DetailDrawer>
+
+    <PromptDialog
+      open={voidPromptOpen}
+      title="Void penerimaan"
+      description={`Penerimaan ${p.id} akan di-void. Stok dan utang terkait dibalik (MVP lokal).`}
+      label="Alasan void"
+      placeholder="Tulis alasan void penerimaan…"
+      confirmLabel="Void"
+      danger
+      onClose={() => setVoidPromptOpen(false)}
+      onConfirm={(reason) => {
+        onVoid?.(p.id, reason)
+        setVoidPromptOpen(false)
+        onClose()
+      }}
+    />
+    </>
+  )
+}
+
+function WeighingModal({
+  purchase: p,
+  onClose,
+  onSave,
+  onConfirm,
+}: {
+  purchase: Purchase
+  onClose: () => void
   onSave: (input: WeighingInput) => void
   onConfirm: (input: WeighingInput) => void
-  onGoToPayment: () => void
 }) {
   const supplier = getSupplier(p.supplierId)
   const std = GRAIN_STANDARD[p.grain]
-  const locked = p.stage === 'diterima'
 
   const [form, setForm] = useState<FormState>(() => ({
     bruto: p.weighing ? String(p.weighing.bruto) : '',
@@ -185,13 +589,15 @@ function WeighingPanel({
   }))
   const [errors, setErrors] = useState<FormErrors>({})
   const [agreed, setAgreed] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [receipt, setReceipt] = useState<ReceiptValue>(null)
+  const [receiptError, setReceiptError] = useState<string>()
 
   const input: WeighingInput = {
     bruto: parseNumber(form.bruto),
     tara: parseNumber(form.tara),
     moisture: parseNumber(form.moisture),
     impurity: parseNumber(form.impurity),
+    receiptName: receipt?.name ?? p.weighing?.receiptName,
   }
   const calc = calcWeighing(p.grain, input)
   const hasBruto = input.bruto > 0
@@ -202,253 +608,184 @@ function WeighingPanel({
   function set(key: keyof FormState, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((e) => ({ ...e, [key]: undefined }))
-    setSaved(false)
   }
 
   function validate(): boolean {
     const next: FormErrors = {}
     if (input.bruto <= 0) next.bruto = 'Isi berat bruto'
     if (input.tara < 0) next.tara = 'Tidak boleh negatif'
-    else if (input.bruto > 0 && input.tara >= input.bruto) next.tara = 'Harus lebih kecil dari bruto'
+    else if (input.bruto > 0 && input.tara >= input.bruto)
+      next.tara = 'Harus lebih kecil dari bruto'
     if (input.moisture <= 0 || input.moisture > 40) next.moisture = 'Antara 0–40%'
     if (input.impurity < 0 || input.impurity > 30) next.impurity = 'Antara 0–30%'
     setErrors(next)
+
+    const hasReceipt = Boolean(receipt || p.weighing?.receiptName)
+    if (!hasReceipt) {
+      setReceiptError('Lampirkan bukti timbang (foto/galeri)')
+      return false
+    }
+    setReceiptError(undefined)
     return Object.keys(next).length === 0
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
-        <div className="min-w-0">
-          <p className={sectionLabel}>Penerimaan & timbang</p>
-          <h2 className="mt-1 text-[15px] font-semibold text-ink">
-            <span className="num">{p.id}</span>
-            <span className="mx-1.5 text-line">/</span>
-            {supplier?.name}
-          </h2>
-          <p className="num mt-0.5 text-[12px] text-muted">
-            {p.grain} · {std.label} · {p.sacks} karung · taksiran {formatKg(p.estimatedKg)} · {formatRupiah(p.price)}/kg
-            {p.vehicle ? ` · ${p.vehicle}` : ''}
-          </p>
-        </div>
-        <StageLabel stage={p.stage} />
-      </div>
-
-      {locked ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5">
-          <p className="text-[12px] text-brand-900">
-            Berat dikonfirmasi pada{' '}
-            <span className="font-semibold">
-              {p.weighing?.confirmedAt ? formatDate(p.weighing.confirmedAt, { day: 'numeric', month: 'long' }) : '—'}
-            </span>
-            {p.dueDate ? (
-              <>
-                {' '}· jatuh tempo bayar{' '}
-                <span className="font-semibold">{formatDate(p.dueDate, { day: 'numeric', month: 'long' })}</span>
-              </>
-            ) : null}
-          </p>
-          <button type="button" onClick={onGoToPayment} className="text-[12px] font-semibold text-brand-800 hover:underline">
-            Lihat pembayaran →
-          </button>
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <fieldset disabled={locked} className="min-w-0">
-          <legend className={[sectionLabel, 'mb-3'].join(' ')}>Hasil timbangan</legend>
-          <div className="grid grid-cols-2 gap-3.5">
-            <TextField
-              id="pn-bruto"
-              label="Berat bruto (kg)"
-              requiredMark
-              inputMode="decimal"
-              placeholder="0"
-              value={form.bruto}
-              onChange={(e) => set('bruto', e.target.value)}
-              error={errors.bruto}
-            />
-            <TextField
-              id="pn-tara"
-              label="Tara karung (kg)"
-              inputMode="decimal"
-              value={form.tara}
-              onChange={(e) => set('tara', e.target.value)}
-              error={errors.tara}
-            />
-          </div>
-          <p className="mt-1.5 font-mono text-[11px] text-muted">
-            Tara bawaan {TARA_PER_SACK} kg × {p.sacks} karung
-          </p>
-
-          <p className={[sectionLabel, 'mt-5 mb-3'].join(' ')}>Uji mutu</p>
-          <div className="grid grid-cols-2 gap-3.5">
-            <TextField
-              id="pn-moisture"
-              label="Kadar air (%)"
-              requiredMark
-              inputMode="decimal"
-              placeholder={`maks ${std.moisture}`}
-              value={form.moisture}
-              onChange={(e) => set('moisture', e.target.value)}
-              error={errors.moisture}
-            />
-            <TextField
-              id="pn-impurity"
-              label="Hampa/kotoran (%)"
-              requiredMark
-              inputMode="decimal"
-              placeholder={`maks ${std.impurity}`}
-              value={form.impurity}
-              onChange={(e) => set('impurity', e.target.value)}
-              error={errors.impurity}
-            />
-          </div>
-          <p className="mt-1.5 font-mono text-[11px] text-muted">
-            Standar {p.grain}: kadar air ≤ {std.moisture}%, hampa ≤ {std.impurity}%. Kelebihannya jadi rafaksi.
-          </p>
-        </fieldset>
-
-        <div className="min-w-0 rounded-2xl bg-surface p-4">
-          <p className={[sectionLabel, 'mb-2'].join(' ')}>Perhitungan berat</p>
-          <dl className="space-y-1.5 text-[13px]">
-            <CalcRow label="Berat bruto" value={formatKg(input.bruto)} />
-            <CalcRow label="Tara karung" value={`− ${formatKg(input.tara)}`} muted />
-            <div className="border-t border-line pt-1.5">
-              <CalcRow label="Berat timbang" value={formatKg(calc.weighed)} strong />
-            </div>
-            <CalcRow
-              label={`Kadar air lebih ${formatPercent(calc.moistureCut)}`}
-              value={calc.moistureCut > 0 ? `− ${formatKg(Math.round((calc.weighed * calc.moistureCut) / 100))}` : '—'}
-              warn={calc.moistureCut > 0}
-              muted={calc.moistureCut === 0}
-            />
-            <CalcRow
-              label={`Hampa lebih ${formatPercent(calc.impurityCut)}`}
-              value={calc.impurityCut > 0 ? `− ${formatKg(Math.round((calc.weighed * calc.impurityCut) / 100))}` : '—'}
-              warn={calc.impurityCut > 0}
-              muted={calc.impurityCut === 0}
-            />
-          </dl>
-
-          <div className="mt-3 rounded-xl border border-line bg-panel px-3.5 py-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-medium text-muted">Berat netto diterima</span>
-              <span className="num text-[22px] leading-none font-semibold tracking-tight text-ink">
-                {formatNumber(calc.netto)}
-                <span className="ml-1 text-[12px] font-normal text-muted">kg</span>
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line pt-2">
-              <span className="text-[12px] text-muted">Nilai pembelian</span>
-              <span className="num text-[14px] font-semibold text-brand-800">{formatRupiah(calc.netto * p.price)}</span>
-            </div>
-          </div>
-
-          {hasBruto ? (
-            <p
-              className={[
-                'mt-2.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px]',
-                varianceWarn ? 'bg-amber-100 text-amber-800' : 'bg-brand-100 text-brand-800',
-              ].join(' ')}
-            >
-              Selisih vs taksiran: {variance >= 0 ? '+' : '−'}
-              {formatKg(Math.abs(variance))} ({variance >= 0 ? '+' : '−'}
-              {formatPercent(Math.abs(variancePct))})
-              {varianceWarn ? ` · di atas toleransi ${VARIANCE_TOLERANCE}%, cek ulang timbangan` : ' · wajar'}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {!locked ? (
-        <div className="mt-5 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+    <FinanceModal
+      title={p.id}
+      subtitle="Penerimaan & timbang"
+      wide
+      onClose={onClose}
+      footer={
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {p.stage === 'ditimbang' ? (
-            <div className="sm:min-w-[300px]">
-              <Switch
-                id="pn-agree"
-                label="Pemasok menyetujui berat netto"
-                checked={agreed}
-                onChange={setAgreed}
-              />
-            </div>
+            <Switch
+              id="pn-agree"
+              label="Pemasok menyetujui berat netto"
+              checked={agreed}
+              onChange={setAgreed}
+            />
           ) : (
-            <p className="text-[12px] text-muted">
-              {saved ? 'Tersimpan. Lanjutkan konfirmasi berat dengan pemasok.' : 'Simpan hasil timbang, lalu konfirmasi bersama pemasok.'}
-            </p>
+            <p className="text-[12px] text-muted">Simpan hasil timbang dulu, lalu konfirmasi.</p>
           )}
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            {p.stage === 'dicatat' ? (
+          <div className="flex gap-2 sm:ml-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-11 rounded-xl border border-line px-4 text-[14px] font-medium text-ink transition hover:bg-surface"
+            >
+              Tutup
+            </button>
+            {isPurchaseAwaitingWeigh(p.stage) ? (
               <button
                 type="button"
-                className={primaryBtn}
                 onClick={() => {
-                  if (validate()) {
-                    onSave(input)
-                    setSaved(true)
-                  }
+                  if (validate()) onSave(input)
                 }}
+                className="h-11 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900"
               >
-                Simpan hasil timbang
+                Simpan timbang
               </button>
             ) : (
               <>
                 <button
                   type="button"
-                  className={secondaryBtn}
                   onClick={() => {
-                    if (validate()) {
-                      onSave(input)
-                      setSaved(true)
-                    }
+                    if (validate()) onSave(input)
                   }}
+                  className="h-11 rounded-xl border border-line px-4 text-[14px] font-medium text-ink transition hover:bg-surface"
                 >
-                  {saved ? 'Tersimpan ✓' : 'Perbarui timbangan'}
+                  Perbarui
                 </button>
                 <button
                   type="button"
-                  className={primaryBtn}
                   disabled={!agreed}
-                  title={agreed ? undefined : 'Aktifkan persetujuan pemasok dulu'}
                   onClick={() => {
                     if (validate()) onConfirm(input)
                   }}
+                  className="h-11 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Konfirmasi berat & terima gabah
+                  Konfirmasi berat
                 </button>
               </>
             )}
           </div>
         </div>
-      ) : null}
-    </div>
-  )
-}
+      }
+    >
+      <div className="space-y-4">
+        <DetailFields
+          fields={[
+            { label: 'Pemasok', value: supplier?.name ?? '—' },
+            {
+              label: 'Gabah',
+              value: `${p.grain} · ${std.label} · ${p.sacks} karung`,
+            },
+            { label: 'Taksiran', value: formatKg(p.estimatedKg) },
+            { label: 'Harga', value: `${formatRupiah(p.price)}/kg` },
+          ]}
+        />
 
-function CalcRow({
-  label,
-  value,
-  strong,
-  muted,
-  warn,
-}: {
-  label: string
-  value: string
-  strong?: boolean
-  muted?: boolean
-  warn?: boolean
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className={muted ? 'text-muted' : 'text-ink'}>{label}</dt>
-      <dd
-        className={[
-          'num text-right',
-          strong ? 'font-semibold text-ink' : warn ? 'text-amber-700' : muted ? 'text-muted' : 'text-ink',
-        ].join(' ')}
-      >
-        {value}
-      </dd>
-    </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextField
+            id="pn-bruto"
+            label="Berat bruto (kg)"
+            requiredMark
+            inputMode="decimal"
+            value={form.bruto}
+            onChange={(e) => set('bruto', e.target.value)}
+            error={errors.bruto}
+          />
+          <TextField
+            id="pn-tara"
+            label="Tara karung (kg)"
+            inputMode="decimal"
+            value={form.tara}
+            onChange={(e) => set('tara', e.target.value)}
+            error={errors.tara}
+          />
+          <TextField
+            id="pn-moisture"
+            label="Kadar air (%)"
+            requiredMark
+            inputMode="decimal"
+            value={form.moisture}
+            onChange={(e) => set('moisture', e.target.value)}
+            error={errors.moisture}
+          />
+          <TextField
+            id="pn-impurity"
+            label="Hampa/kotoran (%)"
+            requiredMark
+            inputMode="decimal"
+            value={form.impurity}
+            onChange={(e) => set('impurity', e.target.value)}
+            error={errors.impurity}
+          />
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface/70 px-3.5 py-3">
+          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="text-muted">Berat netto</span>
+            <span className="num text-[18px] font-semibold text-ink">
+              {formatNumber(calc.netto)} kg
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line pt-2 text-[13px]">
+            <span className="text-muted">Nilai pembelian</span>
+            <span className="num font-semibold text-brand-800">
+              {formatRupiah(calc.netto * p.price)}
+            </span>
+          </div>
+          {hasBruto ? (
+            <p
+              className={[
+                'mt-2 rounded-lg px-2.5 py-1.5 font-mono text-[11px]',
+                varianceWarn ? 'bg-amber-100 text-amber-800' : 'bg-brand-100 text-brand-800',
+              ].join(' ')}
+            >
+              Selisih vs taksiran: {variance >= 0 ? '+' : '−'}
+              {formatKg(Math.abs(variance))} ({formatPercent(Math.abs(variancePct))})
+              {varianceWarn ? ` · di atas toleransi ${VARIANCE_TOLERANCE}%` : ' · wajar'}
+            </p>
+          ) : null}
+        </div>
+
+        <ReceiptUpload
+          value={receipt}
+          onChange={(v) => {
+            setReceipt(v)
+            setReceiptError(undefined)
+          }}
+          label="Bukti timbang / foto karung"
+          requiredMark
+          error={receiptError}
+          hint={
+            p.weighing?.receiptName && !receipt
+              ? `Sudah ada: ${p.weighing.receiptName} — unggah ulang untuk mengganti`
+              : undefined
+          }
+        />
+      </div>
+    </FinanceModal>
   )
 }

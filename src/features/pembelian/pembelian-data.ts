@@ -1,7 +1,59 @@
+import { lookupSupplier } from '@/features/master/master-storage'
+import type { ApprovalStamp } from '@/features/workflow/approvals'
+import type { ProofAttachment } from '@/features/workflow/proof'
+
 export type GrainType = 'GKP' | 'GKG'
 
-/** Alur: dicatat → ditimbang → diterima (berat dikonfirmasi, jadi utang). */
-export type PurchaseStage = 'dicatat' | 'ditimbang' | 'diterima'
+export type PurchaseStage =
+  | 'draft'
+  | 'diajukan'
+  | 'disetujui'
+  | 'ditolak'
+  | 'ditimbang'
+  | 'menunggu_selesai'
+  | 'selesai'
+
+export const STAGE_LABEL: Record<PurchaseStage, string> = {
+  draft: 'Draft',
+  diajukan: 'Menunggu approve',
+  disetujui: 'Disetujui keuangan',
+  ditolak: 'Ditolak',
+  ditimbang: 'Ditimbang',
+  menunggu_selesai: 'Menunggu selesai',
+  selesai: 'Selesai',
+}
+
+export function migratePurchaseStage(raw: string): PurchaseStage {
+  if (raw === 'dicatat') return 'diajukan'
+  if (raw === 'diterima') return 'selesai'
+  if (
+    raw === 'draft' ||
+    raw === 'diajukan' ||
+    raw === 'disetujui' ||
+    raw === 'ditolak' ||
+    raw === 'ditimbang' ||
+    raw === 'menunggu_selesai' ||
+    raw === 'selesai'
+  )
+    return raw
+  return 'draft'
+}
+
+export function isPurchaseReceivedForAp(stage: PurchaseStage): boolean {
+  return stage === 'menunggu_selesai' || stage === 'selesai'
+}
+
+export function canHardDeletePurchase(stage: PurchaseStage): boolean {
+  return stage === 'draft' || stage === 'ditolak'
+}
+
+export function canVoidPurchase(stage: PurchaseStage): boolean {
+  return stage === 'ditimbang' || stage === 'menunggu_selesai' || stage === 'selesai'
+}
+
+export function isPurchaseAwaitingWeigh(stage: PurchaseStage): boolean {
+  return stage === 'draft' || stage === 'diajukan' || stage === 'disetujui'
+}
 
 export type PaymentStatus = 'lunas' | 'sebagian' | 'belum' | 'terlambat'
 
@@ -20,6 +72,8 @@ export type Weighing = {
   impurity: number // % hampa/kotoran
   weighedAt: string // ISO
   confirmedAt?: string // ISO
+  /** Nama file bukti timbang / serah terima gabah */
+  receiptName?: string
 }
 
 export type Payment = {
@@ -27,6 +81,8 @@ export type Payment = {
   date: string // ISO
   amount: number // Rp
   method: PaymentMethod
+  /** Nama file bukti transfer / struk bayar */
+  receiptName?: string
 }
 
 export type Purchase = {
@@ -37,15 +93,29 @@ export type Purchase = {
   sacks: number
   estimatedKg: number // taksiran berat saat dicatat
   price: number // Rp per kg netto (harga sepakat)
+  /** Harga efektif setelah potongan kadar air (diisi saat diterima) */
+  effectivePrice?: number
+  /** Lot gabah untuk trace ke produksi */
+  lotId?: string
   vehicle?: string
   note?: string
   stage: PurchaseStage
   weighing?: Weighing
   dueDate?: string // ISO, jatuh tempo pembayaran
   payments: Payment[]
+  invoiceProof?: ProofAttachment | string
+  purchaseProof?: ProofAttachment | string
+  approvals?: ApprovalStamp[]
+  rejectReason?: string
+  budgetApprovedAt?: string
+  completedAt?: string
+  voidedAt?: string
+  voidReason?: string
 }
 
-export type WeighingInput = Pick<Weighing, 'bruto' | 'tara' | 'moisture' | 'impurity'>
+export type WeighingInput = Pick<Weighing, 'bruto' | 'tara' | 'moisture' | 'impurity'> & {
+  receiptName?: string
+}
 
 export type NewPurchase = Omit<Purchase, 'id' | 'stage' | 'payments'>
 
@@ -81,6 +151,8 @@ export const DEFAULT_PRICE: Record<GrainType, number> = {
 export const TARA_PER_SACK = 1 // kg
 export const PAYMENT_TERM_DAYS = 7
 export const VARIANCE_TOLERANCE = 3 // %
+/** Potongan harga Rp/kg per 1% kadar air di atas standar */
+export const MOISTURE_PRICE_CUT_PER_PCT = 50
 
 export const SUPPLIERS: Supplier[] = [
   { id: 'sup-01', name: 'Kelompok Tani Sri Rejeki', village: 'Desa Ngawen' },
@@ -89,12 +161,6 @@ export const SUPPLIERS: Supplier[] = [
   { id: 'sup-04', name: 'Bu Suminah', village: 'Desa Tegalsari' },
   { id: 'sup-05', name: 'Koperasi Tani Sejahtera', village: 'Kec. Gondang' },
 ]
-
-export const STAGE_LABEL: Record<PurchaseStage, string> = {
-  dicatat: 'Belum ditimbang',
-  ditimbang: 'Menunggu konfirmasi',
-  diterima: 'Berat dikonfirmasi',
-}
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   lunas: 'Lunas',
@@ -109,6 +175,8 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 }
 
 export function getSupplier(id: string): Supplier | undefined {
+  const row = lookupSupplier(id)
+  if (row) return { id: row.id, name: row.name, village: row.area }
   return SUPPLIERS.find((s) => s.id === id)
 }
 
@@ -137,14 +205,54 @@ export function calcWeighing(grain: GrainType, w: WeighingInput): WeighingCalc {
   return { weighed, moistureCut, impurityCut, rafaksi, netto }
 }
 
+/** Harga per kg setelah potongan kadar air (impurity hanya potong berat). */
+export function effectiveUnitPrice(
+  grain: GrainType,
+  basePrice: number,
+  moisture: number,
+): number {
+  const excess = Math.max(0, moisture - GRAIN_STANDARD[grain].moisture)
+  return Math.max(
+    0,
+    Math.round(basePrice - excess * MOISTURE_PRICE_CUT_PER_PCT),
+  )
+}
+
+export function nextLotId(items: Purchase[], date = new Date()): string {
+  const head = `LOT-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}-`
+  const max = items.reduce((m, p) => {
+    if (!p.lotId?.startsWith(head)) return m
+    const n = Number(p.lotId.slice(head.length))
+    return Number.isFinite(n) ? Math.max(m, n) : m
+  }, 0)
+  return `${head}${String(max + 1).padStart(3, '0')}`
+}
+
 export function summarize(p: Purchase, today = todayIso()): PurchaseSummary {
+  if (p.voidedAt) {
+    return {
+      weighing: p.weighing ? calcWeighing(p.grain, p.weighing) : null,
+      estimatedValue: 0,
+      total: 0,
+      paid: 0,
+      outstanding: 0,
+      variancePct: null,
+      payment: null,
+    }
+  }
   const weighing = p.weighing ? calcWeighing(p.grain, p.weighing) : null
-  const total = p.stage === 'diterima' && weighing ? weighing.netto * p.price : 0
+  const unitPrice =
+    p.effectivePrice ??
+    (weighing
+      ? effectiveUnitPrice(p.grain, p.price, p.weighing!.moisture)
+      : p.price)
+  const received = isPurchaseReceivedForAp(p.stage)
+  const total = received && weighing ? weighing.netto * unitPrice : 0
   const paid = p.payments.reduce((sum, pay) => sum + pay.amount, 0)
   const outstanding = Math.max(0, total - paid)
 
   let payment: PaymentStatus | null = null
-  if (p.stage === 'diterima') {
+  if (received) {
     if (outstanding === 0) payment = 'lunas'
     else if (p.dueDate && p.dueDate < today) payment = 'terlambat'
     else payment = paid > 0 ? 'sebagian' : 'belum'
@@ -164,9 +272,13 @@ export function summarize(p: Purchase, today = todayIso()): PurchaseSummary {
   }
 }
 
-export function nextPurchaseId(items: Purchase[], date = new Date()): string {
+export function nextPurchaseId(
+  items: Purchase[],
+  date = new Date(),
+  docPrefix = 'PB',
+): string {
   const yymm = `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, '0')}`
-  const prefix = `PB-${yymm}-`
+  const prefix = `${docPrefix}-${yymm}-`
   const max = items
     .filter((p) => p.id.startsWith(prefix))
     .reduce((m, p) => Math.max(m, Number(p.id.slice(prefix.length)) || 0), 0)
@@ -181,7 +293,10 @@ export function nextPaymentId(items: Purchase[]): string {
 }
 
 type SeedPayment = Omit<Payment, 'id' | 'amount'> & { amount: number | 'lunas' }
-type Seed = Omit<Purchase, 'payments'> & { payments?: SeedPayment[] }
+type Seed = Omit<Purchase, 'payments' | 'stage'> & {
+  stage: string
+  payments?: SeedPayment[]
+}
 
 const SEED: Seed[] = [
   { id: 'PB-2610-0021', date: '2026-10-29', supplierId: 'sup-04', grain: 'GKP', sacks: 14, estimatedKg: 700, price: 6600, vehicle: 'AD 8812 KL', stage: 'dicatat' },
@@ -211,9 +326,13 @@ const SEED: Seed[] = [
 
 let seedPaymentNo = 0
 
-export const INITIAL_PURCHASES: Purchase[] = SEED.map((s) => {
-  const base: Purchase = { ...s, payments: [] }
-  const total = summarize({ ...base, stage: 'diterima' }).total
+export const INITIAL_PURCHASES: Purchase[] = SEED.map((s, idx) => {
+  const stage = migratePurchaseStage(s.stage)
+  const lotId = isPurchaseReceivedForAp(stage)
+    ? `LOT-202610-${String(idx + 1).padStart(3, '0')}`
+    : undefined
+  const base: Purchase = { ...s, stage, payments: [], lotId }
+  const total = summarize({ ...base, stage: 'selesai' }).total
   return {
     ...base,
     payments: (s.payments ?? []).map((pay) => ({
@@ -260,4 +379,13 @@ export function parseNumber(value: string): number {
   const cleaned = value.trim().replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : 0
+}
+
+/** Badge angka untuk menu sidebar Pembelian. */
+export function getPembelianNavCounts(purchases: Purchase[]) {
+  return {
+    pencatatan: purchases.length,
+    penerimaan: purchases.filter((p) => !isPurchaseReceivedForAp(p.stage)).length,
+    pembayaran: purchases.filter((p) => summarize(p).outstanding > 0).length,
+  }
 }

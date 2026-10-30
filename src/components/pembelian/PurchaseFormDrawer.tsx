@@ -5,7 +5,6 @@ import { TextField } from '@/components/ui/TextField'
 import {
   DEFAULT_PRICE,
   GRAIN_STANDARD,
-  SUPPLIERS,
   formatKg,
   formatRupiah,
   parseNumber,
@@ -13,6 +12,7 @@ import {
   type GrainType,
   type NewPurchase,
 } from '@/features/pembelian/pembelian-data'
+import { useMasterStore } from '@/features/master/master-store'
 
 type PurchaseFormDrawerProps = {
   open: boolean
@@ -53,13 +53,15 @@ const GRAIN_OPTIONS = (Object.keys(GRAIN_STANDARD) as GrainType[]).map((g) => ({
   description: `Maks kadar air ${GRAIN_STANDARD[g].moisture}% · hampa ${GRAIN_STANDARD[g].impurity}%`,
 }))
 
-const SUPPLIER_OPTIONS = SUPPLIERS.map((s) => ({
-  value: s.id,
-  label: s.name,
-  description: s.village,
-}))
-
 export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFormDrawerProps) {
+  const { suppliers } = useMasterStore()
+  const supplierOptions = suppliers
+    .filter((s) => s.active)
+    .map((s) => ({
+      value: s.id,
+      label: s.name,
+      description: s.area,
+    }))
   const [form, setForm] = useState<FormState>(emptyForm)
   const [errors, setErrors] = useState<FormErrors>({})
   const onCloseRef = useRef(onClose)
@@ -156,7 +158,7 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
           </button>
         </header>
 
-        <div className="scrollbar-none flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        <div className="scrollbar-brand flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <fieldset className="space-y-4">
             <legend className={[sectionLabel, 'mb-3'].join(' ')}>01 · Pemasok & gabah</legend>
             <div>
@@ -164,7 +166,7 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
                 label="Pemasok"
                 requiredMark
                 value={form.supplierId}
-                options={SUPPLIER_OPTIONS}
+                options={supplierOptions}
                 onChange={(v) => set('supplierId', v)}
                 placeholder="Pilih pemasok gabah"
               />
