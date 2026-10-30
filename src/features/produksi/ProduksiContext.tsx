@@ -23,7 +23,6 @@ import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
   berasQty,
   computeLotCost,
-  lotCostTotal,
   nextBatchId,
   nextPackRunId,
   resolveLotIdFromBatch,
@@ -689,59 +688,59 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         method: 'proportional',
       })
 
-      const lotId = resolveLotIdFromBatch(doneBatch)
-      if (lotId) {
-        const { purchases } = pembelianRepository.load()
-        const purchase = purchases.find(
-          (p) => p.lotId === lotId && !p.voidedAt,
-        )
-        if (purchase) {
-          const grainValue = grainValueForPurchase(purchase)
-          const allocatedOps = proportionalOpsForBatch(doneBatch, batchesForCosting)
-          const snapshot = computeLotCost({
-            lotId,
-            batchId: doneBatch.id,
-            grainValue,
-            allocatedOps,
-            berasQty: berasQty(doneBatch),
-            method: 'proportional',
-          })
-          const totalCost = lotCostTotal(snapshot)
-          const wipGrain =
-            doneBatch.wipGrainValue ?? grainValueForBatch(doneBatch)
-          const journalDate = journalDateFromIso(completedAt)
-          const memo = `Complete batch ${doneBatch.id}`
-          const lines = [
-            {
-              accountId: mapAccount('inventoryBeras'),
-              debit: totalCost,
-              credit: 0,
-              memo,
-            },
-            {
-              accountId: mapAccount('wip'),
-              debit: 0,
-              credit: wipGrain,
-              memo: `${memo} — WIP grain`,
-            },
-          ]
-          if (allocatedOps > 0) {
-            lines.push({
-              accountId: mapAccount('mfgOverhead'),
-              debit: 0,
-              credit: allocatedOps,
-              memo: `${memo} — alokasi ops`,
-            })
-          }
-          if (totalCost > 0) {
-            postJournalEntry({
-              date: journalDate,
-              memo,
-              sourceKey: `batch:${doneBatch.id}:done`,
-              sourceType: 'auto',
-              manual: false,
-              lines,
-            })
+      // Done GL only after WIP start (Dr beras / Cr wip + ops). Legacy complete keeps stock only.
+      if (doneBatch.wipStockPosted) {
+        const wipGrain = doneBatch.wipGrainValue
+        if (
+          wipGrain != null &&
+          Number.isFinite(wipGrain) &&
+          wipGrain > 0
+        ) {
+          const lotId = resolveLotIdFromBatch(doneBatch)
+          if (lotId) {
+            const { purchases } = pembelianRepository.load()
+            const purchase = purchases.find(
+              (p) => p.lotId === lotId && !p.voidedAt,
+            )
+            if (purchase) {
+              const allocatedOps = proportionalOpsForBatch(
+                doneBatch,
+                batchesForCosting,
+              )
+              const totalCost = wipGrain + allocatedOps
+              const journalDate = journalDateFromIso(completedAt)
+              const memo = `Complete batch ${doneBatch.id}`
+              const lines = [
+                {
+                  accountId: mapAccount('inventoryBeras'),
+                  debit: totalCost,
+                  credit: 0,
+                  memo,
+                },
+                {
+                  accountId: mapAccount('wip'),
+                  debit: 0,
+                  credit: wipGrain,
+                  memo: `${memo} — WIP grain`,
+                },
+              ]
+              if (allocatedOps > 0) {
+                lines.push({
+                  accountId: mapAccount('mfgOverhead'),
+                  debit: 0,
+                  credit: allocatedOps,
+                  memo: `${memo} — alokasi ops`,
+                })
+              }
+              postJournalEntry({
+                date: journalDate,
+                memo,
+                sourceKey: `batch:${doneBatch.id}:done`,
+                sourceType: 'auto',
+                manual: false,
+                lines,
+              })
+            }
           }
         }
       }
