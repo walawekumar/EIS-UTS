@@ -4,10 +4,27 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useAuth } from '@/features/auth/AuthContext'
+import {
+  type Account,
+  type AccountMap,
+  type AccountMapKey,
+  type FailedJournalPost,
+  type JournalEntry,
+  type JournalLine,
+  type JournalSourceType,
+} from '@/features/keuangan/gl-data'
+import {
+  enqueueFailedPost,
+  postJournal,
+  removeFailedPost,
+  reverseJournal,
+} from '@/features/keuangan/gl-journal'
+import { glRepository } from '@/features/keuangan/gl-storage'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
   formatDateId,
@@ -75,11 +92,34 @@ type ApplyLinkedPayInput = {
   note?: string
 }
 
+type PostJournalEntryInput = {
+  date: string
+  memo: string
+  sourceKey?: string
+  sourceType: JournalSourceType
+  manual: boolean
+  lines: JournalLine[]
+}
+
 type FinanceStoreValue = {
   cashEntries: CashEntry[]
   payables: PayableRow[]
   receivables: ReceivableRow[]
   expenses: ExpenseRow[]
+  accounts: Account[]
+  accountMap: AccountMap
+  journals: JournalEntry[]
+  failedPosts: FailedJournalPost[]
+  postJournalEntry: (input: PostJournalEntryInput) => string | undefined
+  reverseJournalEntry: (opts: {
+    sourceKey?: string
+    id?: string
+  }) => string | undefined
+  retryFailedPost: (sourceKey: string) => string | undefined
+  upsertAccount: (account: Account) => string | undefined
+  setAccountActive: (id: string, active: boolean) => string | undefined
+  setAccountMap: (map: AccountMap) => void
+  mapAccount: (key: AccountMapKey) => string
   addCashEntry: (input: AddCashInput) => void
   removeCashEntry: (id: string) => void
   payPayable: (input: PayInput) => void
@@ -111,6 +151,14 @@ function agingFromDue(iso: string): number {
   today.setHours(0, 0, 0, 0)
   const diff = Math.floor((today.getTime() - due.getTime()) / 86_400_000)
   return Math.max(0, diff)
+}
+
+function todayGlDate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function prependCash(
@@ -149,6 +197,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const actor = user?.name ?? 'Pengguna'
 
   const boot = keuanganRepository.load()
+  const glBoot = glRepository.load()
   const [cashEntries, setCashEntries] = useState<CashEntry[]>(() => [
     ...boot.cashEntries,
   ])
@@ -157,6 +206,26 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     ...boot.receivables,
   ])
   const [expenses, setExpenses] = useState<ExpenseRow[]>(() => [...boot.expenses])
+  const [accounts, setAccounts] = useState<Account[]>(() => [...glBoot.accounts])
+  const [accountMap, setAccountMapState] = useState<AccountMap>(() => ({
+    ...glBoot.accountMap,
+  }))
+  const [journals, setJournals] = useState<JournalEntry[]>(() => [
+    ...glBoot.journals,
+  ])
+  const [failedPosts, setFailedPosts] = useState<FailedJournalPost[]>(() => [
+    ...glBoot.failedPosts,
+  ])
+
+  const glRef = useRef({
+    accounts,
+    accountMap,
+    journals,
+    failedPosts,
+  })
+  useEffect(() => {
+    glRef.current = { accounts, accountMap, journals, failedPosts }
+  }, [accounts, accountMap, journals, failedPosts])
 
   useEffect(() => {
     keuanganRepository.save({
@@ -168,6 +237,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       updatedAt: new Date().toISOString(),
     })
   }, [cashEntries, payables, receivables, expenses])
+
+  useEffect(() => {
+    glRepository.save({
+      version: 1,
+      accounts,
+      accountMap,
+      journals,
+      failedPosts,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [accounts, accountMap, journals, failedPosts])
 
   const addCashEntry = useCallback(
     (input: AddCashInput) => {
@@ -452,12 +532,151 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  const mapAccount = useCallback(
+    (key: AccountMapKey) => glRef.current.accountMap[key],
+    [],
+  )
+
+  const setAccountMap = useCallback((map: AccountMap) => {
+    setAccountMapState({ ...map })
+  }, [])
+
+  const upsertAccount = useCallback((account: Account): string | undefined => {
+    const code = account.code.trim()
+    const name = account.name.trim()
+    if (!code || !name) return 'Kode dan nama akun wajib diisi.'
+    const { accounts: list } = glRef.current
+    if (list.some((a) => a.code === code && a.id !== account.id)) {
+      return 'Kode akun sudah dipakai.'
+    }
+    const idx = list.findIndex((a) => a.id === account.id)
+    if (idx < 0) {
+      if (account.system) return 'Akun baru tidak boleh berstatus sistem.'
+      setAccounts([
+        { ...account, code, name, system: false },
+        ...list,
+      ])
+      return undefined
+    }
+    const prev = list[idx]
+    if (prev.system) {
+      setAccounts(
+        list.map((a) =>
+          a.id === account.id
+            ? { ...prev, code, name, active: account.active }
+            : a,
+        ),
+      )
+      return undefined
+    }
+    setAccounts(
+      list.map((a) =>
+        a.id === account.id ? { ...account, code, name, system: false } : a,
+      ),
+    )
+    return undefined
+  }, [])
+
+  const setAccountActive = useCallback(
+    (id: string, active: boolean): string | undefined => {
+      const { accounts: list } = glRef.current
+      if (!list.some((a) => a.id === id)) return 'Akun tidak ditemukan.'
+      setAccounts(list.map((a) => (a.id === id ? { ...a, active } : a)))
+      return undefined
+    },
+    [],
+  )
+
+  const postJournalEntry = useCallback(
+    (input: PostJournalEntryInput): string | undefined => {
+      const { accounts: accts, journals: jrn, failedPosts: failed } =
+        glRef.current
+      const result = postJournal({
+        ...input,
+        createdBy: actor,
+        accounts: accts,
+        journals: jrn,
+      })
+      if (result.ok) {
+        setJournals(result.journals)
+        if (input.sourceKey) {
+          setFailedPosts(removeFailedPost(failed, input.sourceKey))
+        }
+        return undefined
+      }
+      if (input.sourceKey) {
+        setFailedPosts(
+          enqueueFailedPost(failed, {
+            sourceKey: input.sourceKey,
+            payload: {
+              date: input.date,
+              memo: input.memo,
+              sourceKey: input.sourceKey,
+              sourceType: input.sourceType,
+              manual: input.manual,
+              lines: input.lines,
+              createdBy: actor,
+            },
+            error: result.error,
+            createdAt: new Date().toISOString(),
+          }),
+        )
+      }
+      return result.error
+    },
+    [actor],
+  )
+
+  const reverseJournalEntry = useCallback(
+    (opts: { sourceKey?: string; id?: string }): string | undefined => {
+      const { journals: jrn } = glRef.current
+      const result = reverseJournal(jrn, {
+        ...opts,
+        createdBy: actor,
+        date: todayGlDate(),
+      })
+      if (!result.ok) return result.error
+      setJournals(result.journals)
+      return undefined
+    },
+    [actor],
+  )
+
+  const retryFailedPost = useCallback(
+    (sourceKey: string): string | undefined => {
+      const item = glRef.current.failedPosts.find(
+        (f) => f.sourceKey === sourceKey,
+      )
+      if (!item) return 'Antrian jurnal gagal tidak ditemukan.'
+      return postJournalEntry({
+        date: item.payload.date,
+        memo: item.payload.memo,
+        sourceKey: item.sourceKey,
+        sourceType: item.payload.sourceType,
+        manual: item.payload.manual,
+        lines: item.payload.lines,
+      })
+    },
+    [postJournalEntry],
+  )
+
   const value = useMemo(
     () => ({
       cashEntries,
       payables,
       receivables,
       expenses,
+      accounts,
+      accountMap,
+      journals,
+      failedPosts,
+      postJournalEntry,
+      reverseJournalEntry,
+      retryFailedPost,
+      upsertAccount,
+      setAccountActive,
+      setAccountMap,
+      mapAccount,
       addCashEntry,
       removeCashEntry,
       payPayable,
@@ -478,6 +697,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       payables,
       receivables,
       expenses,
+      accounts,
+      accountMap,
+      journals,
+      failedPosts,
+      postJournalEntry,
+      reverseJournalEntry,
+      retryFailedPost,
+      upsertAccount,
+      setAccountActive,
+      setAccountMap,
+      mapAccount,
       addCashEntry,
       removeCashEntry,
       payPayable,
