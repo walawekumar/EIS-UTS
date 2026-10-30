@@ -108,9 +108,12 @@ Helper approval: `src/features/workflow/approvals.ts` (`ApprovalStamp`, `hasAppr
 
 ### Penjualan (ringkas)
 
-- Void setelah dikirim: reverse stok + hapus AR tertaut (`voidedAt`).
+- Void setelah dikirim: reverse stok + hapus AR tertaut (`voidedAt`) + reverse jurnal `so:*`.
 - Hard-delete hanya tahap awal (`dibuat`).
 - Limit kredit pelanggan dicek saat kirim dengan settlement `kredit`.
+- **`SaleOrder.lotId`:** diisi wajib saat **kirim** (lot costing giling / `LotCost`). Draft boleh tanpa lot.
+- **COGS GL:** `qty × LotCost.costPerKgBeras` (asumsi qty kg). **Tidak** fallback ke `costPrice` master. Tanpa LotCost valid → blokir kirim / post retur.
+- **Retur jual COGS:** memakai `order.lotId` SO asal (bukan pilih lot ulang). Order lama tanpa `lotId` tidak bisa post retur COGS.
 
 ### Pembelian — retur — `ReturnStage` (`PurchaseReturn`)
 
@@ -190,7 +193,7 @@ Laporan resmi 2a (**Laporan → Neraca saldo / Laba rugi / Neraca**) memakai `ac
 
 ### Dual-track (kas / AP / AR vs GL)
 
-Layar **Kas, Utang, Piutang, Biaya, Payroll** tetap sumber kerja harian (`upsertPayable`, `creditPayable`, `creditReceivable`, `addCashEntry`, dll.). Setelah event ops sukses, builder jurnal memanggil `postJournal` paralel. Void ops → `reverseJournal`. Tidak ada backfill historis; saldo awal lewat jurnal `opening` ke `openingEquity`.
+Layar **Kas, Utang, Piutang, Biaya, Payroll** tetap sumber kerja harian (`upsertPayable`, `creditPayable`, `creditReceivable`, `addCashEntry`, dll.). Setelah event ops sukses, builder jurnal memanggil `postJournal` paralel. Void ops → `reverseJournal`. Gagal auto-journal → `FailedJournalPost` + **toast di halaman pemicu** (ops tidak di-rollback). Tidak ada backfill historis; saldo awal lewat jurnal `opening` ke `openingEquity`.
 
 ### Produksi — WIP + jurnal
 

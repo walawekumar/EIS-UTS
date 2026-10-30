@@ -740,7 +740,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
               receiptName: prev.receiptName,
             }),
           )
-          reverseJournalEntry({ sourceKey: `ex:${id}:post` })
+          journalError = reverseJournalEntry({
+            sourceKey: `ex:${id}:post`,
+          })
         }
         return list.map((item) =>
           item.id === id ? { ...item, status } : item,
