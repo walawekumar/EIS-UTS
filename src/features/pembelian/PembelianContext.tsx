@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -16,18 +17,24 @@ import {
   calcWeighing,
   effectiveUnitPrice,
   getSupplier,
+  isPurchaseReceivedForAp,
   nextLotId,
   nextPaymentId,
   nextPurchaseId,
+  nextPurchaseReturnId,
+  returnedQtyForPurchase,
   canHardDeletePurchase,
   canVoidPurchase,
   summarize,
   todayIso,
+  upsertLotQc as mergeLotQc,
   type LotQc,
+  type LotQcGrade,
   type NewPayment,
   type NewPurchase,
   type Purchase,
   type PurchaseReturn,
+  type PurchaseReturnLine,
   type WeighingInput,
 } from '@/features/pembelian/pembelian-data'
 import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
@@ -55,6 +62,85 @@ function roleAllowed(role: UserRole | undefined, allowed: UserRole[]): boolean {
   return allowed.includes(role)
 }
 
+const LOT_QC_GRADES: LotQcGrade[] = ['A', 'B', 'C', 'reject']
+
+export type PurchaseReturnInput = {
+  /** Set to edit an existing draft or ditolak return. */
+  id?: string
+  purchaseId: string
+  lines: PurchaseReturnLine[]
+  reason: string
+}
+
+export type LotQcInput = Pick<
+  LotQc,
+  | 'lotId'
+  | 'purchaseId'
+  | 'moisture'
+  | 'impurity'
+  | 'brokenPct'
+  | 'grade'
+  | 'passed'
+  | 'note'
+>
+
+function grainSku(grain: string): { sku: string; name: string } {
+  return GRAIN_SKU[grain] ?? GRAIN_SKU.GKP
+}
+
+function receivedQtyForSku(purchase: Purchase, sku: string): number {
+  if (sku !== grainSku(purchase.grain).sku) return 0
+  if (!purchase.weighing || !isPurchaseReceivedForAp(purchase.stage)) return 0
+  return calcWeighing(purchase.grain, purchase.weighing).netto
+}
+
+function normalizeReturnLines(lines: PurchaseReturnLine[]): PurchaseReturnLine[] {
+  return lines.map((line) => ({
+    sku: line.sku.trim(),
+    productName: line.productName.trim(),
+    unit: line.unit.trim() || 'kg',
+    qty: line.qty,
+  }))
+}
+
+function returnQtyError(
+  purchase: Purchase,
+  lines: PurchaseReturnLine[],
+  allReturns: PurchaseReturn[],
+): string | undefined {
+  if (lines.length === 0) return 'Retur wajib punya minimal satu baris.'
+  const totals = new Map<string, number>()
+  for (const line of lines) {
+    if (!line.sku) return 'SKU baris retur wajib diisi.'
+    if (!line.productName) return 'Nama barang baris retur wajib diisi.'
+    if (!Number.isFinite(line.qty) || line.qty <= 0) {
+      return 'Qty retur harus lebih dari 0.'
+    }
+    totals.set(line.sku, (totals.get(line.sku) ?? 0) + line.qty)
+  }
+  for (const [sku, qty] of totals) {
+    const received = receivedQtyForSku(purchase, sku)
+    const returned = returnedQtyForPurchase(allReturns, purchase.id, sku)
+    const remaining = received - returned
+    if (qty > remaining) {
+      return `Qty ${sku} melebihi sisa diterima (${Math.max(0, remaining)} kg).`
+    }
+  }
+  return undefined
+}
+
+function purchaseUnitPrice(purchase: Purchase): number {
+  if (purchase.effectivePrice != null) return purchase.effectivePrice
+  if (purchase.weighing) {
+    return effectiveUnitPrice(
+      purchase.grain,
+      purchase.price,
+      purchase.weighing.moisture,
+    )
+  }
+  return purchase.price
+}
+
 type PembelianContextValue = {
   purchases: Purchase[]
   createPurchase: (data: NewPurchase) => string
@@ -79,6 +165,15 @@ type PembelianContextValue = {
       purchaseProof?: Purchase['purchaseProof']
     },
   ) => void
+  returns: PurchaseReturn[]
+  lotQc: LotQc[]
+  createPurchaseReturn: (input: PurchaseReturnInput) => string | undefined
+  submitPurchaseReturn: (id: string) => string | undefined
+  approvePurchaseReturn: (id: string) => string | undefined
+  rejectPurchaseReturn: (id: string, reason: string) => string | undefined
+  postPurchaseReturn: (id: string) => string | undefined
+  upsertLotQc: (input: LotQcInput) => string | undefined
+  overrideLotQcReceive: (lotId: string, reason: string) => string | undefined
 }
 
 const PembelianContext = createContext<PembelianContextValue | null>(null)
@@ -89,13 +184,18 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     upsertPayableFromPurchase,
     applyPurchasePayment,
     removeLinkedPayable,
+    creditPayable,
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
   const initialSnapshot = useMemo(() => pembelianRepository.load(), [])
   const [items, setItems] = useState<Purchase[]>(() => initialSnapshot.purchases)
-  const [returns] = useState<PurchaseReturn[]>(() => initialSnapshot.returns)
-  const [lotQc] = useState<LotQc[]>(() => initialSnapshot.lotQc)
+  const [returns, setReturns] = useState<PurchaseReturn[]>(
+    () => initialSnapshot.returns,
+  )
+  const [lotQc, setLotQc] = useState<LotQc[]>(() => initialSnapshot.lotQc)
+  const lotQcRef = useRef(lotQc)
+  lotQcRef.current = lotQc
 
   useEffect(() => {
     pembelianRepository.save({
@@ -400,6 +500,13 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (!hasProof(proof)) {
         return 'Lampirkan struk beli sebelum konfirmasi penerimaan.'
       }
+      if (current.lotId) {
+        const qc = lotQcRef.current.find((q) => q.lotId === current.lotId)
+        if (!qc) return 'QC lot belum diisi.'
+        if (!qc.passed && !qc.overrideReason) {
+          return 'QC lot belum lulus — perlu override admin.'
+        }
+      }
 
       const weighing = {
         ...measures,
@@ -506,6 +613,307 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     [applyPurchasePayment, items, user?.role],
   )
 
+  const createPurchaseReturn = useCallback(
+    (input: PurchaseReturnInput): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
+        return 'Hanya petugas pembelian atau admin yang dapat mencatat retur.'
+      }
+      const reason = input.reason.trim()
+      if (!reason) return 'Alasan retur wajib diisi.'
+      const purchase = items.find((p) => p.id === input.purchaseId)
+      if (!purchase) return 'Dokumen pembelian tidak ditemukan.'
+      if (purchase.voidedAt) return 'Dokumen pembelian sudah dibatalkan.'
+      if (!isPurchaseReceivedForAp(purchase.stage)) {
+        return 'Retur hanya untuk pembelian yang sudah diterima.'
+      }
+      const lines = normalizeReturnLines(input.lines)
+      const qtyError = returnQtyError(purchase, lines, returns)
+      if (qtyError) return qtyError
+
+      if (input.id) {
+        const existing = returns.find((r) => r.id === input.id)
+        if (!existing) return 'Dokumen retur tidak ditemukan.'
+        if (existing.stage !== 'draft' && existing.stage !== 'ditolak') {
+          return 'Hanya retur draft atau ditolak yang dapat diubah.'
+        }
+        setReturns((list) =>
+          list.map((r) =>
+            r.id === input.id
+              ? {
+                  ...r,
+                  purchaseId: purchase.id,
+                  lotId: purchase.lotId,
+                  lines,
+                  reason,
+                  stage: 'draft',
+                  rejectedReason: undefined,
+                  approvals: undefined,
+                }
+              : r,
+          ),
+        )
+        appendAudit({
+          action: 'update',
+          entity: 'purchase',
+          entityId: input.id,
+          note: `Ubah retur ${purchase.id}`,
+        })
+        return undefined
+      }
+
+      const id = nextPurchaseReturnId(returns)
+      const row: PurchaseReturn = {
+        id,
+        purchaseId: purchase.id,
+        lotId: purchase.lotId,
+        lines,
+        reason,
+        stage: 'draft',
+        createdAt: new Date().toISOString(),
+      }
+      setReturns((list) => [row, ...list])
+      appendAudit({
+        action: 'create',
+        entity: 'purchase',
+        entityId: id,
+        note: `Retur ${purchase.id}`,
+      })
+      return undefined
+    },
+    [items, returns, appendAudit, user?.role],
+  )
+
+  const submitPurchaseReturn = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
+        return 'Hanya petugas pembelian atau admin yang dapat mengajukan retur.'
+      }
+      const current = returns.find((r) => r.id === id)
+      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (current.stage !== 'draft') {
+        return 'Hanya draft yang dapat diajukan.'
+      }
+      const purchase = items.find((p) => p.id === current.purchaseId)
+      if (!purchase) return 'Dokumen pembelian tidak ditemukan.'
+      if (purchase.voidedAt) return 'Dokumen pembelian sudah dibatalkan.'
+      const qtyError = returnQtyError(purchase, current.lines, returns)
+      if (qtyError) return qtyError
+      setReturns((list) =>
+        list.map((r) => (r.id === id ? { ...r, stage: 'diajukan' } : r)),
+      )
+      appendAudit({
+        action: 'submit',
+        entity: 'purchase',
+        entityId: id,
+        note: `Ajukan retur ${current.purchaseId}`,
+      })
+      return undefined
+    },
+    [items, returns, appendAudit, user?.role],
+  )
+
+  const approvePurchaseReturn = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
+        return 'Hanya keuangan atau admin yang dapat menyetujui retur.'
+      }
+      const current = returns.find((r) => r.id === id)
+      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (current.stage !== 'diajukan') {
+        return 'Hanya retur diajukan yang dapat disetujui.'
+      }
+      const role = user!.role
+      if (role !== 'keuangan' && role !== 'admin') {
+        return 'Peran tidak diizinkan menyetujui retur.'
+      }
+      const at = new Date().toISOString()
+      setReturns((list) =>
+        list.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                stage: 'disetujui',
+                rejectedReason: undefined,
+                approvals: upsertApproval(r.approvals, {
+                  role,
+                  by: user!.name,
+                  at,
+                }),
+              }
+            : r,
+        ),
+      )
+      appendAudit({
+        action: 'approve',
+        entity: 'purchase',
+        entityId: id,
+        note: `Retur disetujui (${role})`,
+      })
+      return undefined
+    },
+    [returns, appendAudit, user],
+  )
+
+  const rejectPurchaseReturn = useCallback(
+    (id: string, reason: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
+        return 'Hanya keuangan atau admin yang dapat menolak retur.'
+      }
+      const trimmed = reason.trim()
+      if (!trimmed) return 'Alasan penolakan wajib diisi.'
+      const current = returns.find((r) => r.id === id)
+      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (current.stage !== 'diajukan') {
+        return 'Hanya retur diajukan yang dapat ditolak.'
+      }
+      setReturns((list) =>
+        list.map((r) =>
+          r.id === id
+            ? { ...r, stage: 'ditolak', rejectedReason: trimmed }
+            : r,
+        ),
+      )
+      appendAudit({
+        action: 'reject',
+        entity: 'purchase',
+        entityId: id,
+        note: trimmed,
+      })
+      return undefined
+    },
+    [returns, appendAudit, user?.role],
+  )
+
+  const postPurchaseReturn = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
+        return 'Hanya keuangan atau admin yang dapat memposting retur.'
+      }
+      const current = returns.find((r) => r.id === id)
+      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (current.stage !== 'disetujui') {
+        return 'Hanya retur disetujui yang dapat diposting.'
+      }
+      const purchase = items.find((p) => p.id === current.purchaseId)
+      if (!purchase) return 'Dokumen pembelian tidak ditemukan.'
+      if (purchase.voidedAt) return 'Dokumen pembelian sudah dibatalkan.'
+      const qtyError = returnQtyError(purchase, current.lines, returns)
+      if (qtyError) return qtyError
+
+      const unitPrice = purchaseUnitPrice(purchase)
+      const credit = current.lines.reduce(
+        (sum, line) => sum + line.qty * unitPrice,
+        0,
+      )
+      const location = readAppSettings().stock.defaultLocation
+      const postedAt = new Date().toISOString()
+
+      for (const line of current.lines) {
+        addMovement({
+          type: 'out',
+          sku: line.sku,
+          productName: line.productName,
+          unit: line.unit,
+          qty: line.qty,
+          fromLocation: location,
+          toLocation: 'Pemasok',
+          note: `Retur pembelian ${current.id} · ${purchase.id}`,
+        })
+      }
+      creditPayable(purchase.id, credit)
+      setReturns((list) =>
+        list.map((r) =>
+          r.id === id ? { ...r, stage: 'posted', postedAt } : r,
+        ),
+      )
+      appendAudit({
+        action: 'return',
+        entity: 'purchase',
+        entityId: current.id,
+        note: `Retur ${purchase.id}`,
+      })
+      return undefined
+    },
+    [items, returns, addMovement, creditPayable, appendAudit, user?.role],
+  )
+
+  const upsertLotQc = useCallback(
+    (input: LotQcInput): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'gudang', 'admin'])) {
+        return 'Hanya pembelian, gudang, atau admin yang dapat mengisi QC lot.'
+      }
+      const lotId = input.lotId.trim()
+      if (!lotId) return 'Lot wajib diisi.'
+      if (!LOT_QC_GRADES.includes(input.grade)) return 'Grade QC tidak valid.'
+      if (
+        !Number.isFinite(input.moisture) ||
+        input.moisture < 0 ||
+        !Number.isFinite(input.impurity) ||
+        input.impurity < 0 ||
+        !Number.isFinite(input.brokenPct) ||
+        input.brokenPct < 0
+      ) {
+        return 'Angka QC tidak valid.'
+      }
+      const purchase = items.find((p) => p.lotId === lotId)
+      if (!purchase) return 'Lot tidak ditemukan pada pembelian.'
+      if (input.purchaseId !== purchase.id) {
+        return 'Lot tidak sesuai dengan pembelian.'
+      }
+      const prev = lotQcRef.current.find((q) => q.lotId === lotId)
+      const row: LotQc = {
+        lotId,
+        purchaseId: purchase.id,
+        moisture: input.moisture,
+        impurity: input.impurity,
+        brokenPct: input.brokenPct,
+        grade: input.grade,
+        passed: input.passed,
+        note: input.note?.trim() || undefined,
+        by: user?.name ?? 'Sistem',
+        at: new Date().toISOString(),
+        overrideReason: input.passed ? undefined : prev?.overrideReason,
+      }
+      const next = mergeLotQc(lotQcRef.current, row)
+      lotQcRef.current = next
+      setLotQc(next)
+      appendAudit({
+        action: 'update',
+        entity: 'purchase',
+        entityId: purchase.id,
+        note: `QC ${lotId} · ${input.passed ? 'lulus' : 'tidak lulus'} · grade ${input.grade}`,
+      })
+      return undefined
+    },
+    [items, appendAudit, user],
+  )
+
+  const overrideLotQcReceive = useCallback(
+    (lotId: string, reason: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['admin'])) {
+        return 'Hanya admin yang dapat mengoverride penerimaan QC.'
+      }
+      const trimmed = reason.trim()
+      if (!trimmed) return 'Alasan override wajib diisi.'
+      const current = lotQcRef.current.find((q) => q.lotId === lotId)
+      if (!current) return 'QC lot belum diisi.'
+      if (current.passed) return 'QC lot sudah lulus.'
+      const next = lotQcRef.current.map((q) =>
+        q.lotId === lotId ? { ...q, overrideReason: trimmed } : q,
+      )
+      lotQcRef.current = next
+      setLotQc(next)
+      appendAudit({
+        action: 'update',
+        entity: 'purchase',
+        entityId: current.purchaseId,
+        note: `Override QC ${lotId}: ${trimmed}`,
+      })
+      return undefined
+    },
+    [appendAudit, user?.role],
+  )
+
   const value = useMemo(
     () => ({
       purchases,
@@ -521,6 +929,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       reopenPurchaseDraft,
       addPayment,
       updatePurchaseProofs,
+      returns,
+      lotQc,
+      createPurchaseReturn,
+      submitPurchaseReturn,
+      approvePurchaseReturn,
+      rejectPurchaseReturn,
+      postPurchaseReturn,
+      upsertLotQc,
+      overrideLotQcReceive,
     }),
     [
       purchases,
@@ -536,6 +953,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       reopenPurchaseDraft,
       addPayment,
       updatePurchaseProofs,
+      returns,
+      lotQc,
+      createPurchaseReturn,
+      submitPurchaseReturn,
+      approvePurchaseReturn,
+      rejectPurchaseReturn,
+      postPurchaseReturn,
+      upsertLotQc,
+      overrideLotQcReceive,
     ],
   )
 

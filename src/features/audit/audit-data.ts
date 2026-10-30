@@ -6,6 +6,7 @@ export type AuditAction =
   | 'reject'
   | 'start'
   | 'post'
+  | 'return'
   | 'void'
   | 'delete'
 
