@@ -199,6 +199,12 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/keuangan/jurnal',
         roles: ['admin', 'keuangan'],
       },
+      {
+        id: 'e-faktur',
+        label: 'e-Faktur',
+        path: '/app/keuangan/e-faktur',
+        roles: ['admin', 'keuangan'],
+      },
     ],
   },
   {
