@@ -29,23 +29,39 @@ function Sparkline({ values }: { values: number[] }) {
   )
 }
 
+function looksLikePct(delta: string): boolean {
+  return /[−\-+]?\d+[.,]?\d*\s*%/.test(delta.trim())
+}
+
 export function MetricCard({ metric }: { metric: MetricCardData }) {
+  const pct = looksLikePct(metric.delta)
   return (
-    <article className="flex items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5 shadow-[0_1px_2px_rgba(20,32,25,0.04)]">
+    <article className="flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5 shadow-[0_1px_2px_rgba(20,32,25,0.04)]">
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-medium text-muted">{metric.label}</p>
-        <p className="num mt-1.5 text-[20px] leading-none font-semibold tracking-tight text-ink">
+        <p className="truncate text-[12px] font-medium text-muted">
+          {metric.label}
+        </p>
+        <p className="num mt-1.5 truncate text-[20px] leading-none font-semibold tracking-tight text-ink">
           {metric.value}
         </p>
-        <p className="mt-2 font-mono text-[11px]">
+        <p className="mt-2">
           <span
-            className={
-              metric.positive ? 'font-semibold text-brand-700' : 'font-semibold text-amber-700'
-            }
+            className={[
+              'inline-flex max-w-full truncate font-mono text-[11px] font-semibold',
+              pct
+                ? [
+                    'rounded-full px-2 py-0.5',
+                    metric.positive
+                      ? 'bg-brand-50 text-brand-800'
+                      : 'bg-amber-50 text-amber-800',
+                  ].join(' ')
+                : metric.positive
+                  ? 'text-brand-700'
+                  : 'text-amber-700',
+            ].join(' ')}
           >
             {metric.delta}
           </span>
-          <span className="ml-1.5 text-muted">vs minggu lalu</span>
         </p>
       </div>
       <Sparkline values={metric.spark} />

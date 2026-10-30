@@ -79,7 +79,7 @@ function FilterDropdown<T extends string>({
   const selected = options.find((o) => o.value === value) ?? options[0]
 
   return (
-    <div ref={rootRef} className="relative w-full shrink-0 sm:w-auto sm:min-w-[11rem]">
+    <div ref={rootRef} className="relative w-full min-w-0">
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
@@ -161,7 +161,7 @@ function DateRangeDropdown({
     : 'Tanggal'
 
   return (
-    <div ref={rootRef} className="relative w-full shrink-0 sm:w-auto sm:min-w-[11rem]">
+    <div ref={rootRef} className="relative w-full min-w-0">
       <button
         id={id}
         type="button"
@@ -262,9 +262,9 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
   const hasDates = Boolean(onDateFromChange && onDateToChange)
 
   return (
-    <div className="mb-3.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-2">
-        <label className="relative block min-w-0 flex-1">
+    <div className="mb-3.5 flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <label className="relative block min-w-0 w-full flex-1 basis-[14rem]">
           <span className="sr-only">Cari</span>
           <svg
             viewBox="0 0 24 24"
@@ -286,38 +286,46 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           />
         </label>
 
-        <FilterDropdown
-          value={filter}
-          options={filterOptions}
-          onChange={onFilterChange}
-          label={filterLabel}
-        />
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:w-auto sm:min-w-0 sm:flex-none md:flex md:flex-wrap md:items-center">
+          <div className="w-full md:w-[11rem]">
+            <FilterDropdown
+              value={filter}
+              options={filterOptions}
+              onChange={onFilterChange}
+              label={filterLabel}
+            />
+          </div>
 
-        {hasSecondary ? (
-          <FilterDropdown
-            value={secondaryFilter}
-            options={secondaryFilterOptions}
-            onChange={onSecondaryFilterChange}
-            label={secondaryFilterLabel}
-          />
-        ) : null}
+          {hasSecondary ? (
+            <div className="w-full md:w-[11rem]">
+              <FilterDropdown
+                value={secondaryFilter}
+                options={secondaryFilterOptions}
+                onChange={onSecondaryFilterChange}
+                label={secondaryFilterLabel}
+              />
+            </div>
+          ) : null}
 
-        {hasDates ? (
-          <DateRangeDropdown
-            dateFrom={dateFrom ?? ''}
-            dateTo={dateTo ?? ''}
-            onDateFromChange={onDateFromChange!}
-            onDateToChange={onDateToChange!}
-          />
-        ) : null}
+          {hasDates ? (
+            <div className="w-full md:w-[11rem]">
+              <DateRangeDropdown
+                dateFrom={dateFrom ?? ''}
+                dateTo={dateTo ?? ''}
+                onDateFromChange={onDateFromChange!}
+                onDateToChange={onDateToChange!}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap gap-2">
+      <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto">
         {secondaryActionLabel && onSecondaryAction ? (
           <button
             type="button"
             onClick={onSecondaryAction}
-            className="h-10 rounded-xl border border-line px-4 text-[13px] font-medium text-ink transition hover:bg-brand-50"
+            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-line px-4 text-[13px] font-medium text-ink transition hover:bg-brand-50 sm:w-auto"
           >
             {secondaryActionLabel}
           </button>
@@ -326,7 +334,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           <button
             type="button"
             onClick={onAction}
-            className="h-10 rounded-xl bg-brand-800 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-900"
+            className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-brand-800 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-900 sm:w-auto"
           >
             {actionLabel}
           </button>

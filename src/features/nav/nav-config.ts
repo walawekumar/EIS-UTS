@@ -25,6 +25,12 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/dashboard',
         roles: ['admin', 'pembelian', 'produksi', 'gudang', 'penjualan', 'keuangan'],
       },
+      {
+        id: 'inbox',
+        label: 'Kotak masuk',
+        path: '/app/inbox',
+        roles: ['admin', 'pembelian', 'produksi', 'gudang', 'penjualan', 'keuangan'],
+      },
     ],
   },
   {

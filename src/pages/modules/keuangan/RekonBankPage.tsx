@@ -179,23 +179,38 @@ export function RekonBankPage() {
           <FinanceToast message={toast} />
         </div>
 
-        <div className="mb-3 flex flex-wrap items-end gap-2">
-          <Select
-            label="Sesi aktif"
-            value={activeSessionId ?? ''}
-            options={sessions.map((s) => ({
-              value: s.id,
-              label: sessionLabel(s),
-            }))}
-            onChange={(id) => setActiveSessionId(id)}
-          />
-          <button
-            type="button"
-            className="rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-white"
-            onClick={() => setCreateOpen(true)}
-          >
-            Sesi baru
-          </button>
+        <div className="mb-3 space-y-1.5">
+          <p className="text-[12px] font-medium text-ink">Sesi aktif</p>
+          <div className="flex items-center gap-2">
+            <Select
+              label="Sesi aktif"
+              hideLabel
+              className="min-w-0 max-w-xs flex-1 sm:max-w-sm"
+              value={(activeSessionId ?? '') as string}
+              options={
+                sessions.length > 0
+                  ? sessions.map((s) => ({
+                      value: s.id,
+                      label: sessionLabel(s),
+                    }))
+                  : [{ value: '', label: 'Belum ada sesi' }]
+              }
+              placeholder="Pilih sesi"
+              onChange={(id) => setActiveSessionId(id || null)}
+            />
+            <button
+              type="button"
+              className="inline-flex h-11 shrink-0 items-center rounded-xl bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink/90"
+              onClick={() => setCreateOpen(true)}
+            >
+              Sesi baru
+            </button>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-[11px] text-muted">
+              Buat sesi rekon untuk rentang tanggal statement bank.
+            </p>
+          ) : null}
         </div>
 
         {activeSession ? (
