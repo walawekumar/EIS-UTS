@@ -13,10 +13,11 @@ type ReceiptUploadProps = {
   label?: string
   hint?: string
   error?: string
+  requiredMark?: boolean
 }
 
 const MAX_BYTES = 3 * 1024 * 1024
-const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,application/pdf'
 
 function revoke(url: string | undefined) {
   if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
@@ -25,22 +26,29 @@ function revoke(url: string | undefined) {
 export function ReceiptUpload({
   value,
   onChange,
-  label = 'Upload struk / bukti',
-  hint = 'JPG, PNG, WEBP, atau PDF · maks. 3 MB',
+  label = 'Bukti / struk',
+  hint = 'Wajib dilampirkan · JPG, PNG, WEBP, atau PDF · maks. 3 MB',
   error,
+  requiredMark,
 }: ReceiptUploadProps) {
   const id = useId()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   function clear() {
     revoke(value?.previewUrl)
     onChange(null)
-    if (inputRef.current) inputRef.current.value = ''
+    if (galleryRef.current) galleryRef.current.value = ''
+    if (cameraRef.current) cameraRef.current.value = ''
   }
 
   function applyFile(file: File | undefined) {
     if (!file) return
-    if (!ACCEPT.split(',').includes(file.type) && !file.type.startsWith('image/')) {
+    const okType =
+      ACCEPT.split(',').includes(file.type) ||
+      file.type.startsWith('image/') ||
+      file.type === 'application/pdf'
+    if (!okType) {
       onChange(null)
       return
     }
@@ -51,10 +59,10 @@ export function ReceiptUpload({
     revoke(value?.previewUrl)
     const previewUrl = URL.createObjectURL(file)
     onChange({
-      name: file.name,
+      name: file.name || `bukti-${Date.now()}.jpg`,
       size: file.size,
       previewUrl,
-      mime: file.type,
+      mime: file.type || 'image/jpeg',
     })
   }
 
@@ -62,25 +70,28 @@ export function ReceiptUpload({
     applyFile(event.target.files?.[0])
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
     applyFile(event.dataTransfer.files?.[0])
   }
 
-  const isImage = value?.mime.startsWith('image/')
+  const isImage = Boolean(value?.mime.startsWith('image/'))
 
   return (
     <div>
-      <p className="mb-1.5 text-[13px] font-medium text-ink">{label}</p>
+      <p className="mb-1.5 text-[13px] font-medium text-ink">
+        {label}
+        {requiredMark ? <span className="ml-0.5 text-brand-600">*</span> : null}
+      </p>
 
       {value ? (
         <div className="overflow-hidden rounded-xl border border-line bg-surface/60">
           {isImage ? (
-            <div className="flex max-h-40 items-center justify-center bg-ink/5 p-2">
+            <div className="flex max-h-44 items-center justify-center bg-ink/5 p-2">
               <img
                 src={value.previewUrl}
                 alt={value.name}
-                className="max-h-36 max-w-full rounded-lg object-contain"
+                className="max-h-40 max-w-full rounded-lg object-contain"
               />
             </div>
           ) : (
@@ -101,7 +112,7 @@ export function ReceiptUpload({
             <div className="flex shrink-0 gap-1">
               <button
                 type="button"
-                onClick={() => inputRef.current?.click()}
+                onClick={() => galleryRef.current?.click()}
                 className="rounded-lg px-2 py-1 text-[12px] font-medium text-brand-800 transition hover:bg-brand-50"
               >
                 Ganti
@@ -117,32 +128,55 @@ export function ReceiptUpload({
           </div>
         </div>
       ) : (
-        <label
-          htmlFor={id}
+        <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
           className={[
-            'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-5 text-center transition',
+            'rounded-xl border border-dashed px-3 py-4 text-center transition',
             error
               ? 'border-red-300 bg-red-50/40'
-              : 'border-line bg-surface/50 hover:border-brand-300 hover:bg-brand-50/40',
+              : 'border-line bg-surface/50 hover:border-brand-300',
           ].join(' ')}
         >
-          <span className="flex size-9 items-center justify-center rounded-xl bg-brand-100 text-brand-800">
+          <span className="mx-auto mb-2 flex size-9 items-center justify-center rounded-xl bg-brand-100 text-brand-800">
             <UploadIcon />
           </span>
-          <span className="text-[13px] font-medium text-ink">
-            Seret struk ke sini atau klik untuk unggah
-          </span>
-          <span className="text-[11px] text-muted">{hint}</span>
-        </label>
+          <p className="text-[13px] font-medium text-ink">Lampirkan bukti</p>
+          <p className="mt-0.5 text-[11px] text-muted">{hint}</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-800 px-3 text-[12px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              <CameraIcon />
+              Ambil foto
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-white px-3 text-[12px] font-medium text-ink transition hover:bg-brand-50"
+            >
+              <GalleryIcon />
+              Dari galeri
+            </button>
+          </div>
+        </div>
       )}
 
       <input
-        ref={inputRef}
+        ref={galleryRef}
         id={id}
         type="file"
         accept={ACCEPT}
+        className="sr-only"
+        onChange={onInputChange}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         className="sr-only"
         onChange={onInputChange}
       />
@@ -154,17 +188,29 @@ export function ReceiptUpload({
 
 function UploadIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      aria-hidden
-    >
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M12 16V6" />
       <path d="M8 9l4-4 4 4" />
       <path d="M4 18h16" />
+    </svg>
+  )
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 8h3l1.5-2h7L17 8h3v11H4V8Z" strokeLinejoin="round" />
+      <circle cx="12" cy="13.5" r="3" />
+    </svg>
+  )
+}
+
+function GalleryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m21 16-5-5-8 8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

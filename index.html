@@ -13,6 +13,25 @@
     />
   </head>
   <body>
+    <script>
+      ;(function () {
+        try {
+          var raw = localStorage.getItem('egabah.settings.v2')
+          var prefs = raw ? JSON.parse(raw).prefs || {} : {}
+          var mode = prefs.mode || 'light'
+          var accent = prefs.accent || 'green'
+          var resolved =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode
+          document.documentElement.dataset.theme = resolved
+          document.documentElement.dataset.accent = accent
+          document.documentElement.style.colorScheme = resolved
+        } catch (e) {}
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

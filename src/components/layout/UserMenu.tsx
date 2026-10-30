@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
+import {
+  SETTINGS_EVENT,
+  readAppSettings,
+} from '@/features/settings/app-settings'
 import { ChevronDownIcon } from '@/components/ui/icons'
 
 export function UserMenu() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [profile, setProfile] = useState(() => readAppSettings().profile)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const sync = () => setProfile(readAppSettings().profile)
+    window.addEventListener(SETTINGS_EVENT, sync)
+    return () => window.removeEventListener(SETTINGS_EVENT, sync)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -32,6 +43,9 @@ export function UserMenu() {
 
   if (!user) return null
 
+  const displayName = profile.name.trim() || user.name
+  const initial = displayName.charAt(0).toUpperCase()
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -41,12 +55,24 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white">
-          {user.name.charAt(0).toUpperCase()}
+        <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-700 text-sm font-semibold text-white">
+          {profile.avatarUrl ? (
+            <img
+              src={profile.avatarUrl}
+              alt=""
+              className="size-full object-cover"
+            />
+          ) : (
+            initial
+          )}
         </span>
         <span className="hidden min-w-0 leading-tight sm:block">
-          <span className="block truncate text-[13px] font-medium text-ink">{user.name}</span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted">{user.roleLabel}</span>
+          <span className="block truncate text-[13px] font-medium text-ink">
+            {displayName}
+          </span>
+          <span className="mt-0.5 block truncate text-[11px] text-muted">
+            {user.roleLabel}
+          </span>
         </span>
         <ChevronDownIcon
           className={[

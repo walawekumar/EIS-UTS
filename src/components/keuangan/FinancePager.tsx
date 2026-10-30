@@ -34,7 +34,7 @@ export function FinancePager({
   const items = getPageItems(page, pageCount)
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+    <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5 border-t border-line/70 pt-3">
       <p className="text-[12px] text-muted">
         {total === 0
           ? 'Menampilkan 0 dari 0 entri'
@@ -47,7 +47,7 @@ export function FinancePager({
             type="button"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
-            className="rounded-xl border border-line px-3 py-2 text-[13px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Sebelumnya
           </button>
@@ -67,7 +67,7 @@ export function FinancePager({
                 onClick={() => onPageChange(item)}
                 aria-current={item === page ? 'page' : undefined}
                 className={[
-                  'flex size-9 items-center justify-center rounded-xl font-mono text-[13px] transition',
+                  'flex size-8 items-center justify-center rounded-xl font-mono text-[12px] transition',
                   item === page
                     ? 'bg-brand-800 font-semibold text-white'
                     : 'border border-line text-ink hover:bg-brand-50',
@@ -82,7 +82,7 @@ export function FinancePager({
             type="button"
             disabled={page >= pageCount}
             onClick={() => onPageChange(page + 1)}
-            className="rounded-xl border border-line px-3 py-2 text-[13px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Berikutnya
           </button>

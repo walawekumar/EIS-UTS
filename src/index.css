@@ -28,6 +28,85 @@
   --radius-lg: 0.875rem;
 }
 
+/* Dark surface tokens — brand accents stay readable on deep green-black */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-brand-950: #e8f5ee;
+  --color-brand-900: #d3ebdd;
+  --color-brand-800: #5aaf88;
+  --color-brand-700: #4a9e78;
+  --color-brand-600: #3d8a66;
+  --color-brand-500: #35966b;
+  --color-brand-400: #2a7a58;
+  --color-brand-300: #216348;
+  --color-brand-200: #1a3d2c;
+  --color-brand-100: #142820;
+  --color-brand-50: #101c17;
+
+  --color-surface: #0f1512;
+  --color-ink: #e7eee9;
+  --color-muted: #9aaba1;
+  --color-line: #2a3831;
+  --color-panel: #171e1a;
+}
+
+[data-accent='blue'] {
+  --color-brand-950: #0b1a2b;
+  --color-brand-900: #102844;
+  --color-brand-800: #163a63;
+  --color-brand-700: #1d4f86;
+  --color-brand-600: #2563a8;
+  --color-brand-500: #3b7fc4;
+  --color-brand-400: #5f9ad4;
+  --color-brand-300: #8fb8e2;
+  --color-brand-200: #c2d8ef;
+  --color-brand-100: #e2edf7;
+  --color-brand-50: #f1f6fb;
+}
+
+[data-theme='dark'][data-accent='blue'] {
+  --color-brand-950: #eaf3fb;
+  --color-brand-900: #d5e7f6;
+  --color-brand-800: #5f9ad4;
+  --color-brand-700: #4f8bc7;
+  --color-brand-600: #3b7fc4;
+  --color-brand-500: #2563a8;
+  --color-brand-400: #1d4f86;
+  --color-brand-300: #163a63;
+  --color-brand-200: #132a45;
+  --color-brand-100: #101f32;
+  --color-brand-50: #0d1724;
+}
+
+[data-accent='teal'] {
+  --color-brand-950: #062522;
+  --color-brand-900: #0c2f2c;
+  --color-brand-800: #0f4540;
+  --color-brand-700: #145c55;
+  --color-brand-600: #1a756c;
+  --color-brand-500: #22968a;
+  --color-brand-400: #45b0a5;
+  --color-brand-300: #7cc9c1;
+  --color-brand-200: #b6e2dd;
+  --color-brand-100: #dcf1ee;
+  --color-brand-50: #eef8f6;
+}
+
+[data-theme='dark'][data-accent='teal'] {
+  --color-brand-950: #e8f7f5;
+  --color-brand-900: #d0efeb;
+  --color-brand-800: #45b0a5;
+  --color-brand-700: #37a097;
+  --color-brand-600: #22968a;
+  --color-brand-500: #1a756c;
+  --color-brand-400: #145c55;
+  --color-brand-300: #0f4540;
+  --color-brand-200: #123532;
+  --color-brand-100: #0f2624;
+  --color-brand-50: #0c1c1a;
+}
+
 @layer base {
   html,
   body,
@@ -41,6 +120,9 @@
     color: var(--color-ink);
     background: var(--color-surface);
     -webkit-font-smoothing: antialiased;
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
   }
 
   * {
@@ -63,6 +145,39 @@
     display: none;
     width: 0;
     height: 0;
+  }
+
+  /* Custom scrollbar — untuk panel / card / drawer saja */
+  .scrollbar-brand {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand-300) transparent;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 999px;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-brand-400) 55%, var(--color-line));
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-thumb:hover {
+    background: var(--color-brand-500);
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-brand::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   .num {

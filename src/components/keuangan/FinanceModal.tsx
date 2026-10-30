@@ -72,7 +72,7 @@ export function FinanceModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="scrollbar-brand min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {children}
         </div>
 
@@ -182,7 +182,7 @@ export function TextAreaField({
         placeholder={placeholder}
         rows={rows}
         className={[
-          'w-full resize-none rounded-xl border bg-white px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/55',
+          'w-full resize-none rounded-xl border bg-panel px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/55',
           error
             ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100'
             : 'border-line focus:border-brand-600 focus:ring-2 focus:ring-brand-100',

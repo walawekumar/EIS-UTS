@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
 import { LeafMarkIcon, MailIcon, UserBadgeIcon } from '@/components/ui/icons'
 import { useAuth } from '@/features/auth/AuthContext'
+import { readAppSettings } from '@/features/settings/app-settings'
 import { LoginPreview } from '@/pages/login/LoginPreview'
 import { ROLE_LABELS, type UserRole } from '@/types/auth'
 
@@ -27,6 +28,14 @@ const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
               : 'Kas, utang, piutang, biaya',
 }))
 
+function resolvePostLoginPath(): string {
+  const path = readAppSettings().prefs.defaultModule.trim()
+  if (path.startsWith('/app/') && path.length > '/app/'.length) {
+    return path
+  }
+  return '/app/dashboard'
+}
+
 export function LoginPage() {
   const { isAuthenticated, login } = useAuth()
   const navigate = useNavigate()
@@ -38,7 +47,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   if (isAuthenticated) {
-    return <Navigate to="/app/dashboard" replace />
+    return <Navigate to={resolvePostLoginPath()} replace />
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -46,11 +55,8 @@ export function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      await login({ email, password, role })
-      if (!remember) {
-        // Session tetap disimpan untuk MVP mock; flag siap dipakai saat Supabase
-      }
-      navigate('/app/dashboard', { replace: true })
+      await login({ email, password, role, remember })
+      navigate(resolvePostLoginPath(), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk.')
     } finally {
@@ -86,6 +92,11 @@ export function LoginPage() {
             </h1>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">
               Masuk untuk membuka portal modul penggilingan padi.
+            </p>
+            <p className="mt-3 max-w-sm text-[12px] leading-relaxed text-muted/90">
+              Akun demo: <span className="font-medium text-ink">admin@egabah.local</span>{' '}
+              / <span className="font-medium text-ink">demo123</span> (sesuaikan peran di
+              bawah).
             </p>
 
             <form onSubmit={onSubmit} className="mt-8 space-y-4">

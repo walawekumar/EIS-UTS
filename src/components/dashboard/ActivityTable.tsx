@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ChevronDownIcon, EyeIcon } from '@/components/ui/icons'
 import type { ActivityRow } from '@/features/dashboard/dashboard-data'
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const STATUS_LABEL = {
   ok: 'Selesai',
@@ -15,8 +17,6 @@ const STATUS_FILTERS = [
   { value: 'warn', label: 'Tinjau' },
   { value: 'draft', label: 'Draft' },
 ] as const
-
-const PAGE_SIZE = 5
 
 type StatusFilter = (typeof STATUS_FILTERS)[number]['value']
 
@@ -82,7 +82,7 @@ function StatusFilterSelect({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={[
-          'flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-white px-3 text-left text-[13px] transition',
+          'flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-panel px-3 text-left text-[13px] transition',
           open
             ? 'border-brand-600 ring-2 ring-brand-100'
             : 'border-line hover:border-brand-300',
@@ -99,7 +99,7 @@ function StatusFilterSelect({
       {open ? (
         <div
           role="listbox"
-          className="absolute right-0 z-20 mt-1.5 w-full overflow-hidden rounded-xl border border-line bg-white py-1 shadow-md"
+          className="absolute right-0 z-20 mt-1.5 w-full overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
         >
           {STATUS_FILTERS.map((opt) => {
             const active = opt.value === value
@@ -255,7 +255,7 @@ function RowActions({
   }, [open])
 
   return (
-    <div ref={rootRef} className="relative flex items-center justify-end gap-0.5">
+    <div ref={rootRef} className="relative flex items-center justify-center gap-0.5">
       <button
         type="button"
         onClick={onView}
@@ -299,7 +299,7 @@ function RowActions({
       {open ? (
         <div
           role="menu"
-          className="absolute top-full right-0 z-20 mt-1 w-36 overflow-hidden rounded-xl border border-line bg-white py-1 shadow-md"
+          className="absolute top-full right-0 z-20 mt-1 w-36 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
         >
           <button
             type="button"
@@ -330,11 +330,13 @@ function RowActions({
 }
 
 export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
+  const PAGE_SIZE = usePageSize()
   const [items, setItems] = useState(rows)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<ActivityRow | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<ActivityRow | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
@@ -380,9 +382,14 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
   }
 
   function handleDelete(row: ActivityRow) {
-    const ok = window.confirm(`Hapus aktivitas ${row.reference}?`)
-    if (!ok) return
+    setConfirmDelete(row)
+  }
+
+  function confirmDeleteActivity() {
+    if (!confirmDelete) return
+    const row = confirmDelete
     setItems((prev) => prev.filter((item) => rowKey(item) !== rowKey(row)))
+    setConfirmDelete(null)
     setToast(`Aktivitas ${row.reference} dihapus`)
   }
 
@@ -441,7 +448,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
             value={query}
             onChange={(e) => updateQuery(e.target.value)}
             placeholder="Cari referensi, jenis…"
-            className="h-9 w-full rounded-xl border border-line bg-white py-2 pr-3 pl-9 text-[13px] text-ink outline-none placeholder:text-muted/70 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+            className="h-9 w-full rounded-xl border border-line bg-panel py-2 pr-3 pl-9 text-[13px] text-ink outline-none placeholder:text-muted/70 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
           />
         </div>
         <StatusFilterSelect value={status} onChange={updateStatus} />
@@ -457,7 +464,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
               <th className="px-2 py-2.5 font-medium">Status</th>
               <th className="px-2 py-2.5 font-medium">Nilai</th>
               <th className="px-2 py-2.5 font-medium">Oleh</th>
-              <th className="w-28 px-3 py-2.5 text-right font-medium">Aksi</th>
+              <th className="w-28 px-3 py-2.5 text-center font-medium">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -499,7 +506,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
                       <span className="text-ink">{row.actor}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5 text-center">
                     <RowActions
                       row={row}
                       onView={() => setDetail(row)}
@@ -572,6 +579,20 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
       {detail ? (
         <ActivityDetailModal row={detail} onClose={() => setDetail(null)} />
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={
+          confirmDelete
+            ? `Hapus aktivitas ${confirmDelete.reference}?`
+            : 'Hapus aktivitas?'
+        }
+        description="Entri ini akan dihapus dari daftar aktivitas terbaru (MVP lokal)."
+        confirmLabel="Ya, hapus"
+        danger
+        onConfirm={confirmDeleteActivity}
+        onClose={() => setConfirmDelete(null)}
+      />
 
       {toast ? (
         <div className="fixed right-4 bottom-4 z-[90] rounded-xl border border-line bg-panel px-3.5 py-2.5 text-[13px] text-ink shadow-lg">

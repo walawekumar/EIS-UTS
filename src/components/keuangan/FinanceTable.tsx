@@ -7,12 +7,14 @@ export type SortState<K extends string> = {
   dir: SortDir
 }
 
+/** Klik 1: asc → klik 2: desc → klik 3: reset (null). */
 export function toggleSort<K extends string>(
   current: SortState<K> | null,
   key: K,
-): SortState<K> {
+): SortState<K> | null {
   if (current?.key === key) {
-    return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+    if (current.dir === 'asc') return { key, dir: 'desc' }
+    return null
   }
   return { key, dir: 'asc' }
 }
@@ -38,17 +40,23 @@ export function sortBy<T, K extends string>(
 }
 
 export function FinanceTable({
-  minWidth = '680px',
+  minWidth,
   children,
 }: {
+  /** Jika diisi, tabel bisa scroll horizontal. Tanpa ini tabel fluid 100%. */
   minWidth?: string
   children: ReactNode
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-line">
+    <div
+      className={[
+        'rounded-2xl border border-line/90 bg-panel',
+        minWidth ? 'overflow-x-auto' : 'overflow-hidden',
+      ].join(' ')}
+    >
       <table
-        className="w-full border-collapse text-left text-[13px]"
-        style={{ minWidth }}
+        className="w-full border-collapse text-left text-[13px] [&_th]:px-3.5 [&_th]:py-3 [&_td]:px-3.5 [&_td]:py-3"
+        style={minWidth ? { minWidth } : undefined}
       >
         {children}
       </table>
@@ -59,7 +67,7 @@ export function FinanceTable({
 export function FinanceThead({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-line bg-surface/80 text-[11px] tracking-wide text-muted uppercase">
+      <tr className="border-b border-line/80 bg-surface/70 text-[11px] tracking-wide text-muted uppercase">
         {children}
       </tr>
     </thead>
@@ -72,14 +80,18 @@ export function FinanceTh({
   children,
   ...props
 }: {
-  align?: 'left' | 'right'
+  align?: 'left' | 'right' | 'center'
   children: ReactNode
 } & ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
       className={[
-        'px-2 py-2.5 font-medium first:px-3 last:px-3',
-        align === 'right' ? 'text-right' : 'text-left',
+        'font-medium',
+        align === 'right'
+          ? 'text-right'
+          : align === 'center'
+            ? 'text-center'
+            : 'text-left',
         className ?? '',
       ].join(' ')}
       {...props}
@@ -108,7 +120,7 @@ export function FinanceSortTh<K extends string>({
   return (
     <th
       className={[
-        'px-2 py-2.5 font-medium first:px-3 last:px-3',
+        'font-medium',
         align === 'right' ? 'text-right' : 'text-left',
         className ?? '',
       ].join(' ')}
@@ -155,14 +167,25 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir | null }) {
 export function FinanceTr({
   children,
   onClick,
+  className,
+  active,
 }: {
   children: ReactNode
   onClick?: () => void
+  className?: string
+  active?: boolean
 }) {
   return (
     <tr
       onClick={onClick}
-      className="border-b border-line last:border-0 transition hover:bg-surface/80"
+      className={[
+        'border-b border-line/70 last:border-0 transition',
+        onClick ? 'cursor-pointer hover:bg-surface/70' : '',
+        active
+          ? 'relative bg-brand-50/70 hover:bg-brand-50/70 after:absolute after:inset-y-1.5 after:left-0 after:w-[3px] after:rounded-full after:bg-brand-600'
+          : '',
+        className ?? '',
+      ].join(' ')}
     >
       {children}
     </tr>
@@ -177,7 +200,7 @@ export function FinanceTd({
   children,
   ...props
 }: {
-  align?: 'left' | 'right'
+  align?: 'left' | 'right' | 'center'
   mono?: boolean
   muted?: boolean
   children: ReactNode
@@ -185,8 +208,11 @@ export function FinanceTd({
   return (
     <td
       className={[
-        'px-2 py-2.5 first:px-3 last:px-3',
-        align === 'right' ? 'text-right' : '',
+        align === 'right'
+          ? 'text-right'
+          : align === 'center'
+            ? 'text-center'
+            : '',
         mono ? 'num' : '',
         muted ? 'text-muted' : 'text-ink',
         className ?? '',
@@ -218,7 +244,7 @@ export function FinanceEmptyRow({
 }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-3 py-10 text-center text-[13px] text-muted">
+      <td colSpan={colSpan} className="py-10 text-center text-[13px] text-muted">
         {message}
       </td>
     </tr>
