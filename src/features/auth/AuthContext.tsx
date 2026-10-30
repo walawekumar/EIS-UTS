@@ -22,6 +22,7 @@ import {
 } from '@/features/master/master-cloud'
 import { readAppSettings } from '@/features/settings/app-settings'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase-client'
+import { flushPendingRelationalSaves } from '@/lib/cloud-relational'
 import type { AuthUser } from '@/types/auth'
 
 type LoginInput = {
@@ -49,11 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser())
 
   const logout = useCallback(() => {
-    clearStoredUser()
-    setUser(null)
-    if (isSupabaseConfigured()) {
-      void getSupabase()?.auth.signOut()
-    }
+    void flushPendingRelationalSaves().finally(() => {
+      clearStoredUser()
+      setUser(null)
+      if (isSupabaseConfigured()) {
+        void getSupabase()?.auth.signOut()
+      }
+    })
   }, [])
 
   const login = useCallback(
@@ -109,30 +112,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sb = getSupabase()
     if (!sb) return
     let cancelled = false
-    void (async () => {
-      const { data } = await sb.auth.getSession()
-      const uid = data.session?.user?.id
-      if (!uid) return
+
+    async function syncFromSession(uid: string | undefined) {
+      if (!uid) {
+        clearStoredUser()
+        if (!cancelled) setUser(null)
+        return
+      }
       try {
         const profile = await loadProfileByUserId(uid)
-        if (cancelled || !profile.active) {
-          if (!cancelled && !profile.active) {
-            clearStoredUser()
-            setUser(null)
-            await sb.auth.signOut()
-          }
+        if (cancelled) return
+        if (!profile.active) {
+          clearStoredUser()
+          setUser(null)
+          await sb!.auth.signOut()
           return
         }
         const next = authUserFromProfile(profile)
         saveStoredUser(next, true)
-        if (!cancelled) setUser(next)
+        setUser(next)
       } catch {
         clearStoredUser()
         if (!cancelled) setUser(null)
       }
+    }
+
+    void (async () => {
+      const { data } = await sb.auth.getSession()
+      await syncFromSession(data.session?.user?.id)
     })()
+
+    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        // Return before any Supabase call. Awaiting inside this callback
+        // deadlocks the auth lock; flush, then clear, on a later turn.
+        window.setTimeout(() => {
+          void flushPendingRelationalSaves().finally(() => {
+            clearStoredUser()
+            if (!cancelled) setUser(null)
+          })
+        }, 0)
+        return
+      }
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'USER_UPDATED'
+      ) {
+        void syncFromSession(session?.user?.id)
+      }
+    })
+
     return () => {
       cancelled = true
+      sub.subscription.unsubscribe()
     }
   }, [])
 

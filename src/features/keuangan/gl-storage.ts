@@ -1,6 +1,6 @@
-// src/features/keuangan/gl-storage.ts
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import { assembleGl, projectGl } from '@/lib/ops-relational/mappers/gl'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import {
   DEFAULT_ACCOUNT_MAP,
   SEED_ACCOUNTS,
@@ -53,9 +53,16 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const glRepository = createCloudBackedRepository({
-  key: 'gl',
+export const glRepository = createRelationalBackedRepository({
   local: inner,
   normalize: normalizeGlSnapshot,
+  tables: [
+    'gl_accounts',
+    'gl_account_map',
+    'gl_journals',
+    'gl_journal_lines',
+    'gl_failed_posts',
+  ],
+  assemble: assembleGl,
+  project: projectGl,
 })
-

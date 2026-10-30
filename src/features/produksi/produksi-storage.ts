@@ -1,5 +1,9 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import {
+  assembleProduksi,
+  projectProduksi,
+} from '@/lib/ops-relational/mappers/produksi'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import {
   SEED_BATCHES,
   type LotCost,
@@ -45,8 +49,16 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const produksiRepository = createCloudBackedRepository({
-  key: 'produksi',
+export const produksiRepository = createRelationalBackedRepository({
   local: inner,
   normalize,
+  tables: [
+    'production_batches',
+    'batch_outputs',
+    'pack_runs',
+    'pack_run_lines',
+    'lot_costs',
+  ],
+  assemble: assembleProduksi,
+  project: projectProduksi,
 })

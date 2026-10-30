@@ -1,9 +1,7 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
-import {
-  EMPTY_PERIOD_SNAPSHOT,
-  type PeriodSnapshot,
-} from '@/features/keuangan/period-data'
+import { assemblePeriod, projectPeriod } from '@/lib/ops-relational/mappers/period'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
+import { EMPTY_PERIOD_SNAPSHOT, type PeriodSnapshot } from '@/features/keuangan/period-data'
 
 function seed(): PeriodSnapshot {
   return {
@@ -30,7 +28,9 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const periodRepository = createCloudBackedRepository({
-  key: 'period',
+export const periodRepository = createRelationalBackedRepository({
   local: inner,
+  tables: ['period_locks', 'period_unlock_requests'],
+  assemble: assemblePeriod,
+  project: projectPeriod,
 })

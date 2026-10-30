@@ -1,5 +1,9 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import {
+  assemblePembelian,
+  projectPembelian,
+} from '@/lib/ops-relational/mappers/pembelian'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import {
   INITIAL_PURCHASES,
   migratePurchaseStage,
@@ -54,8 +58,16 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const pembelianRepository = createCloudBackedRepository({
-  key: 'pembelian',
+export const pembelianRepository = createRelationalBackedRepository({
   local: inner,
   normalize,
+  tables: [
+    'purchases',
+    'purchase_payments',
+    'purchase_returns',
+    'purchase_return_lines',
+    'lot_qc',
+  ],
+  assemble: assemblePembelian,
+  project: projectPembelian,
 })

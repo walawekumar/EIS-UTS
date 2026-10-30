@@ -1,9 +1,7 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
-import {
-  DEFAULT_TAX_SETTINGS,
-  type TaxSnapshot,
-} from '@/features/keuangan/tax-data'
+import { assembleTax, projectTax } from '@/lib/ops-relational/mappers/tax'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
+import { DEFAULT_TAX_SETTINGS, type TaxSnapshot } from '@/features/keuangan/tax-data'
 
 function seed(): TaxSnapshot {
   return {
@@ -32,7 +30,9 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const taxRepository = createCloudBackedRepository({
-  key: 'tax',
+export const taxRepository = createRelationalBackedRepository({
   local: inner,
+  tables: ['tax_settings', 'tax_docs', 'tax_invoices'],
+  assemble: assembleTax,
+  project: projectTax,
 })

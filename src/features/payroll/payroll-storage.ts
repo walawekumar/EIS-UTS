@@ -1,5 +1,6 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import { assemblePayroll, projectPayroll } from '@/lib/ops-relational/mappers/payroll'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import {
   SEED_PAYROLL,
   normalizePayrollRun,
@@ -39,8 +40,10 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const payrollRepository = createCloudBackedRepository({
-  key: 'payroll',
+export const payrollRepository = createRelationalBackedRepository({
   local: inner,
   normalize,
+  tables: ['payroll_runs', 'payroll_lines'],
+  assemble: assemblePayroll,
+  project: projectPayroll,
 })

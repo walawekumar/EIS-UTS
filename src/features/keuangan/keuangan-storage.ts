@@ -1,5 +1,6 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import { assembleKeuangan, projectKeuangan } from '@/lib/ops-relational/mappers/keuangan'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import {
   CASH_ENTRIES,
   EXPENSES,
@@ -49,7 +50,9 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const keuanganRepository = createCloudBackedRepository({
-  key: 'keuangan',
+export const keuanganRepository = createRelationalBackedRepository({
   local: inner,
+  tables: ['cash_entries', 'payables', 'receivables', 'expenses'],
+  assemble: assembleKeuangan,
+  project: projectKeuangan,
 })

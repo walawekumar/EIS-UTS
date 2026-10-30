@@ -1,9 +1,7 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
-import {
-  EMPTY_BANK_SNAPSHOT,
-  type BankSnapshot,
-} from '@/features/keuangan/bank-data'
+import { assembleBank, projectBank } from '@/lib/ops-relational/mappers/bank'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
+import { EMPTY_BANK_SNAPSHOT, type BankSnapshot } from '@/features/keuangan/bank-data'
 
 function seed(): BankSnapshot {
   return {
@@ -30,7 +28,9 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const bankRepository = createCloudBackedRepository({
-  key: 'bank',
+export const bankRepository = createRelationalBackedRepository({
   local: inner,
+  tables: ['bank_sessions', 'bank_lines'],
+  assemble: assembleBank,
+  project: projectBank,
 })

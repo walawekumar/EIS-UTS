@@ -1,5 +1,6 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
-import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
+import { assembleAudit, projectAudit } from '@/lib/ops-relational/mappers/audit'
+import { createRelationalBackedRepository } from '@/lib/relational-backed-repository'
 import type { AuditLog } from '@/features/audit/audit-data'
 
 export type AuditSnapshot = {
@@ -28,7 +29,9 @@ const inner = createLocalRepository({
   isValid,
 })
 
-export const auditRepository = createCloudBackedRepository({
-  key: 'audit',
+export const auditRepository = createRelationalBackedRepository({
   local: inner,
+  tables: ['audit_logs'],
+  assemble: assembleAudit,
+  project: projectAudit,
 })
