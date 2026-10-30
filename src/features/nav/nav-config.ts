@@ -218,6 +218,12 @@ export const NAV_GROUPS: NavGroup[] = [
           'gudang',
         ],
       },
+      {
+        id: 'rekon-bank',
+        label: 'Rekon Bank',
+        path: '/app/keuangan/rekon-bank',
+        roles: ['admin', 'keuangan'],
+      },
     ],
   },
   {

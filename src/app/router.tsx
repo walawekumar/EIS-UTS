@@ -11,6 +11,7 @@ import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
 import { CoaPage } from '@/pages/modules/keuangan/CoaPage'
 import { EFakturPage } from '@/pages/modules/keuangan/EFakturPage'
 import { PeriodePage } from '@/pages/modules/keuangan/PeriodePage'
+import { RekonBankPage } from '@/pages/modules/keuangan/RekonBankPage'
 import { JurnalPage } from '@/pages/modules/keuangan/JurnalPage'
 import { KasPage } from '@/pages/modules/keuangan/KasPage'
 import { PayrollPage } from '@/pages/modules/keuangan/PayrollPage'
@@ -181,6 +182,7 @@ export function AppRouter() {
             <Route path="jurnal" element={<JurnalPage />} />
             <Route path="e-faktur" element={<EFakturPage />} />
             <Route path="periode" element={<PeriodePage />} />
+            <Route path="rekon-bank" element={<RekonBankPage />} />
             <Route
               path="utang-piutang"
               element={<Navigate to="/app/keuangan/utang" replace />}
