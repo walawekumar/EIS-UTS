@@ -22,6 +22,8 @@ import { PembelianPage } from '@/pages/modules/PembelianPage'
 import { PembayaranPage } from '@/pages/modules/pembelian/PembayaranPage'
 import { PencatatanPage } from '@/pages/modules/pembelian/PencatatanPage'
 import { PenerimaanPage } from '@/pages/modules/pembelian/PenerimaanPage'
+import { QcPage } from '@/pages/modules/pembelian/QcPage'
+import { ReturPage } from '@/pages/modules/pembelian/ReturPage'
 import { PenjualanPage } from '@/pages/modules/PenjualanPage'
 import { OrderPage } from '@/pages/modules/penjualan/OrderPage'
 import { PengirimanPage } from '@/pages/modules/penjualan/PengirimanPage'
@@ -92,6 +94,8 @@ export function AppRouter() {
               />
               <Route path="penerimaan" element={<PenerimaanPage />} />
               <Route path="pembayaran" element={<PembayaranPage />} />
+              <Route path="retur" element={<ReturPage />} />
+              <Route path="qc" element={<QcPage />} />
               <Route
                 path="utang"
                 element={<Navigate to="/app/pembelian/pembayaran" replace />}

@@ -4,16 +4,19 @@ import { usePembelian, useSelectedDoc } from '@/features/pembelian/PembelianCont
 export function PenerimaanPage() {
   const {
     purchases,
+    lotQc,
     saveWeighing,
     confirmWeighing,
     voidPurchase,
     completePurchase,
+    overrideLotQcReceive,
   } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
 
   return (
     <PenerimaanView
       purchases={purchases}
+      lotQc={lotQc}
       selectedId={selectedId}
       onSelect={select}
       onSaveWeighing={(id, input) => {
@@ -29,6 +32,7 @@ export function PenerimaanPage() {
       }}
       onGoTo={goTo}
       onCompletePurchase={completePurchase}
+      onOverrideQc={overrideLotQcReceive}
     />
   )
 }

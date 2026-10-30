@@ -49,6 +49,7 @@ import {
   formatNumber,
   formatPercent,
   formatRupiah,
+  getLotQc,
   getSupplier,
   parseNumber,
   canVoidPurchase,
@@ -56,6 +57,7 @@ import {
   isPurchaseReceivedForAp,
   summarize,
   type GrainType,
+  type LotQc,
   type Purchase,
   type WeighingInput,
 } from '@/features/pembelian/pembelian-data'
@@ -81,8 +83,23 @@ type MeasureKey = 'bruto' | 'tara' | 'moisture' | 'impurity'
 type FormState = Record<MeasureKey, string>
 type FormErrors = Partial<Record<MeasureKey, string>>
 
+function qcTone(qc: LotQc | undefined): 'neutral' | 'good' | 'warn' | 'danger' {
+  if (!qc) return 'warn'
+  if (qc.passed) return 'good'
+  if (qc.overrideReason) return 'warn'
+  return 'danger'
+}
+
+function qcLabel(qc: LotQc | undefined): string {
+  if (!qc) return 'Belum QC'
+  if (qc.passed) return 'QC lulus'
+  if (qc.overrideReason) return 'QC override'
+  return 'QC gagal'
+}
+
 type PenerimaanViewProps = {
   purchases: Purchase[]
+  lotQc: LotQc[]
   selectedId: string | null
   onSelect: (id: string | null) => void
   onSaveWeighing: (id: string, input: WeighingInput) => void
@@ -94,10 +111,12 @@ type PenerimaanViewProps = {
   onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
   onCompletePurchase: (id: string) => string | undefined
+  onOverrideQc: (lotId: string, reason: string) => string | undefined
 }
 
 export function PenerimaanView({
   purchases,
+  lotQc,
   selectedId,
   onSelect,
   onSaveWeighing,
@@ -105,6 +124,7 @@ export function PenerimaanView({
   onVoid,
   onGoTo,
   onCompletePurchase,
+  onOverrideQc,
 }: PenerimaanViewProps) {
   const PAGE_SIZE = usePageSize()
   const waiting = useMemo(
@@ -313,18 +333,21 @@ export function PenerimaanView({
               sort={sort}
               onSort={handleSort}
             />
+            <FinanceTh>QC</FinanceTh>
             <FinanceTh align="center" className="w-32">
               Aksi
             </FinanceTh>
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
-              <FinanceEmptyRow colSpan={8} message="Tidak ada dokumen yang cocok." />
+              <FinanceEmptyRow colSpan={9} message="Tidak ada dokumen yang cocok." />
             ) : (
               rows.map((p, index) => {
                 const supplier = getSupplier(p.supplierId)
                 const dateShow =
                   p.weighing?.confirmedAt ?? p.weighing?.weighedAt ?? p.date
+                const qc =
+                  p.lotId != null ? getLotQc(lotQc, p.lotId) : undefined
                 return (
                   <FinanceTr key={p.id}>
                     <FinanceTd mono muted>
@@ -357,6 +380,13 @@ export function PenerimaanView({
                               : 'neutral'
                         }
                       />
+                    </FinanceTd>
+                    <FinanceTd>
+                      {p.lotId ? (
+                        <StatusPill label={qcLabel(qc)} tone={qcTone(qc)} />
+                      ) : (
+                        <span className="text-[12px] text-muted">—</span>
+                      )}
                     </FinanceTd>
                     <FinanceTd align="center">
                       <div className="inline-flex items-center justify-center gap-0.5">
@@ -436,6 +466,7 @@ export function PenerimaanView({
         <WeighingModal
           key={work.id}
           purchase={work}
+          lotQc={lotQc}
           onClose={closeWork}
           onSave={(input) => {
             onSaveWeighing(work.id, input)
@@ -449,7 +480,7 @@ export function PenerimaanView({
             const err = onConfirm(work.id, input, purchaseProof)
             if (err) {
               setToast(err)
-              return
+              return err
             }
             setToast(
               `${work.id} berat dikonfirmasi${
@@ -457,7 +488,9 @@ export function PenerimaanView({
               }`,
             )
             closeWork()
+            return undefined
           }}
+          onOverrideQc={onOverrideQc}
         />
       ) : null}
     </div>
@@ -626,20 +659,37 @@ function ReceiveDetailDrawer({
 
 function WeighingModal({
   purchase: p,
+  lotQc,
   onClose,
   onSave,
   onConfirm,
+  onOverrideQc,
 }: {
   purchase: Purchase
+  lotQc: LotQc[]
   onClose: () => void
   onSave: (input: WeighingInput) => void
   onConfirm: (
     input: WeighingInput,
     purchaseProof?: ProofAttachment | string,
-  ) => void
+  ) => string | undefined
+  onOverrideQc: (lotId: string, reason: string) => string | undefined
 }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const supplier = getSupplier(p.supplierId)
   const std = GRAIN_STANDARD[p.grain]
+  const qc = p.lotId ? getLotQc(lotQc, p.lotId) : undefined
+  const qcBlocked =
+    p.stage === 'ditimbang' &&
+    p.lotId != null &&
+    (!qc || (!qc.passed && !qc.overrideReason))
+
+  const [overrideOpen, setOverrideOpen] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    input: WeighingInput
+    proof?: ProofAttachment | string
+  } | null>(null)
 
   const [form, setForm] = useState<FormState>(() => ({
     bruto: p.weighing ? String(p.weighing.bruto) : '',
@@ -704,7 +754,19 @@ function WeighingModal({
     return Object.keys(next).length === 0
   }
 
+  function runConfirm(forConfirm: boolean) {
+    if (!validate(forConfirm)) return
+    const proof = receiptToProof(purchaseReceipt) ?? p.purchaseProof
+    const err = onConfirm(input, proof)
+    if (err && err.includes('QC') && isAdmin && p.lotId && qc) {
+      setPendingConfirm({ input, proof })
+      setOverrideOpen(true)
+      return
+    }
+  }
+
   return (
+    <>
     <FinanceModal
       title={p.id}
       subtitle="Penerimaan & timbang"
@@ -754,12 +816,7 @@ function WeighingModal({
                 <button
                   type="button"
                   disabled={!agreed}
-                  onClick={() => {
-                    if (!validate(true)) return
-                    const proof =
-                      receiptToProof(purchaseReceipt) ?? p.purchaseProof
-                    onConfirm(input, proof)
-                  }}
+                  onClick={() => runConfirm(true)}
                   className="h-11 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Konfirmasi berat
@@ -780,8 +837,37 @@ function WeighingModal({
             },
             { label: 'Taksiran', value: formatKg(p.estimatedKg) },
             { label: 'Harga', value: `${formatRupiah(p.price)}/kg` },
-          ]}
+            p.lotId ? { label: 'Lot', value: p.lotId } : null,
+          ].filter(Boolean) as { label: string; value: string }[]}
         />
+
+        {p.lotId ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface/70 px-3.5 py-2.5">
+            <div>
+              <p className="text-[12px] font-medium text-ink">QC lot</p>
+              <p className="mt-0.5 text-[11px] text-muted">
+                Konfirmasi butuh QC lulus atau override admin.
+              </p>
+            </div>
+            <StatusPill label={qcLabel(qc)} tone={qcTone(qc)} />
+          </div>
+        ) : null}
+
+        {qcBlocked && !qc ? (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+            Isi QC di menu QC Lot sebelum konfirmasi penerimaan.
+          </p>
+        ) : null}
+
+        {qcBlocked && qc && !qc.passed && !qc.overrideReason && isAdmin ? (
+          <button
+            type="button"
+            onClick={() => setOverrideOpen(true)}
+            className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] font-medium text-amber-900 transition hover:bg-amber-100"
+          >
+            Override QC (admin)
+          </button>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField
@@ -879,5 +965,38 @@ function WeighingModal({
         ) : null}
       </div>
     </FinanceModal>
+
+    <PromptDialog
+      open={overrideOpen}
+      title="Override QC lot"
+      description={
+        p.lotId
+          ? `Lot ${p.lotId} tidak lulus QC. Admin dapat menerima dengan alasan tercatat di audit.`
+          : undefined
+      }
+      label="Alasan override"
+      placeholder="Misalnya mutu diterima setelah sortir ulang…"
+      confirmLabel="Override & lanjut"
+      danger
+      onClose={() => {
+        setOverrideOpen(false)
+        setPendingConfirm(null)
+      }}
+      onConfirm={(reason) => {
+        if (!p.lotId) return
+        const err = onOverrideQc(p.lotId, reason)
+        if (err) return
+        setOverrideOpen(false)
+        const pending = pendingConfirm
+        setPendingConfirm(null)
+        if (pending) {
+          onConfirm(pending.input, pending.proof)
+        } else if (validate(true)) {
+          const proof = receiptToProof(purchaseReceipt) ?? p.purchaseProof
+          onConfirm(input, proof)
+        }
+      }}
+    />
+    </>
   )
 }

@@ -49,6 +49,18 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/pembelian/pembayaran',
         roles: ['admin', 'pembelian', 'keuangan'],
       },
+      {
+        id: 'pembelian-retur',
+        label: 'Retur',
+        path: '/app/pembelian/retur',
+        roles: ['admin', 'pembelian', 'keuangan'],
+      },
+      {
+        id: 'pembelian-qc',
+        label: 'QC Lot',
+        path: '/app/pembelian/qc',
+        roles: ['admin', 'pembelian', 'gudang'],
+      },
     ],
   },
   {
