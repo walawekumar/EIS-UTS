@@ -173,9 +173,45 @@ costPerKgBeras = (nilaiGabahEfektifLot + alokasiBiayaOps) / qtyBerasHasil
 
 Nilai gabah dari PO terkait lot; alokasi ops manual atau proporsional qty batch vs biaya `posted` periode (`method`: `manual` \| `proportional`). Snapshot tidak berubah saat master harga berubah. Tampil di **Rendemen** (ranking) dan **Laporan** (tab Produksi → blok costing per lot).
 
-## Akuntansi (gelombang 1)
+## Akuntansi GL (gelombang 2a)
 
-Transaksi di atas (retur, pack, costing) **belum** menulis jurnal COA. AP/AR disentuh hanya lewat `creditPayable` / `creditReceivable` pada post retur; pack dan `LotCost` hanya stok + snapshot nilai.
+**Storage:** `egabah.gl.v1` (COA + jurnal + mapping), dimuat bersama snapshot `egabah.keuangan.v1` di finance-store.
+
+### Entitas GL
+
+| Entitas | File | Keterangan |
+| --- | --- | --- |
+| `Account` | `gl-data.ts` | `code`, `name`, `type` (`asset` \| `liability` \| `equity` \| `revenue` \| `expense`), `isPostable`, `active`, `system` |
+| `AccountMap` | ↑ | Kunci posting tetap (`cash`, `ap`, `ar`, `inventoryGabah`, `inventoryBeras`, `wip`, `cogs`, `sales`, `salesReturn`, …) → `accountId` |
+| `JournalEntry` / `JournalLine` | ↑ | Double-entry; `sourceType` `auto` \| `manual` \| `opening` \| `reverse`; void via `voidedAt` + pasangan reverse |
+| `FailedJournalPost` | ↑ | Antrean tipis jika ops sukses tetapi `postJournal` gagal — `{ sourceKey, payload, error, createdAt }`; retry dari UI Jurnal |
+
+Laporan resmi 2a (**Laporan → Neraca saldo / Laba rugi / Neraca**) memakai `accountBalanceMap(journals)` — jurnal dengan `voidedAt` diabaikan.
+
+### Dual-track (kas / AP / AR vs GL)
+
+Layar **Kas, Utang, Piutang, Biaya, Payroll** tetap sumber kerja harian (`upsertPayable`, `creditPayable`, `creditReceivable`, `addCashEntry`, dll.). Setelah event ops sukses, builder jurnal memanggil `postJournal` paralel. Void ops → `reverseJournal`. Tidak ada backfill historis; saldo awal lewat jurnal `opening` ke `openingEquity`.
+
+### Produksi — WIP + jurnal
+
+| Tahap | Stok | Jurnal (contoh `sourceKey`) |
+| --- | --- | --- |
+| **Start batch** | Gabah out lokasi input → WIP | `batch:{id}:start` — Dr WIP, Cr persediaan gabah |
+| **Complete batch** | Output beras in (gabah sudah dikonsumsi di start) | `batch:{id}:done` — Dr FG (LotCost), Cr WIP + alokasi overhead |
+| **Pack posted** | Reclass SKU | `pack:{id}:post` |
+| **Void** | Reverse stok seperti gelombang 1 | Reverse jurnal pasangan |
+
+`LotCost` tetap snapshot nilai; jurnal complete memakai total cost yang sama dengan modul produksi.
+
+### Laporan GL (ringkas)
+
+- **Neraca saldo:** akun postable aktif, kolom debit/kredit dari saldo bertanda (nature akun).
+- **Laba rugi:** pendapatan − beban; `salesReturn` tipe `revenue` kontra (mengurangi pendapatan).
+- **Neraca:** aset vs utang + ekuitas + laba rugi berjalan.
+
+### Di luar scope 2a
+
+PPN / e-Faktur, rekonsiliasi bank, tutup buku enforced, dan **backfill** jurnal untuk transaksi sebelum go-live GL. Gelombang 1 (retur, QC, pack, costing) sudah ada di ops; jurnal auto hanya **forward** dari aktivasi 2a.
 
 ## Produksi — struktur batch
 

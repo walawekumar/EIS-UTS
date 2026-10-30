@@ -26,8 +26,55 @@ import { isLowStock } from '@/features/persediaan/persediaan-data'
 import { useProduksi } from '@/features/produksi/ProduksiContext'
 import { actualRendemen, type LotCost } from '@/features/produksi/produksi-data'
 import { downloadBackup } from '@/features/backup/backup'
+import {
+  accountBalanceMap,
+  type Account,
+  type AccountType,
+} from '@/features/keuangan/gl-data'
 
-type Tab = 'ringkas' | 'aging' | 'stok' | 'produksi'
+type Tab =
+  | 'ringkas'
+  | 'aging'
+  | 'stok'
+  | 'produksi'
+  | 'neraca-saldo'
+  | 'laba-rugi'
+  | 'neraca'
+
+function isCreditNormal(type: AccountType): boolean {
+  return type === 'liability' || type === 'equity' || type === 'revenue'
+}
+
+/** Map signed net (debit − credit) to trial balance columns by account nature. */
+function trialDebitCredit(net: number, type: AccountType): { debit: number; credit: number } {
+  if (net === 0) return { debit: 0, credit: 0 }
+  if (isCreditNormal(type)) {
+    if (net < 0) return { debit: 0, credit: -net }
+    return { debit: net, credit: 0 }
+  }
+  if (net > 0) return { debit: net, credit: 0 }
+  return { debit: 0, credit: -net }
+}
+
+/** P&L line amount: revenue uses credit − debit (contra revenue reduces via signed net). */
+function plLineAmount(net: number, type: AccountType): number {
+  if (type === 'revenue') return -net
+  if (type === 'expense') return net
+  return 0
+}
+
+/** Balance sheet display amount (positive = normal side). */
+function balanceSheetAmount(net: number, type: AccountType): number {
+  if (type === 'asset') return net
+  if (type === 'liability' || type === 'equity') return -net
+  return 0
+}
+
+function sortedPostableAccounts(accounts: Account[]): Account[] {
+  return accounts
+    .filter((a) => a.isPostable && a.active)
+    .sort((a, b) => a.code.localeCompare(b.code))
+}
 
 function idr(n: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -38,7 +85,8 @@ function idr(n: number) {
 }
 
 export function LaporanPage() {
-  const { cashEntries, payables, receivables, expenses } = useFinanceStore()
+  const { cashEntries, payables, receivables, expenses, accounts, journals } =
+    useFinanceStore()
   const { purchases } = usePembelian()
   const { orders } = usePenjualan()
   const { stocks } = usePersediaanStore()
@@ -77,6 +125,83 @@ export function LaporanPage() {
     for (const b of batches) map.set(b.id, b)
     return map
   }, [batches])
+
+  const balances = useMemo(() => accountBalanceMap(journals), [journals])
+
+  const trialRows = useMemo(() => {
+    let totalDebit = 0
+    let totalCredit = 0
+    const rows = sortedPostableAccounts(accounts).map((acc) => {
+      const net = balances.get(acc.id) ?? 0
+      const { debit, credit } = trialDebitCredit(net, acc.type)
+      totalDebit += debit
+      totalCredit += credit
+      return { acc, debit, credit }
+    })
+    return { rows, totalDebit, totalCredit }
+  }, [accounts, balances])
+
+  const plReport = useMemo(() => {
+    const revenue: { acc: Account; amount: number }[] = []
+    const expense: { acc: Account; amount: number }[] = []
+    let totalRevenue = 0
+    let totalExpense = 0
+    for (const acc of sortedPostableAccounts(accounts)) {
+      if (acc.type !== 'revenue' && acc.type !== 'expense') continue
+      const net = balances.get(acc.id) ?? 0
+      const amount = plLineAmount(net, acc.type)
+      if (amount === 0) continue
+      if (acc.type === 'revenue') {
+        revenue.push({ acc, amount })
+        totalRevenue += amount
+      } else {
+        expense.push({ acc, amount })
+        totalExpense += amount
+      }
+    }
+    return {
+      revenue,
+      expense,
+      totalRevenue,
+      totalExpense,
+      netIncome: totalRevenue - totalExpense,
+    }
+  }, [accounts, balances])
+
+  const balanceSheet = useMemo(() => {
+    const assets: { acc: Account; amount: number }[] = []
+    const liabilities: { acc: Account; amount: number }[] = []
+    const equity: { acc: Account; amount: number }[] = []
+    let totalAssets = 0
+    let totalLiabilities = 0
+    let totalEquity = 0
+    for (const acc of sortedPostableAccounts(accounts)) {
+      const net = balances.get(acc.id) ?? 0
+      const amount = balanceSheetAmount(net, acc.type)
+      if (amount === 0) continue
+      if (acc.type === 'asset') {
+        assets.push({ acc, amount })
+        totalAssets += amount
+      } else if (acc.type === 'liability') {
+        liabilities.push({ acc, amount })
+        totalLiabilities += amount
+      } else if (acc.type === 'equity') {
+        equity.push({ acc, amount })
+        totalEquity += amount
+      }
+    }
+    const { netIncome } = plReport
+    return {
+      assets,
+      liabilities,
+      equity,
+      totalAssets,
+      totalLiabilities,
+      totalEquity,
+      netIncome,
+      totalLiabilitiesEquity: totalLiabilities + totalEquity + netIncome,
+    }
+  }, [accounts, balances, plReport])
 
   const costingRows = useMemo(() => {
     const latestByLot = new Map<string, LotCost>()
@@ -152,6 +277,9 @@ export function LaporanPage() {
                 ['aging', 'Aging AR/AP'],
                 ['stok', 'Stok rendah'],
                 ['produksi', 'Rendemen'],
+                ['neraca-saldo', 'Neraca saldo'],
+                ['laba-rugi', 'Laba rugi'],
+                ['neraca', 'Neraca'],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -399,6 +527,244 @@ export function LaporanPage() {
                   )}
                 </tbody>
               </FinanceTable>
+            </div>
+          </div>
+        ) : null}
+
+        {tab === 'neraca-saldo' ? (
+          <div>
+            <p className="mb-2 text-[12px] text-muted">
+              Dari jurnal non-void; saldo per akun postable aktif.
+            </p>
+            <FinanceTable>
+              <FinanceThead>
+                <FinanceTh>Kode</FinanceTh>
+                <FinanceTh>Akun</FinanceTh>
+                <FinanceTh>Debit</FinanceTh>
+                <FinanceTh>Kredit</FinanceTh>
+              </FinanceThead>
+              <tbody>
+                {trialRows.rows.length === 0 ? (
+                  <FinanceEmptyRow colSpan={4} message="Belum ada akun postable." />
+                ) : (
+                  <>
+                    {trialRows.rows.map(({ acc, debit, credit }) => (
+                      <FinanceTr key={acc.id}>
+                        <FinanceTd mono>{acc.code}</FinanceTd>
+                        <FinanceTd>{acc.name}</FinanceTd>
+                        <FinanceTd mono>{debit > 0 ? idr(debit) : '—'}</FinanceTd>
+                        <FinanceTd mono>{credit > 0 ? idr(credit) : '—'}</FinanceTd>
+                      </FinanceTr>
+                    ))}
+                    <FinanceTr>
+                      <FinanceTd colSpan={2}>
+                        <span className="font-semibold text-ink">Total</span>
+                      </FinanceTd>
+                      <FinanceTd mono>
+                        <span className="font-semibold">{idr(trialRows.totalDebit)}</span>
+                      </FinanceTd>
+                      <FinanceTd mono>
+                        <span className="font-semibold">{idr(trialRows.totalCredit)}</span>
+                      </FinanceTd>
+                    </FinanceTr>
+                  </>
+                )}
+              </tbody>
+            </FinanceTable>
+          </div>
+        ) : null}
+
+        {tab === 'laba-rugi' ? (
+          <div className="space-y-4">
+            <p className="text-[12px] text-muted">
+              Pendapatan − beban dari GL; retur penjualan mengurangi pendapatan (akun revenue
+              kontra).
+            </p>
+            <div>
+              <h3 className="mb-2 text-[13px] font-semibold text-ink">Pendapatan</h3>
+              <FinanceTable>
+                <FinanceThead>
+                  <FinanceTh>Kode</FinanceTh>
+                  <FinanceTh>Akun</FinanceTh>
+                  <FinanceTh>Jumlah</FinanceTh>
+                </FinanceThead>
+                <tbody>
+                  {plReport.revenue.length === 0 ? (
+                    <FinanceEmptyRow colSpan={3} message="Belum ada saldo pendapatan." />
+                  ) : (
+                    plReport.revenue.map(({ acc, amount }) => (
+                      <FinanceTr key={acc.id}>
+                        <FinanceTd mono>{acc.code}</FinanceTd>
+                        <FinanceTd>{acc.name}</FinanceTd>
+                        <FinanceTd mono>{idr(amount)}</FinanceTd>
+                      </FinanceTr>
+                    ))
+                  )}
+                  <FinanceTr>
+                    <FinanceTd colSpan={2}>
+                      <span className="font-semibold text-ink">Total pendapatan</span>
+                    </FinanceTd>
+                    <FinanceTd mono>
+                      <span className="font-semibold">{idr(plReport.totalRevenue)}</span>
+                    </FinanceTd>
+                  </FinanceTr>
+                </tbody>
+              </FinanceTable>
+            </div>
+            <div>
+              <h3 className="mb-2 text-[13px] font-semibold text-ink">Beban</h3>
+              <FinanceTable>
+                <FinanceThead>
+                  <FinanceTh>Kode</FinanceTh>
+                  <FinanceTh>Akun</FinanceTh>
+                  <FinanceTh>Jumlah</FinanceTh>
+                </FinanceThead>
+                <tbody>
+                  {plReport.expense.length === 0 ? (
+                    <FinanceEmptyRow colSpan={3} message="Belum ada saldo beban." />
+                  ) : (
+                    plReport.expense.map(({ acc, amount }) => (
+                      <FinanceTr key={acc.id}>
+                        <FinanceTd mono>{acc.code}</FinanceTd>
+                        <FinanceTd>{acc.name}</FinanceTd>
+                        <FinanceTd mono>{idr(amount)}</FinanceTd>
+                      </FinanceTr>
+                    ))
+                  )}
+                  <FinanceTr>
+                    <FinanceTd colSpan={2}>
+                      <span className="font-semibold text-ink">Total beban</span>
+                    </FinanceTd>
+                    <FinanceTd mono>
+                      <span className="font-semibold">{idr(plReport.totalExpense)}</span>
+                    </FinanceTd>
+                  </FinanceTr>
+                </tbody>
+              </FinanceTable>
+            </div>
+            <p className="text-[14px] font-semibold text-ink">
+              Laba (rugi) bersih:{' '}
+              <span className={plReport.netIncome >= 0 ? 'text-emerald-700' : 'text-red-700'}>
+                {idr(plReport.netIncome)}
+              </span>
+            </p>
+          </div>
+        ) : null}
+
+        {tab === 'neraca' ? (
+          <div className="space-y-4">
+            <p className="text-[12px] text-muted">
+              Aset, utang, modal dari saldo GL + laba rugi berjalan periode ini.
+            </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <h3 className="mb-2 text-[13px] font-semibold text-ink">Aset</h3>
+                <FinanceTable>
+                  <FinanceThead>
+                    <FinanceTh>Akun</FinanceTh>
+                    <FinanceTh>Saldo</FinanceTh>
+                  </FinanceThead>
+                  <tbody>
+                    {balanceSheet.assets.length === 0 ? (
+                      <FinanceEmptyRow colSpan={2} message="—" />
+                    ) : (
+                      balanceSheet.assets.map(({ acc, amount }) => (
+                        <FinanceTr key={acc.id}>
+                          <FinanceTd>
+                            <span className="font-medium">{acc.name}</span>
+                            <span className="ml-1 text-[11px] text-muted">{acc.code}</span>
+                          </FinanceTd>
+                          <FinanceTd mono>{idr(amount)}</FinanceTd>
+                        </FinanceTr>
+                      ))
+                    )}
+                    <FinanceTr>
+                      <FinanceTd>
+                        <span className="font-semibold">Total aset</span>
+                      </FinanceTd>
+                      <FinanceTd mono>
+                        <span className="font-semibold">{idr(balanceSheet.totalAssets)}</span>
+                      </FinanceTd>
+                    </FinanceTr>
+                  </tbody>
+                </FinanceTable>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="mb-2 text-[13px] font-semibold text-ink">Utang</h3>
+                  <FinanceTable>
+                    <FinanceThead>
+                      <FinanceTh>Akun</FinanceTh>
+                      <FinanceTh>Saldo</FinanceTh>
+                    </FinanceThead>
+                    <tbody>
+                      {balanceSheet.liabilities.length === 0 ? (
+                        <FinanceEmptyRow colSpan={2} message="—" />
+                      ) : (
+                        balanceSheet.liabilities.map(({ acc, amount }) => (
+                          <FinanceTr key={acc.id}>
+                            <FinanceTd>
+                              <span className="font-medium">{acc.name}</span>
+                              <span className="ml-1 text-[11px] text-muted">{acc.code}</span>
+                            </FinanceTd>
+                            <FinanceTd mono>{idr(amount)}</FinanceTd>
+                          </FinanceTr>
+                        ))
+                      )}
+                      <FinanceTr>
+                        <FinanceTd>
+                          <span className="font-semibold">Total utang</span>
+                        </FinanceTd>
+                        <FinanceTd mono>
+                          <span className="font-semibold">
+                            {idr(balanceSheet.totalLiabilities)}
+                          </span>
+                        </FinanceTd>
+                      </FinanceTr>
+                    </tbody>
+                  </FinanceTable>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-[13px] font-semibold text-ink">Ekuitas</h3>
+                  <FinanceTable>
+                    <FinanceThead>
+                      <FinanceTh>Akun</FinanceTh>
+                      <FinanceTh>Saldo</FinanceTh>
+                    </FinanceThead>
+                    <tbody>
+                      {balanceSheet.equity.map(({ acc, amount }) => (
+                        <FinanceTr key={acc.id}>
+                          <FinanceTd>
+                            <span className="font-medium">{acc.name}</span>
+                            <span className="ml-1 text-[11px] text-muted">{acc.code}</span>
+                          </FinanceTd>
+                          <FinanceTd mono>{idr(amount)}</FinanceTd>
+                        </FinanceTr>
+                      ))}
+                      <FinanceTr>
+                        <FinanceTd>Laba (rugi) berjalan</FinanceTd>
+                        <FinanceTd mono>{idr(balanceSheet.netIncome)}</FinanceTd>
+                      </FinanceTr>
+                      <FinanceTr>
+                        <FinanceTd>
+                          <span className="font-semibold">Total ekuitas</span>
+                        </FinanceTd>
+                        <FinanceTd mono>
+                          <span className="font-semibold">
+                            {idr(balanceSheet.totalEquity + balanceSheet.netIncome)}
+                          </span>
+                        </FinanceTd>
+                      </FinanceTr>
+                    </tbody>
+                  </FinanceTable>
+                </div>
+                <p className="text-[13px] text-muted">
+                  Total utang + ekuitas (termasuk laba berjalan):{' '}
+                  <span className="font-semibold text-ink">
+                    {idr(balanceSheet.totalLiabilitiesEquity)}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
         ) : null}
