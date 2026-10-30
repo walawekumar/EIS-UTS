@@ -10,8 +10,10 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
+import type { AccountMapKey } from '@/features/keuangan/gl-data'
+import type { JournalLine } from '@/features/keuangan/gl-data'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
-import { lookupCustomer } from '@/features/master/master-storage'
+import { lookupCustomer, lookupProductBySku } from '@/features/master/master-storage'
 import {
   addDays,
   getCustomer,
@@ -40,6 +42,159 @@ import type { UserRole } from '@/types/auth'
 function roleAllowed(role: UserRole | undefined, allowed: UserRole[]): boolean {
   if (!role) return false
   return allowed.includes(role)
+}
+
+/** YYYY-MM-DD from ISO or date-only string. */
+function journalDateFromIso(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+function unitCostForSku(sku: string): number {
+  const cost = lookupProductBySku(sku)?.costPrice ?? 0
+  return Number.isFinite(cost) && cost > 0 ? cost : 0
+}
+
+function postPenjualanPairJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    amount: number
+    debitKey: AccountMapKey
+    creditKey: AccountMapKey
+  },
+): void {
+  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
+  if (!Number.isFinite(amount) || amount <= 0) return
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines: [
+      {
+        accountId: mapAccount(debitKey),
+        debit: amount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount(creditKey),
+        debit: 0,
+        credit: amount,
+        memo,
+      },
+    ],
+  })
+}
+
+function postPenjualanShipJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    revenue: number
+    cogsAmount: number
+  },
+): void {
+  const { date, memo, sourceKey, revenue, cogsAmount } = input
+  if (!Number.isFinite(revenue) || revenue <= 0) return
+  const lines: JournalLine[] = [
+    {
+      accountId: mapAccount('ar'),
+      debit: revenue,
+      credit: 0,
+      memo,
+    },
+    {
+      accountId: mapAccount('sales'),
+      debit: 0,
+      credit: revenue,
+      memo,
+    },
+  ]
+  if (Number.isFinite(cogsAmount) && cogsAmount > 0) {
+    lines.push(
+      {
+        accountId: mapAccount('cogs'),
+        debit: cogsAmount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount('inventoryBeras'),
+        debit: 0,
+        credit: cogsAmount,
+        memo,
+      },
+    )
+  }
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines,
+  })
+}
+
+function postPenjualanReturnJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    credit: number
+    cogsAmount: number
+  },
+): void {
+  const { date, memo, sourceKey, credit, cogsAmount } = input
+  if (!Number.isFinite(credit) || credit <= 0) return
+  const lines: JournalLine[] = [
+    {
+      accountId: mapAccount('salesReturn'),
+      debit: credit,
+      credit: 0,
+      memo,
+    },
+    {
+      accountId: mapAccount('ar'),
+      debit: 0,
+      credit: credit,
+      memo,
+    },
+  ]
+  if (Number.isFinite(cogsAmount) && cogsAmount > 0) {
+    lines.push(
+      {
+        accountId: mapAccount('inventoryBeras'),
+        debit: cogsAmount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount('cogs'),
+        debit: 0,
+        credit: cogsAmount,
+        memo,
+      },
+    )
+  }
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines,
+  })
 }
 
 export type SaleReturnInput = {
@@ -119,6 +274,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
     addCashEntry,
     removeLinkedReceivable,
     creditReceivable,
+    postJournalEntry,
+    mapAccount,
     receivables,
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
@@ -287,6 +444,16 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         paid: isPaid ? total : 0,
       })
 
+      const unitCost = unitCostForSku(next.sku)
+      const cogsAmount = unitCost > 0 ? next.qty * unitCost : 0
+      postPenjualanShipJournal(postJournalEntry, mapAccount, {
+        date: today,
+        memo: `Pengiriman penjualan ${next.id} · ${party}`,
+        sourceKey: `so:${next.id}:ship`,
+        revenue: total,
+        cogsAmount,
+      })
+
       if (isPaid) {
         addCashEntry({
           direction: 'in',
@@ -294,6 +461,14 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
           description: `Pelunasan kirim ${next.id} · ${party}`,
           amount: total,
           receiptName: input.payReceiptName,
+        })
+        postPenjualanPairJournal(postJournalEntry, mapAccount, {
+          date: today,
+          memo: `Pelunasan COD ${next.id} · ${party}`,
+          sourceKey: `so:${next.id}:cod`,
+          amount: total,
+          debitKey: 'cash',
+          creditKey: 'ar',
         })
       }
 
@@ -321,6 +496,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       addMovement,
       items,
       upsertReceivableFromSale,
+      postJournalEntry,
+      mapAccount,
       receivables,
       appendAudit,
     ],
@@ -346,8 +523,16 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         receiptName: payment.receiptName,
         note: payment.method,
       })
+      postPenjualanPairJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(payment.date),
+        memo: `Terima piutang ${next.id} · ${customer?.name ?? next.customerId}`,
+        sourceKey: `so:${next.id}:pay:${payId}`,
+        amount: payment.amount,
+        debitKey: 'cash',
+        creditKey: 'ar',
+      })
     },
-    [applySalePayment, items],
+    [applySalePayment, items, postJournalEntry, mapAccount],
   )
 
   const createSaleReturn = useCallback(
@@ -558,6 +743,17 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         })
       }
       creditReceivable(order.id, credit)
+      const cogsAmount = current.lines.reduce(
+        (sum, line) => sum + line.qty * unitCostForSku(line.sku),
+        0,
+      )
+      postPenjualanReturnJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(postedAt),
+        memo: `Retur penjualan ${current.id} · ${order.id}`,
+        sourceKey: `sr:${current.id}:post`,
+        credit,
+        cogsAmount,
+      })
       setReturns((list) =>
         list.map((r) =>
           r.id === id ? { ...r, stage: 'posted', postedAt } : r,
@@ -571,7 +767,16 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [items, returns, addMovement, creditReceivable, appendAudit, user?.role],
+    [
+      items,
+      returns,
+      addMovement,
+      creditReceivable,
+      postJournalEntry,
+      mapAccount,
+      appendAudit,
+      user?.role,
+    ],
   )
 
   const value = useMemo(
