@@ -12,6 +12,7 @@ import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { UserRole } from '@/features/auth/auth-data'
 import {
+  calcWeighing,
   effectiveUnitPrice,
   type Purchase,
 } from '@/features/pembelian/pembelian-data'
@@ -53,9 +54,13 @@ function purchaseUnitPrice(purchase: Purchase): number {
   return purchase.price
 }
 
-function grainValueForBatch(batch: ProductionBatch, purchase: Purchase): number {
+function grainValueForPurchase(purchase: Purchase): number {
   const unit = purchaseUnitPrice(purchase)
-  return batch.inputQty * unit
+  if (purchase.weighing) {
+    const netto = calcWeighing(purchase.grain, purchase.weighing).netto
+    return netto * unit
+  }
+  return purchase.estimatedKg * unit
 }
 
 function monthKey(isoDate: string): string {
@@ -420,10 +425,12 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
     [patch],
   )
 
-  const recalcLotCost = useCallback(
-    (batchId: string, opts: RecalcLotCostOptions): string | undefined => {
-      const batch = items.find((b) => b.id === batchId)
-      if (!batch) return 'Batch tidak ditemukan.'
+  const persistLotCostForBatch = useCallback(
+    (
+      batch: ProductionBatch,
+      allBatches: ProductionBatch[],
+      opts: RecalcLotCostOptions,
+    ): string | undefined => {
       if (batch.stage !== 'done') return 'Costing hanya untuk batch selesai.'
 
       const lotId = resolveLotIdFromBatch(batch)
@@ -436,7 +443,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (!purchase) return `Tidak ada pembelian untuk lot ${lotId}.`
 
       const qtyBeras = berasQty(batch)
-      const grainValue = grainValueForBatch(batch, purchase)
+      const grainValue = grainValueForPurchase(purchase)
       let allocatedOps = 0
       if (opts.method === 'manual') {
         allocatedOps = opts.manualOps ?? 0
@@ -444,12 +451,12 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
           return 'Alokasi biaya manual tidak valid.'
         }
       } else {
-        allocatedOps = proportionalOpsForBatch(batch, items)
+        allocatedOps = proportionalOpsForBatch(batch, allBatches)
       }
 
       const snapshot = computeLotCost({
         lotId,
-        batchId,
+        batchId: batch.id,
         grainValue,
         allocatedOps,
         berasQty: qtyBeras,
@@ -457,13 +464,22 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       })
 
       setLotCosts((list) => [
-        ...list.filter((c) => c.batchId !== batchId),
+        ...list.filter((c) => c.batchId !== batch.id),
         snapshot,
       ])
-      publishSync('produksi', batchId)
+      publishSync('produksi', batch.id)
       return undefined
     },
-    [items],
+    [],
+  )
+
+  const recalcLotCost = useCallback(
+    (batchId: string, opts: RecalcLotCostOptions): string | undefined => {
+      const batch = items.find((b) => b.id === batchId)
+      if (!batch) return 'Batch tidak ditemukan.'
+      return persistLotCostForBatch(batch, items, opts)
+    },
+    [items, persistLotCostForBatch],
   )
 
   const completeBatch = useCallback(
@@ -477,21 +493,27 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         postStock(current, addMovement, false)
       }
 
+      const completedAt = new Date().toISOString()
+      const doneBatch: ProductionBatch = {
+        ...current,
+        stage: 'done',
+        completedAt,
+        stockPosted: true,
+        startedAt: current.startedAt ?? completedAt,
+      }
+      const batchesForCosting = items.map((b) => (b.id === id ? doneBatch : b))
+
       patch(
         id,
-        (b) => ({
-          ...b,
-          stage: 'done',
-          completedAt: new Date().toISOString(),
-          stockPosted: true,
-          startedAt: b.startedAt ?? new Date().toISOString(),
-        }),
+        () => doneBatch,
         { action: 'post', note: 'Batch selesai — stok diposting' },
       )
 
-      recalcLotCost(id, { method: 'proportional' })
+      persistLotCostForBatch(doneBatch, batchesForCosting, {
+        method: 'proportional',
+      })
     },
-    [items, addMovement, patch, recalcLotCost],
+    [items, addMovement, patch, persistLotCostForBatch],
   )
 
   const voidBatch = useCallback(
