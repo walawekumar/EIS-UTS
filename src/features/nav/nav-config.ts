@@ -193,6 +193,12 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/keuangan/akun-map',
         roles: ['admin', 'keuangan'],
       },
+      {
+        id: 'jurnal',
+        label: 'Jurnal',
+        path: '/app/keuangan/jurnal',
+        roles: ['admin', 'keuangan'],
+      },
     ],
   },
   {

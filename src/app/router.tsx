@@ -9,6 +9,7 @@ import { AuditPage } from '@/pages/modules/AuditPage'
 import { AccountMapPage } from '@/pages/modules/keuangan/AccountMapPage'
 import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
 import { CoaPage } from '@/pages/modules/keuangan/CoaPage'
+import { JurnalPage } from '@/pages/modules/keuangan/JurnalPage'
 import { KasPage } from '@/pages/modules/keuangan/KasPage'
 import { PayrollPage } from '@/pages/modules/keuangan/PayrollPage'
 import { PiutangPage } from '@/pages/modules/keuangan/PiutangPage'
@@ -175,6 +176,7 @@ export function AppRouter() {
             <Route path="payroll" element={<PayrollPage />} />
             <Route path="coa" element={<CoaPage />} />
             <Route path="akun-map" element={<AccountMapPage />} />
+            <Route path="jurnal" element={<JurnalPage />} />
             <Route
               path="utang-piutang"
               element={<Navigate to="/app/keuangan/utang" replace />}
