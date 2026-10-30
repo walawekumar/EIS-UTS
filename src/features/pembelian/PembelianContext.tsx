@@ -11,6 +11,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
+import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import {
   addDays,
@@ -142,6 +143,48 @@ function purchaseUnitPrice(purchase: Purchase): number {
   return purchase.price
 }
 
+/** YYYY-MM-DD from ISO or date-only string. */
+function journalDateFromIso(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+function postPembelianJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    amount: number
+    debitKey: AccountMapKey
+    creditKey: AccountMapKey
+  },
+): void {
+  const { amount, date, memo, sourceKey, debitKey, creditKey } = input
+  if (!Number.isFinite(amount) || amount <= 0) return
+  postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines: [
+      {
+        accountId: mapAccount(debitKey),
+        debit: amount,
+        credit: 0,
+        memo,
+      },
+      {
+        accountId: mapAccount(creditKey),
+        debit: 0,
+        credit: amount,
+        memo,
+      },
+    ],
+  })
+}
+
 type PembelianContextValue = {
   purchases: Purchase[]
   createPurchase: (data: NewPurchase) => string
@@ -186,6 +229,8 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     applyPurchasePayment,
     removeLinkedPayable,
     creditPayable,
+    postJournalEntry,
+    mapAccount,
   } = useFinanceStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
@@ -549,6 +594,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         paid: summary.paid,
       })
 
+      postPembelianJournal(postJournalEntry, mapAccount, {
+        date: today,
+        memo: `Penerimaan gabah ${next.id}`,
+        sourceKey: `po:${next.id}:receive`,
+        amount: summary.total,
+        debitKey: 'inventoryGabah',
+        creditKey: 'ap',
+      })
+
       if (calc.netto > 0) {
         addMovement({
           type: 'in',
@@ -570,7 +624,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [addMovement, items, upsertPayableFromPurchase, appendAudit, user?.role],
+    [
+      addMovement,
+      items,
+      upsertPayableFromPurchase,
+      postJournalEntry,
+      mapAccount,
+      appendAudit,
+      user?.role,
+    ],
   )
 
   const addPayment = useCallback(
@@ -611,9 +673,18 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         receiptName,
         note: payment.method,
       })
+
+      postPembelianJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(payment.date),
+        memo: `Bayar utang ${next.id} · ${payId}`,
+        sourceKey: `po:${next.id}:pay:${payId}`,
+        amount: payment.amount,
+        debitKey: 'ap',
+        creditKey: 'cash',
+      })
       return undefined
     },
-    [applyPurchasePayment, items, user?.role],
+    [applyPurchasePayment, postJournalEntry, mapAccount, items, user?.role],
   )
 
   const createPurchaseReturn = useCallback(
@@ -824,6 +895,16 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         })
       }
       creditPayable(purchase.id, credit)
+
+      postPembelianJournal(postJournalEntry, mapAccount, {
+        date: journalDateFromIso(postedAt),
+        memo: `Retur pembelian ${current.id} · ${purchase.id}`,
+        sourceKey: `pr:${current.id}:post`,
+        amount: credit,
+        debitKey: 'ap',
+        creditKey: 'inventoryGabah',
+      })
+
       setReturns((list) =>
         list.map((r) =>
           r.id === id ? { ...r, stage: 'posted', postedAt } : r,
@@ -837,7 +918,16 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       })
       return undefined
     },
-    [items, returns, addMovement, creditPayable, appendAudit, user?.role],
+    [
+      items,
+      returns,
+      addMovement,
+      creditPayable,
+      postJournalEntry,
+      mapAccount,
+      appendAudit,
+      user?.role,
+    ],
   )
 
   const upsertLotQc = useCallback(
