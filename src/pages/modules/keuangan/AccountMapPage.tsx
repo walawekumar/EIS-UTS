@@ -27,6 +27,7 @@ const MAP_KEY_LABEL: Record<AccountMapKey, string> = {
   openingEquity: 'Modal / saldo awal',
   ppnOut: 'PPN keluaran',
   ppnIn: 'PPN masukan',
+  bankSuspense: 'Selisih rekon bank',
 }
 
 function accountOptionLabel(a: Account): string {
