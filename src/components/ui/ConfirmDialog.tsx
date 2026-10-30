@@ -56,6 +56,8 @@ type PromptDialogProps = {
   confirmLabel?: string
   danger?: boolean
   required?: boolean
+  /** Error from parent after confirm (e.g. API validation) */
+  submitError?: string
   onConfirm: (value: string) => void
   onClose: () => void
 }
@@ -70,6 +72,7 @@ export function PromptDialog({
   confirmLabel = 'Lanjut',
   danger = false,
   required = true,
+  submitError,
   onConfirm,
   onClose,
 }: PromptDialogProps) {
@@ -119,7 +122,7 @@ export function PromptDialog({
         requiredMark={required}
         value={value}
         placeholder={placeholder}
-        error={error}
+        error={error ?? submitError}
         autoFocus
         onChange={(e) => {
           setValue(e.target.value)

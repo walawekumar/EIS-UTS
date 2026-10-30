@@ -686,6 +686,7 @@ function WeighingModal({
     (!qc || (!qc.passed && !qc.overrideReason))
 
   const [overrideOpen, setOverrideOpen] = useState(false)
+  const [overrideError, setOverrideError] = useState<string>()
   const [pendingConfirm, setPendingConfirm] = useState<{
     input: WeighingInput
     proof?: ProofAttachment | string
@@ -757,12 +758,22 @@ function WeighingModal({
   function runConfirm(forConfirm: boolean) {
     if (!validate(forConfirm)) return
     const proof = receiptToProof(purchaseReceipt) ?? p.purchaseProof
-    const err = onConfirm(input, proof)
-    if (err && err.includes('QC') && isAdmin && p.lotId && qc) {
+    if (
+      forConfirm &&
+      qcBlocked &&
+      isAdmin &&
+      p.lotId &&
+      qc &&
+      !qc.passed &&
+      !qc.overrideReason
+    ) {
+      setOverrideError(undefined)
       setPendingConfirm({ input, proof })
       setOverrideOpen(true)
       return
     }
+    const err = onConfirm(input, proof)
+    if (err) return
   }
 
   return (
@@ -862,7 +873,10 @@ function WeighingModal({
         {qcBlocked && qc && !qc.passed && !qc.overrideReason && isAdmin ? (
           <button
             type="button"
-            onClick={() => setOverrideOpen(true)}
+            onClick={() => {
+              setOverrideError(undefined)
+              setOverrideOpen(true)
+            }}
             className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] font-medium text-amber-900 transition hover:bg-amber-100"
           >
             Override QC (admin)
@@ -978,14 +992,20 @@ function WeighingModal({
       placeholder="Misalnya mutu diterima setelah sortir ulang…"
       confirmLabel="Override & lanjut"
       danger
+      submitError={overrideError}
       onClose={() => {
         setOverrideOpen(false)
+        setOverrideError(undefined)
         setPendingConfirm(null)
       }}
       onConfirm={(reason) => {
         if (!p.lotId) return
+        setOverrideError(undefined)
         const err = onOverrideQc(p.lotId, reason)
-        if (err) return
+        if (err) {
+          setOverrideError(err)
+          return
+        }
         setOverrideOpen(false)
         const pending = pendingConfirm
         setPendingConfirm(null)
