@@ -728,6 +728,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             creditKey: 'cash',
           })
         } else if (prev.status === 'posted' && status !== 'posted') {
+          setCashEntries((cash) =>
+            prependCash(cash, {
+              direction: 'in',
+              category: 'Operasional',
+              description: `Void biaya ${prev.reference} · ${prev.description}`,
+              amount: prev.amount,
+              actor,
+              receiptName: prev.receiptName,
+            }),
+          )
           reverseJournalEntry({ sourceKey: `ex:${id}:post` })
         }
         return list.map((item) =>
