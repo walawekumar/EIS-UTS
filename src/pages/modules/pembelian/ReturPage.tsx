@@ -15,27 +15,34 @@ import {
   toggleSort,
   type SortState,
 } from '@/components/keuangan/FinanceTable'
+import { FinanceModal, ModalActions } from '@/components/keuangan/FinanceModal'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
   DetailDrawer,
   DrawerFacts,
   DrawerSection,
 } from '@/components/ops/DetailDrawer'
-import { ConfirmDialog, PromptDialog } from '@/components/ui/ConfirmDialog'
+import { PromptDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import { usePembelian } from '@/features/pembelian/PembelianContext'
 import {
   calcWeighing,
   formatDate,
   formatKg,
+  formatRupiah,
   getSupplier,
   isPurchaseReceivedForAp,
   nextPurchaseReturnId,
   parseNumber,
+  purchaseUnitPrice,
+  resolvePurchaseTaxDefaults,
   returnedQtyForPurchase,
   type Purchase,
   type PurchaseReturn,
@@ -92,6 +99,7 @@ function dateKey(iso: string): string {
 export function ReturPage() {
   const PAGE_SIZE = usePageSize()
   const { user } = useAuth()
+  const { settings } = useTaxStore()
   const {
     purchases,
     returns,
@@ -117,6 +125,12 @@ export function ReturPage() {
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [postOpen, setPostOpen] = useState(false)
+  const [ppnRate, setPpnRate] = useState<PpnRate>(
+    () => resolvePurchaseTaxDefaults(settings).ppnRate,
+  )
+  const [priceMode, setPriceMode] = useState<PriceMode>(
+    () => resolvePurchaseTaxDefaults(settings).priceMode,
+  )
   const [rejectOpen, setRejectOpen] = useState(false)
   const pendingSubmitId = useRef<string | null>(null)
 
@@ -207,6 +221,36 @@ export function ReturPage() {
     setSort((prev) => toggleSort(prev, key))
     setPage(1)
   }
+
+  function openPost(row: PurchaseReturn) {
+    const tax = resolvePurchaseTaxDefaults(settings)
+    const purchase = purchases.find((p) => p.id === row.purchaseId)
+    const rateFromPurchase =
+      purchase?.ppnRate === 0 || purchase?.ppnRate === 11 ? purchase.ppnRate : undefined
+    const modeFromPurchase =
+      purchase?.priceMode === 'inclusive' || purchase?.priceMode === 'exclusive'
+        ? purchase.priceMode
+        : undefined
+    setPpnRate(
+      rateFromPurchase ??
+        (row.ppnRate === 0 || row.ppnRate === 11 ? row.ppnRate : tax.ppnRate),
+    )
+    setPriceMode(
+      modeFromPurchase ??
+        (row.priceMode === 'inclusive' || row.priceMode === 'exclusive'
+          ? row.priceMode
+          : tax.priceMode),
+    )
+    setPostOpen(true)
+  }
+
+  const postSubtotal = useMemo(() => {
+    if (!active) return 0
+    const purchase = purchases.find((p) => p.id === active.purchaseId)
+    if (!purchase) return 0
+    const unitPrice = purchaseUnitPrice(purchase)
+    return active.lines.reduce((sum, line) => sum + line.qty * unitPrice, 0)
+  }, [active, purchases])
 
   function closeDrawer() {
     setCreating(false)
@@ -369,35 +413,53 @@ export function ReturPage() {
             setToast(err ?? `${id} disetujui`)
           }}
           onAskReject={() => setRejectOpen(true)}
-          onAskPost={() => setPostOpen(true)}
+          onAskPost={() => {
+            if (active) openPost(active)
+          }}
         />
       ) : null}
 
-      <ConfirmDialog
-        open={postOpen && active != null}
-        title="Posting retur"
-        description={
-          active
-            ? `Retur ${active.id} mengurangi stok dan utang pembelian ${active.purchaseId}.`
-            : undefined
-        }
-        confirmLabel="Posting"
-        onClose={() => setPostOpen(false)}
-        onConfirm={() => {
-          if (!active) return
-          const result = postPurchaseReturn(active.id)
-          setPostOpen(false)
-          if (!result.ok) {
-            setToast(result.error)
-          } else if (result.journalError) {
-            setToast(
-              `${active.id} diposting · jurnal gagal: ${result.journalError}`,
-            )
-          } else {
-            setToast(`${active.id} diposting`)
+      {postOpen && active ? (
+        <FinanceModal
+          title="Posting retur"
+          subtitle="Konfirmasi"
+          onClose={() => setPostOpen(false)}
+          footer={
+            <ModalActions
+              onCancel={() => setPostOpen(false)}
+              onConfirm={() => {
+                const result = postPurchaseReturn(active.id, { ppnRate, priceMode })
+                setPostOpen(false)
+                if (!result.ok) {
+                  setToast(result.error)
+                  return
+                }
+                if (result.journalError) {
+                  setToast(
+                    `${active.id} diposting · jurnal gagal: ${result.journalError}`,
+                  )
+                } else {
+                  setToast(`${active.id} diposting`)
+                }
+              }}
+              confirmLabel="Posting"
+            />
           }
-        }}
-      />
+        >
+          <div className="space-y-4">
+            <p className="text-[13px] leading-relaxed text-muted">
+              Retur {active.id} mengurangi stok dan utang pembelian {active.purchaseId}.
+            </p>
+            <TaxPostFields
+              subtotal={postSubtotal}
+              rate={ppnRate}
+              priceMode={priceMode}
+              onRateChange={setPpnRate}
+              onModeChange={setPriceMode}
+            />
+          </div>
+        </FinanceModal>
+      ) : null}
 
       <PromptDialog
         open={rejectOpen && active != null}
@@ -651,6 +713,11 @@ function ReturnDrawer({
                 ['Alasan', row.reason],
                 row.rejectedReason ? ['Ditolak', row.rejectedReason] : null,
                 row.postedAt ? ['Diposting', formatDate(dateKey(row.postedAt))] : null,
+                row.totalWithTax != null
+                  ? ['Total retur', formatRupiah(row.totalWithTax)]
+                  : null,
+                row.dpp != null ? ['DPP', formatRupiah(row.dpp)] : null,
+                row.ppn != null && row.ppn > 0 ? ['PPN', formatRupiah(row.ppn)] : null,
               ]}
             />
           </DrawerSection>

@@ -23,8 +23,8 @@ export function PenerimaanPage() {
         saveWeighing(id, input)
         select(id)
       }}
-      onConfirm={(id, input, purchaseProof) =>
-        confirmWeighing(id, input, purchaseProof)
+      onConfirm={(id, input, purchaseProof, tax) =>
+        confirmWeighing(id, input, purchaseProof, tax)
       }
       onVoid={(id, reason) => {
         voidPurchase(id, reason)

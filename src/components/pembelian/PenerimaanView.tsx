@@ -21,7 +21,10 @@ import {
   type SortState,
 } from '@/components/keuangan/FinanceTable'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
@@ -45,6 +48,7 @@ import {
   TARA_PER_SACK,
   VARIANCE_TOLERANCE,
   calcWeighing,
+  effectiveUnitPrice,
   formatDate,
   formatKg,
   formatNumber,
@@ -53,6 +57,7 @@ import {
   getLotQc,
   getSupplier,
   parseNumber,
+  resolvePurchaseTaxDefaults,
   canVoidPurchase,
   isPurchaseAwaitingWeigh,
   isPurchaseReceivedForAp,
@@ -60,6 +65,7 @@ import {
   type GrainType,
   type LotQc,
   type Purchase,
+  type PurchaseReceiveTax,
   type WeighingInput,
 } from '@/features/pembelian/pembelian-data'
 import { usePageSize } from '@/features/settings/usePageSize'
@@ -107,7 +113,8 @@ type PenerimaanViewProps = {
   onConfirm: (
     id: string,
     input: WeighingInput,
-    purchaseProof?: ProofAttachment | string,
+    purchaseProof: ProofAttachment | string | undefined,
+    tax: PurchaseReceiveTax,
   ) => DualTrackResult
   onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
@@ -477,8 +484,8 @@ export function PenerimaanView({
               }`,
             )
           }}
-          onConfirm={(input, purchaseProof) => {
-            const result = onConfirm(work.id, input, purchaseProof)
+          onConfirm={(input, purchaseProof, tax) => {
+            const result = onConfirm(work.id, input, purchaseProof, tax)
             if (!result.ok) {
               setToast(result.error)
               return result.error
@@ -675,11 +682,13 @@ function WeighingModal({
   onSave: (input: WeighingInput) => void
   onConfirm: (
     input: WeighingInput,
-    purchaseProof?: ProofAttachment | string,
+    purchaseProof: ProofAttachment | string | undefined,
+    tax: PurchaseReceiveTax,
   ) => string | undefined
   onOverrideQc: (lotId: string, reason: string) => string | undefined
 }) {
   const { user } = useAuth()
+  const { settings } = useTaxStore()
   const isAdmin = user?.role === 'admin'
   const supplier = getSupplier(p.supplierId)
   const std = GRAIN_STANDARD[p.grain]
@@ -694,7 +703,12 @@ function WeighingModal({
   const [pendingConfirm, setPendingConfirm] = useState<{
     input: WeighingInput
     proof?: ProofAttachment | string
+    tax: PurchaseReceiveTax
   } | null>(null)
+  const taxDefaults = resolvePurchaseTaxDefaults(settings)
+  const [ppnRate, setPpnRate] = useState<PpnRate>(taxDefaults.ppnRate)
+  const [priceMode, setPriceMode] = useState<PriceMode>(taxDefaults.priceMode)
+  const [supplierFakturNo, setSupplierFakturNo] = useState('')
 
   const [form, setForm] = useState<FormState>(() => ({
     bruto: p.weighing ? String(p.weighing.bruto) : '',
@@ -719,6 +733,7 @@ function WeighingModal({
     receiptName: receipt?.name ?? p.weighing?.receiptName,
   }
   const calc = calcWeighing(p.grain, input)
+  const taxSubtotal = calc.netto * effectiveUnitPrice(p.grain, p.price, input.moisture)
   const hasBruto = input.bruto > 0
   const variance = hasBruto ? calc.weighed - p.estimatedKg : 0
   const variancePct = p.estimatedKg > 0 ? (variance / p.estimatedKg) * 100 : 0
@@ -759,9 +774,19 @@ function WeighingModal({
     return Object.keys(next).length === 0
   }
 
+  function currentTax(): PurchaseReceiveTax {
+    const trimmed = supplierFakturNo.trim()
+    return {
+      ppnRate,
+      priceMode,
+      supplierFakturNo: trimmed || undefined,
+    }
+  }
+
   function runConfirm(forConfirm: boolean) {
     if (!validate(forConfirm)) return
     const proof = receiptToProof(purchaseReceipt) ?? p.purchaseProof
+    const tax = currentTax()
     if (
       forConfirm &&
       qcBlocked &&
@@ -772,11 +797,11 @@ function WeighingModal({
       !qc.overrideReason
     ) {
       setOverrideError(undefined)
-      setPendingConfirm({ input, proof })
+      setPendingConfirm({ input, proof, tax })
       setOverrideOpen(true)
       return
     }
-    const err = onConfirm(input, proof)
+    const err = onConfirm(input, proof, tax)
     if (err) return
   }
 
@@ -969,6 +994,25 @@ function WeighingModal({
         />
 
         {p.stage === 'ditimbang' ? (
+          <>
+            <TaxPostFields
+              subtotal={taxSubtotal}
+              rate={ppnRate}
+              priceMode={priceMode}
+              onRateChange={setPpnRate}
+              onModeChange={setPriceMode}
+            />
+            <TextField
+              id="pn-faktur"
+              label="No. faktur pemasok"
+              value={supplierFakturNo}
+              onChange={(e) => setSupplierFakturNo(e.target.value)}
+              placeholder="Opsional · nomor faktur pajak pemasok"
+            />
+          </>
+        ) : null}
+
+        {p.stage === 'ditimbang' ? (
           <ReceiptUpload
             value={purchaseReceipt}
             onChange={(v) => {
@@ -1014,10 +1058,10 @@ function WeighingModal({
         const pending = pendingConfirm
         setPendingConfirm(null)
         if (pending) {
-          onConfirm(pending.input, pending.proof)
+          onConfirm(pending.input, pending.proof, pending.tax)
         } else if (validate(true)) {
           const proof = receiptToProof(purchaseReceipt) ?? p.purchaseProof
-          onConfirm(input, proof)
+          onConfirm(input, proof, currentTax())
         }
       }}
     />

@@ -1,4 +1,6 @@
+import type { PpnRate, PriceMode, TaxSnapshotFields } from '@/features/keuangan/tax-data'
 import { lookupSupplier } from '@/features/master/master-storage'
+import { readAppSettings } from '@/features/settings/app-settings'
 import type { ApprovalStamp } from '@/features/workflow/approvals'
 import type { ReturnStage } from '@/features/workflow/doc-stages'
 import type { ProofAttachment } from '@/features/workflow/proof'
@@ -16,7 +18,7 @@ export type PurchaseReturn = {
   createdAt: string
   postedAt?: string
   rejectedReason?: string
-}
+} & TaxSnapshotFields
 
 export type LotQcGrade = 'A' | 'B' | 'C' | 'reject'
 
@@ -171,7 +173,7 @@ export type Purchase = {
   completedAt?: string
   voidedAt?: string
   voidReason?: string
-}
+} & TaxSnapshotFields
 
 export type WeighingInput = Pick<Weighing, 'bruto' | 'tara' | 'moisture' | 'impurity'> & {
   receiptName?: string
@@ -278,6 +280,41 @@ export function effectiveUnitPrice(
   )
 }
 
+export function purchaseUnitPrice(purchase: Purchase): number {
+  if (purchase.effectivePrice != null) return purchase.effectivePrice
+  if (purchase.weighing) {
+    return effectiveUnitPrice(
+      purchase.grain,
+      purchase.price,
+      purchase.weighing.moisture,
+    )
+  }
+  return purchase.price
+}
+
+export type PurchasePostTax = {
+  ppnRate: PpnRate
+  priceMode: PriceMode
+}
+
+export type PurchaseReceiveTax = PurchasePostTax & {
+  supplierFakturNo?: string
+}
+
+/** Tax settings first, then app finance.ppnRate, then 11% exclusive. */
+export function resolvePurchaseTaxDefaults(settings: {
+  defaultRate?: number
+  defaultPriceMode?: string
+}): PurchasePostTax {
+  const stored = settings.defaultRate
+  const appRate = readAppSettings().finance.ppnRate
+  const raw = stored === 0 || stored === 11 ? stored : appRate
+  const ppnRate: PpnRate = raw === 0 ? 0 : 11
+  const priceMode: PriceMode =
+    settings.defaultPriceMode === 'inclusive' ? 'inclusive' : 'exclusive'
+  return { ppnRate, priceMode }
+}
+
 export function nextLotId(items: Purchase[], date = new Date()): string {
   const head = `LOT-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}-`
   const max = items.reduce((m, p) => {
@@ -307,7 +344,8 @@ export function summarize(p: Purchase, today = todayIso()): PurchaseSummary {
       ? effectiveUnitPrice(p.grain, p.price, p.weighing!.moisture)
       : p.price)
   const received = isPurchaseReceivedForAp(p.stage)
-  const total = received && weighing ? weighing.netto * unitPrice : 0
+  const pretax = received && weighing ? weighing.netto * unitPrice : 0
+  const total = p.totalWithTax ?? pretax
   const paid = p.payments.reduce((sum, pay) => sum + pay.amount, 0)
   const outstanding = Math.max(0, total - paid)
 

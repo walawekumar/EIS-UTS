@@ -11,9 +11,12 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
-import type { AccountMapKey } from '@/features/keuangan/gl-data'
+import type { AccountMapKey, JournalLine } from '@/features/keuangan/gl-data'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { computePpn } from '@/features/keuangan/tax-compute'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import {
   addDays,
   calcWeighing,
@@ -25,6 +28,7 @@ import {
   nextPaymentId,
   nextPurchaseId,
   nextPurchaseReturnId,
+  purchaseUnitPrice,
   returnedQtyForPurchase,
   canHardDeletePurchase,
   canVoidPurchase,
@@ -36,6 +40,7 @@ import {
   type NewPayment,
   type NewPurchase,
   type Purchase,
+  type PurchaseReceiveTax,
   type PurchaseReturn,
   type PurchaseReturnLine,
   type WeighingInput,
@@ -132,18 +137,6 @@ function returnQtyError(
   return undefined
 }
 
-function purchaseUnitPrice(purchase: Purchase): number {
-  if (purchase.effectivePrice != null) return purchase.effectivePrice
-  if (purchase.weighing) {
-    return effectiveUnitPrice(
-      purchase.grain,
-      purchase.price,
-      purchase.weighing.moisture,
-    )
-  }
-  return purchase.price
-}
-
 /** YYYY-MM-DD from ISO or date-only string. */
 function journalDateFromIso(iso: string): string {
   return iso.slice(0, 10)
@@ -186,6 +179,98 @@ function postPembelianJournal(
   })
 }
 
+function postPembelianReceiveJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    dpp: number
+    ppn: number
+    total: number
+  },
+): string | undefined {
+  const { date, memo, sourceKey, dpp, ppn, total } = input
+  if (!Number.isFinite(total) || total <= 0) return undefined
+  const lines: JournalLine[] = [
+    {
+      accountId: mapAccount('inventoryGabah'),
+      debit: dpp,
+      credit: 0,
+      memo,
+    },
+  ]
+  if (ppn > 0) {
+    lines.push({
+      accountId: mapAccount('ppnIn'),
+      debit: ppn,
+      credit: 0,
+      memo,
+    })
+  }
+  lines.push({
+    accountId: mapAccount('ap'),
+    debit: 0,
+    credit: total,
+    memo,
+  })
+  return postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines,
+  })
+}
+
+function postPembelianReturnJournal(
+  postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
+  mapAccount: ReturnType<typeof useFinanceStore>['mapAccount'],
+  input: {
+    date: string
+    memo: string
+    sourceKey: string
+    dpp: number
+    ppn: number
+    total: number
+  },
+): string | undefined {
+  const { date, memo, sourceKey, dpp, ppn, total } = input
+  if (!Number.isFinite(total) || total <= 0) return undefined
+  const lines: JournalLine[] = [
+    {
+      accountId: mapAccount('ap'),
+      debit: total,
+      credit: 0,
+      memo,
+    },
+    {
+      accountId: mapAccount('inventoryGabah'),
+      debit: 0,
+      credit: dpp,
+      memo,
+    },
+  ]
+  if (ppn > 0) {
+    lines.push({
+      accountId: mapAccount('ppnIn'),
+      debit: 0,
+      credit: ppn,
+      memo,
+    })
+  }
+  return postJournalEntry({
+    date,
+    memo,
+    sourceKey,
+    sourceType: 'auto',
+    manual: false,
+    lines,
+  })
+}
+
 type PembelianContextValue = {
   purchases: Purchase[]
   createPurchase: (data: NewPurchase) => string
@@ -199,7 +284,8 @@ type PembelianContextValue = {
   confirmWeighing: (
     id: string,
     input: WeighingInput,
-    purchaseProof?: Purchase['purchaseProof'],
+    purchaseProof: Purchase['purchaseProof'] | undefined,
+    tax: PurchaseReceiveTax,
   ) => DualTrackResult
   reopenPurchaseDraft: (id: string) => string | undefined
   addPayment: (id: string, payment: NewPayment) => DualTrackResult
@@ -216,7 +302,10 @@ type PembelianContextValue = {
   submitPurchaseReturn: (id: string) => string | undefined
   approvePurchaseReturn: (id: string) => string | undefined
   rejectPurchaseReturn: (id: string, reason: string) => string | undefined
-  postPurchaseReturn: (id: string) => DualTrackResult
+  postPurchaseReturn: (
+    id: string,
+    tax: { ppnRate: PpnRate; priceMode: PriceMode },
+  ) => DualTrackResult
   upsertLotQc: (input: LotQcInput) => string | undefined
   overrideLotQcReceive: (lotId: string, reason: string) => string | undefined
 }
@@ -234,6 +323,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     reverseJournalEntry,
     mapAccount,
   } = useFinanceStore()
+  const { recordTaxDoc, voidTaxForSource } = useTaxStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
   const initialSnapshot = useMemo(() => pembelianRepository.load(), [])
@@ -341,6 +431,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       }
       removeLinkedPayable(id)
       reverseJournalEntry({ sourceKey: `po:${id}:receive` })
+      voidTaxForSource('purchase', id)
       for (const payment of current.payments) {
         reverseJournalEntry({ sourceKey: `po:${id}:pay:${payment.id}` })
       }
@@ -368,6 +459,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       addMovement,
       removeLinkedPayable,
       reverseJournalEntry,
+      voidTaxForSource,
       appendAudit,
       user?.role,
     ],
@@ -544,7 +636,8 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     (
       id: string,
       input: WeighingInput,
-      purchaseProof?: Purchase['purchaseProof'],
+      purchaseProof: Purchase['purchaseProof'] | undefined,
+      tax: PurchaseReceiveTax,
     ): DualTrackResult => {
       if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
         return {
@@ -596,6 +689,14 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         current.price,
         weighing.moisture,
       )
+      const calc = calcWeighing(current.grain, weighing)
+      const subtotal = calc.netto * unitPrice
+      const taxCalc = computePpn({
+        subtotal,
+        rate: tax.ppnRate,
+        priceMode: tax.priceMode,
+      })
+      const supplierFakturNo = tax.supplierFakturNo?.trim() || undefined
       const next: Purchase = {
         ...current,
         stage: 'menunggu_selesai',
@@ -604,10 +705,15 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         effectivePrice: unitPrice,
         lotId,
         purchaseProof: proof,
+        ppnRate: tax.ppnRate,
+        priceMode: tax.priceMode,
+        dpp: taxCalc.dpp,
+        ppn: taxCalc.ppn,
+        totalWithTax: taxCalc.total,
       }
       const summary = summarize(next)
       const supplier = getSupplier(next.supplierId)
-      const calc = calcWeighing(next.grain, weighing)
+      const party = supplier?.name ?? next.supplierId
       const map = GRAIN_SKU[next.grain] ?? GRAIN_SKU.GKP
       const location = readAppSettings().stock.defaultLocation
 
@@ -615,21 +721,38 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
 
       upsertPayableFromPurchase({
         sourceId: next.id,
-        supplier: supplier?.name ?? next.supplierId,
+        supplier: party,
         invoice: next.id,
         dueDateIso: dueDate,
-        amount: summary.total,
+        amount: taxCalc.total,
         paid: summary.paid,
       })
 
-      const journalError = postPembelianJournal(postJournalEntry, mapAccount, {
+      recordTaxDoc({
+        sourceType: 'purchase',
+        sourceId: next.id,
         date: today,
-        memo: `Penerimaan gabah ${next.id}`,
-        sourceKey: `po:${next.id}:receive`,
-        amount: summary.total,
-        debitKey: 'inventoryGabah',
-        creditKey: 'ap',
+        ppnRate: tax.ppnRate,
+        priceMode: tax.priceMode,
+        dpp: taxCalc.dpp,
+        ppn: taxCalc.ppn,
+        total: taxCalc.total,
+        partyName: party,
+        supplierFakturNo,
       })
+
+      const journalError = postPembelianReceiveJournal(
+        postJournalEntry,
+        mapAccount,
+        {
+          date: today,
+          memo: `Penerimaan gabah ${next.id}`,
+          sourceKey: `po:${next.id}:receive`,
+          dpp: taxCalc.dpp,
+          ppn: taxCalc.ppn,
+          total: taxCalc.total,
+        },
+      )
 
       if (calc.netto > 0) {
         addMovement({
@@ -659,6 +782,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       postJournalEntry,
       mapAccount,
       appendAudit,
+      recordTaxDoc,
       user?.role,
     ],
   )
@@ -900,7 +1024,10 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   )
 
   const postPurchaseReturn = useCallback(
-    (id: string): DualTrackResult => {
+    (
+      id: string,
+      tax: { ppnRate: PpnRate; priceMode: PriceMode },
+    ): DualTrackResult => {
       if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
         return {
           ok: false,
@@ -925,12 +1052,20 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (qtyError) return { ok: false, error: qtyError }
 
       const unitPrice = purchaseUnitPrice(purchase)
-      const credit = current.lines.reduce(
+      const subtotal = current.lines.reduce(
         (sum, line) => sum + line.qty * unitPrice,
         0,
       )
+      const taxCalc = computePpn({
+        subtotal,
+        rate: tax.ppnRate,
+        priceMode: tax.priceMode,
+      })
       const location = readAppSettings().stock.defaultLocation
+      const supplier = getSupplier(purchase.supplierId)
+      const party = supplier?.name ?? purchase.supplierId
       const postedAt = new Date().toISOString()
+      const taxDocDate = journalDateFromIso(postedAt)
 
       for (const line of current.lines) {
         addMovement({
@@ -944,20 +1079,46 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
           note: `Retur pembelian ${current.id} · ${purchase.id}`,
         })
       }
-      creditPayable(purchase.id, credit)
-
-      const journalError = postPembelianJournal(postJournalEntry, mapAccount, {
-        date: journalDateFromIso(postedAt),
-        memo: `Retur pembelian ${current.id} · ${purchase.id}`,
-        sourceKey: `pr:${current.id}:post`,
-        amount: credit,
-        debitKey: 'ap',
-        creditKey: 'inventoryGabah',
+      creditPayable(purchase.id, taxCalc.total)
+      recordTaxDoc({
+        sourceType: 'purchaseReturn',
+        sourceId: current.id,
+        date: taxDocDate,
+        ppnRate: tax.ppnRate,
+        priceMode: tax.priceMode,
+        dpp: taxCalc.dpp,
+        ppn: taxCalc.ppn,
+        total: taxCalc.total,
+        partyName: party,
       })
+
+      const journalError = postPembelianReturnJournal(
+        postJournalEntry,
+        mapAccount,
+        {
+          date: taxDocDate,
+          memo: `Retur pembelian ${current.id} · ${purchase.id}`,
+          sourceKey: `pr:${current.id}:post`,
+          dpp: taxCalc.dpp,
+          ppn: taxCalc.ppn,
+          total: taxCalc.total,
+        },
+      )
 
       setReturns((list) =>
         list.map((r) =>
-          r.id === id ? { ...r, stage: 'posted', postedAt } : r,
+          r.id === id
+            ? {
+                ...r,
+                stage: 'posted',
+                postedAt,
+                ppnRate: tax.ppnRate,
+                priceMode: tax.priceMode,
+                dpp: taxCalc.dpp,
+                ppn: taxCalc.ppn,
+                totalWithTax: taxCalc.total,
+              }
+            : r,
         ),
       )
       appendAudit({
@@ -976,6 +1137,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       postJournalEntry,
       mapAccount,
       appendAudit,
+      recordTaxDoc,
       user?.role,
     ],
   )
