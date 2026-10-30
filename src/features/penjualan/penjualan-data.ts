@@ -1,7 +1,9 @@
+import type { PpnRate, PriceMode, TaxSnapshotFields } from '@/features/keuangan/tax-data'
 import {
   lookupCustomer,
   lookupProductBySku,
 } from '@/features/master/master-storage'
+import { readAppSettings } from '@/features/settings/app-settings'
 import type { ApprovalStamp } from '@/features/workflow/approvals'
 import type { ReturnStage } from '@/features/workflow/doc-stages'
 
@@ -17,7 +19,7 @@ export type SaleReturn = {
   createdAt: string
   postedAt?: string
   rejectedReason?: string
-}
+} & TaxSnapshotFields
 
 export function returnedQtyForOrder(
   returns: SaleReturn[],
@@ -99,7 +101,7 @@ export type SaleOrder = {
   voidReason?: string
   /** Lot costing giling — diisi saat kirim. */
   lotId?: string
-}
+} & TaxSnapshotFields
 
 export type NewSaleOrder = Omit<SaleOrder, 'id' | 'stage' | 'payments' | 'delivery' | 'dueDate'>
 
@@ -112,6 +114,28 @@ export type DeliveryInput = {
   settlement: SettlementMode
   payMethod?: PaymentMethod
   payReceiptName?: string
+  ppnRate: PpnRate
+  priceMode: PriceMode
+}
+
+/** Tarif dan mode harga yang dipakai saat posting penjualan / retur. */
+export type SaleTaxChoice = {
+  ppnRate: PpnRate
+  priceMode: PriceMode
+}
+
+/** Tax settings first, then app finance.ppnRate, then 11% exclusive. */
+export function resolveSaleTaxDefaults(settings: {
+  defaultRate?: number
+  defaultPriceMode?: string
+}): SaleTaxChoice {
+  const stored = settings.defaultRate
+  const appRate = readAppSettings().finance.ppnRate
+  const raw = stored === 0 || stored === 11 ? stored : appRate
+  const ppnRate: PpnRate = raw === 0 ? 0 : 11
+  const priceMode: PriceMode =
+    settings.defaultPriceMode === 'inclusive' ? 'inclusive' : 'exclusive'
+  return { ppnRate, priceMode }
 }
 
 export type OrderSummary = {
@@ -197,7 +221,8 @@ export function summarize(order: SaleOrder, today = todayIso()): OrderSummary {
   if (order.voidedAt) {
     return { total: 0, paid: 0, outstanding: 0, payment: null }
   }
-  const total = Math.round(order.qty * order.price)
+  const subtotal = Math.round(order.qty * order.price)
+  const total = order.totalWithTax ?? subtotal
   if (order.stage !== 'dikirim') {
     return { total, paid: 0, outstanding: 0, payment: null }
   }

@@ -21,6 +21,7 @@ import {
   type SortState,
 } from '@/components/keuangan/FinanceTable'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
@@ -33,6 +34,8 @@ import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import type { PenjualanActionResult } from '@/features/penjualan/PenjualanContext'
 import { useProduksi } from '@/features/produksi/ProduksiContext'
 import {
@@ -44,6 +47,7 @@ import {
   formatRupiah,
   formatRupiahShort,
   getCustomer,
+  resolveSaleTaxDefaults,
   summarize,
   type DeliveryInput,
   type PaymentMethod,
@@ -99,6 +103,7 @@ export function PengirimanView({
   onGoTo,
 }: PengirimanViewProps) {
   const PAGE_SIZE = usePageSize()
+  const { settings } = useTaxStore()
   const { lotCosts } = useProduksi()
   const lotOptions = useMemo(
     () =>
@@ -144,6 +149,12 @@ export function PengirimanView({
   const [settlementError, setSettlementError] = useState<string>()
   const [lotId, setLotId] = useState('')
   const [lotError, setLotError] = useState<string>()
+  const [ppnRate, setPpnRate] = useState<PpnRate>(
+    () => resolveSaleTaxDefaults(settings).ppnRate,
+  )
+  const [priceMode, setPriceMode] = useState<PriceMode>(
+    () => resolveSaleTaxDefaults(settings).priceMode,
+  )
 
   const stats: MetricCardData[] = [
     {
@@ -240,6 +251,9 @@ export function PengirimanView({
     setSettlementError(undefined)
     setLotId('')
     setLotError(undefined)
+    const tax = resolveSaleTaxDefaults(settings)
+    setPpnRate(tax.ppnRate)
+    setPriceMode(tax.priceMode)
     onSelect(o.id)
   }
 
@@ -280,6 +294,8 @@ export function PengirimanView({
       settlement,
       payMethod: settlement === 'lunas' ? payMethod : undefined,
       payReceiptName: settlement === 'lunas' ? payReceipt!.name : undefined,
+      ppnRate,
+      priceMode,
     }
     const result = onShip(work.id, input)
     if (!result.ok) {
@@ -515,6 +531,14 @@ export function PengirimanView({
                 { label: 'Jumlah', value: formatQty(work.qty, work.unit) },
                 { label: 'Nilai', value: formatRupiah(summarize(work).total) },
               ]}
+            />
+
+            <TaxPostFields
+              subtotal={work.qty * work.price}
+              rate={ppnRate}
+              priceMode={priceMode}
+              onRateChange={setPpnRate}
+              onModeChange={setPriceMode}
             />
 
             <Select

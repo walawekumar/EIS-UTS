@@ -15,18 +15,22 @@ import {
   toggleSort,
   type SortState,
 } from '@/components/keuangan/FinanceTable'
+import { FinanceModal, ModalActions } from '@/components/keuangan/FinanceModal'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
   DetailDrawer,
   DrawerFacts,
   DrawerSection,
 } from '@/components/ops/DetailDrawer'
-import { ConfirmDialog, PromptDialog } from '@/components/ui/ConfirmDialog'
+import { PromptDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import { usePenjualan } from '@/features/penjualan/PenjualanContext'
 import {
   formatDate,
@@ -34,6 +38,7 @@ import {
   getCustomer,
   nextSaleReturnId,
   parseNumber,
+  resolveSaleTaxDefaults,
   returnedQtyForOrder,
   type SaleOrder,
   type SaleReturn,
@@ -87,6 +92,7 @@ function dateKey(iso: string): string {
 export function ReturPage() {
   const PAGE_SIZE = usePageSize()
   const { user } = useAuth()
+  const { settings } = useTaxStore()
   const {
     orders,
     returns,
@@ -112,6 +118,12 @@ export function ReturPage() {
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [postOpen, setPostOpen] = useState(false)
+  const [ppnRate, setPpnRate] = useState<PpnRate>(
+    () => resolveSaleTaxDefaults(settings).ppnRate,
+  )
+  const [priceMode, setPriceMode] = useState<PriceMode>(
+    () => resolveSaleTaxDefaults(settings).priceMode,
+  )
   const [rejectOpen, setRejectOpen] = useState(false)
   const pendingSubmitId = useRef<string | null>(null)
 
@@ -202,6 +214,27 @@ export function ReturPage() {
     setSort((prev) => toggleSort(prev, key))
     setPage(1)
   }
+
+  function openPost(row: SaleReturn) {
+    const tax = resolveSaleTaxDefaults(settings)
+    setPpnRate(row.ppnRate === 0 || row.ppnRate === 11 ? row.ppnRate : tax.ppnRate)
+    setPriceMode(
+      row.priceMode === 'inclusive' || row.priceMode === 'exclusive'
+        ? row.priceMode
+        : tax.priceMode,
+    )
+    setPostOpen(true)
+  }
+
+  const postSubtotal = useMemo(() => {
+    if (!active) return 0
+    const order = orders.find((o) => o.id === active.orderId)
+    if (!order) return 0
+    return active.lines.reduce((sum, line) => {
+      if (line.sku !== order.sku) return sum
+      return sum + line.qty * order.price
+    }, 0)
+  }, [active, orders])
 
   function closeDrawer() {
     setCreating(false)
@@ -346,7 +379,22 @@ export function ReturPage() {
           onClose={closeDrawer}
           onSave={(input, andSubmit) => {
             const predicted = input.id ?? nextSaleReturnId(returns)
-            const err = createSaleReturn(input)
+            const existing = input.id
+              ? returns.find((row) => row.id === input.id)
+              : undefined
+            const tax = resolveSaleTaxDefaults(settings)
+            const err = createSaleReturn({
+              ...input,
+              ppnRate:
+                existing?.ppnRate === 0 || existing?.ppnRate === 11
+                  ? existing.ppnRate
+                  : tax.ppnRate,
+              priceMode:
+                existing?.priceMode === 'inclusive' ||
+                existing?.priceMode === 'exclusive'
+                  ? existing.priceMode
+                  : tax.priceMode,
+            })
             if (err) return err
             setCreating(false)
             setDrawerId(predicted)
@@ -359,35 +407,52 @@ export function ReturPage() {
             setToast(err ?? `${id} disetujui`)
           }}
           onAskReject={() => setRejectOpen(true)}
-          onAskPost={() => setPostOpen(true)}
+          onAskPost={() => {
+            if (active) openPost(active)
+          }}
         />
       ) : null}
 
-      <ConfirmDialog
-        open={postOpen && active != null}
-        title="Posting retur"
-        description={
-          active
-            ? `Retur ${active.id} menambah stok dan menyesuaikan piutang order ${active.orderId}.`
-            : undefined
-        }
-        confirmLabel="Posting"
-        onClose={() => setPostOpen(false)}
-        onConfirm={() => {
-          if (!active) return
-          const result = postSaleReturn(active.id)
-          setPostOpen(false)
-          if (!result.ok) {
-            setToast(result.error)
-            return
+      {postOpen && active ? (
+        <FinanceModal
+          title="Posting retur"
+          subtitle="Konfirmasi"
+          onClose={() => setPostOpen(false)}
+          footer={
+            <ModalActions
+              onCancel={() => setPostOpen(false)}
+              onConfirm={() => {
+                const result = postSaleReturn(active.id, { ppnRate, priceMode })
+                setPostOpen(false)
+                if (!result.ok) {
+                  setToast(result.error)
+                  return
+                }
+                if (result.journalError) {
+                  setToast(`Diposting, tetapi jurnal gagal: ${result.journalError}`)
+                } else {
+                  setToast(`${active.id} diposting`)
+                }
+              }}
+              confirmLabel="Posting"
+            />
           }
-          if (result.journalError) {
-            setToast(`Diposting, tetapi jurnal gagal: ${result.journalError}`)
-          } else {
-            setToast(`${active.id} diposting`)
-          }
-        }}
-      />
+        >
+          <div className="space-y-4">
+            <p className="text-[13px] leading-relaxed text-muted">
+              Retur {active.id} menambah stok dan menyesuaikan piutang order{' '}
+              {active.orderId}.
+            </p>
+            <TaxPostFields
+              subtotal={postSubtotal}
+              rate={ppnRate}
+              priceMode={priceMode}
+              onRateChange={setPpnRate}
+              onModeChange={setPriceMode}
+            />
+          </div>
+        </FinanceModal>
+      ) : null}
 
       <PromptDialog
         open={rejectOpen && active != null}

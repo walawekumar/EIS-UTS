@@ -10,11 +10,13 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
-import type { AccountMapKey } from '@/features/keuangan/gl-data'
-import type { JournalLine } from '@/features/keuangan/gl-data'
+import type { AccountMapKey, JournalLine } from '@/features/keuangan/gl-data'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { joinJournalErrors } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { computePpn } from '@/features/keuangan/tax-compute'
+import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
+import { useTaxStore } from '@/features/keuangan/tax-store'
 import { lookupCustomer } from '@/features/master/master-storage'
 import { cogsAmountForLot } from '@/features/penjualan/cogs-from-lot'
 import { useProduksi } from '@/features/produksi/ProduksiContext'
@@ -99,26 +101,36 @@ function postPenjualanShipJournal(
     date: string
     memo: string
     sourceKey: string
-    revenue: number
+    dpp: number
+    ppn: number
+    total: number
     cogsAmount: number
   },
 ): string | undefined {
-  const { date, memo, sourceKey, revenue, cogsAmount } = input
-  if (!Number.isFinite(revenue) || revenue <= 0) return undefined
+  const { date, memo, sourceKey, dpp, ppn, total, cogsAmount } = input
+  if (!Number.isFinite(total) || total <= 0) return undefined
   const lines: JournalLine[] = [
     {
       accountId: mapAccount('ar'),
-      debit: revenue,
+      debit: total,
       credit: 0,
       memo,
     },
     {
       accountId: mapAccount('sales'),
       debit: 0,
-      credit: revenue,
+      credit: dpp,
       memo,
     },
   ]
+  if (ppn > 0) {
+    lines.push({
+      accountId: mapAccount('ppnOut'),
+      debit: 0,
+      credit: ppn,
+      memo,
+    })
+  }
   if (Number.isFinite(cogsAmount) && cogsAmount > 0) {
     lines.push(
       {
@@ -152,26 +164,36 @@ function postPenjualanReturnJournal(
     date: string
     memo: string
     sourceKey: string
-    credit: number
+    dpp: number
+    ppn: number
+    total: number
     cogsAmount: number
   },
 ): string | undefined {
-  const { date, memo, sourceKey, credit, cogsAmount } = input
-  if (!Number.isFinite(credit) || credit <= 0) return undefined
+  const { date, memo, sourceKey, dpp, ppn, total, cogsAmount } = input
+  if (!Number.isFinite(total) || total <= 0) return undefined
   const lines: JournalLine[] = [
     {
       accountId: mapAccount('salesReturn'),
-      debit: credit,
+      debit: dpp,
       credit: 0,
       memo,
     },
-    {
-      accountId: mapAccount('ar'),
-      debit: 0,
-      credit: credit,
-      memo,
-    },
   ]
+  if (ppn > 0) {
+    lines.push({
+      accountId: mapAccount('ppnOut'),
+      debit: ppn,
+      credit: 0,
+      memo,
+    })
+  }
+  lines.push({
+    accountId: mapAccount('ar'),
+    debit: 0,
+    credit: total,
+    memo,
+  })
   if (Number.isFinite(cogsAmount) && cogsAmount > 0) {
     lines.push(
       {
@@ -204,6 +226,8 @@ export type SaleReturnInput = {
   orderId: string
   lines: SaleReturnLine[]
   reason: string
+  ppnRate: PpnRate
+  priceMode: PriceMode
 }
 
 function normalizeReturnLines(lines: SaleReturnLine[]): SaleReturnLine[] {
@@ -265,7 +289,10 @@ type PenjualanContextValue = {
   submitSaleReturn: (id: string) => string | undefined
   approveSaleReturn: (id: string) => string | undefined
   rejectSaleReturn: (id: string, reason: string) => string | undefined
-  postSaleReturn: (id: string) => PenjualanActionResult
+  postSaleReturn: (
+    id: string,
+    tax: { ppnRate: PpnRate; priceMode: PriceMode },
+  ) => PenjualanActionResult
 }
 
 const PenjualanContext = createContext<PenjualanContextValue | null>(null)
@@ -283,6 +310,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
     mapAccount,
     receivables,
   } = useFinanceStore()
+  const { recordTaxDoc, recordSaleInvoice, voidTaxForSource } = useTaxStore()
   const { addMovement } = usePersediaanStore()
   const { appendAudit } = useAuditStore()
   const { lotCosts } = useProduksi()
@@ -358,6 +386,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       removeLinkedReceivable(id)
       reverseJournalEntry({ sourceKey: `so:${id}:ship` })
       reverseJournalEntry({ sourceKey: `so:${id}:cod` })
+      voidTaxForSource('sale', id)
       for (const payment of current.payments) {
         reverseJournalEntry({ sourceKey: `so:${id}:pay:${payment.id}` })
       }
@@ -380,7 +409,14 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         before: current,
       })
     },
-    [items, addMovement, removeLinkedReceivable, reverseJournalEntry, appendAudit],
+    [
+      items,
+      addMovement,
+      removeLinkedReceivable,
+      reverseJournalEntry,
+      voidTaxForSource,
+      appendAudit,
+    ],
   )
 
   const shipOrder = useCallback(
@@ -396,7 +432,13 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       const cogs = cogsAmountForLot(lotCosts, input.lotId, current.qty)
       if (!cogs.ok) return { ok: false, error: cogs.error }
 
-      const total = current.qty * current.price
+      const subtotal = current.qty * current.price
+      const calc = computePpn({
+        subtotal,
+        rate: input.ppnRate,
+        priceMode: input.priceMode,
+      })
+      const total = calc.total
       const isPaid = input.settlement === 'lunas'
 
       if (!isPaid) {
@@ -448,6 +490,11 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         },
         dueDate,
         payments,
+        ppnRate: input.ppnRate,
+        priceMode: input.priceMode,
+        dpp: calc.dpp,
+        ppn: calc.ppn,
+        totalWithTax: calc.total,
       }
 
       const customer = getCustomer(next.customerId)
@@ -464,11 +511,26 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         paid: isPaid ? total : 0,
       })
 
+      const taxDoc = recordTaxDoc({
+        sourceType: 'sale',
+        sourceId: next.id,
+        date: today,
+        ppnRate: input.ppnRate,
+        priceMode: input.priceMode,
+        dpp: calc.dpp,
+        ppn: calc.ppn,
+        total: calc.total,
+        partyName: party,
+      })
+      recordSaleInvoice(taxDoc, next.id, party)
+
       const shipJeErr = postPenjualanShipJournal(postJournalEntry, mapAccount, {
         date: today,
         memo: `Pengiriman penjualan ${next.id} · ${party}`,
         sourceKey: `so:${next.id}:ship`,
-        revenue: total,
+        dpp: calc.dpp,
+        ppn: calc.ppn,
+        total: calc.total,
         cogsAmount: cogs.amount,
       })
 
@@ -521,6 +583,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       mapAccount,
       receivables,
       appendAudit,
+      recordTaxDoc,
+      recordSaleInvoice,
     ],
   )
 
@@ -594,6 +658,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
                   orderId: order.id,
                   lines,
                   reason,
+                  ppnRate: input.ppnRate,
+                  priceMode: input.priceMode,
                   stage: 'draft',
                   rejectedReason: undefined,
                   approvals: undefined,
@@ -616,6 +682,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         orderId: order.id,
         lines,
         reason,
+        ppnRate: input.ppnRate,
+        priceMode: input.priceMode,
         stage: 'draft',
         createdAt: new Date().toISOString(),
       }
@@ -733,7 +801,10 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const postSaleReturn = useCallback(
-    (id: string): PenjualanActionResult => {
+    (
+      id: string,
+      tax: { ppnRate: PpnRate; priceMode: PriceMode },
+    ): PenjualanActionResult => {
       if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
         return {
           ok: false,
@@ -768,11 +839,15 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       const cogs = cogsAmountForLot(lotCosts, order.lotId, retQty)
       if (!cogs.ok) return { ok: false, error: cogs.error }
 
-      const unitPrice = order.price
-      const credit = current.lines.reduce(
-        (sum, line) => sum + line.qty * unitPrice,
-        0,
-      )
+      const subtotal = current.lines.reduce((sum, line) => {
+        if (line.sku !== order.sku) return sum
+        return sum + line.qty * order.price
+      }, 0)
+      const calc = computePpn({
+        subtotal,
+        rate: tax.ppnRate,
+        priceMode: tax.priceMode,
+      })
       const location = readAppSettings().stock.defaultLocation
       const customer = getCustomer(order.customerId)
       const party = customer?.name ?? order.customerId
@@ -790,17 +865,42 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
           note: `Retur penjualan ${current.id} · ${order.id}`,
         })
       }
-      creditReceivable(order.id, credit)
+      creditReceivable(order.id, calc.total)
+      const taxDocDate = journalDateFromIso(postedAt)
+      recordTaxDoc({
+        sourceType: 'saleReturn',
+        sourceId: current.id,
+        date: taxDocDate,
+        ppnRate: tax.ppnRate,
+        priceMode: tax.priceMode,
+        dpp: calc.dpp,
+        ppn: calc.ppn,
+        total: calc.total,
+        partyName: party,
+      })
       const journalError = postPenjualanReturnJournal(postJournalEntry, mapAccount, {
-        date: journalDateFromIso(postedAt),
+        date: taxDocDate,
         memo: `Retur penjualan ${current.id} · ${order.id}`,
         sourceKey: `sr:${current.id}:post`,
-        credit,
+        dpp: calc.dpp,
+        ppn: calc.ppn,
+        total: calc.total,
         cogsAmount: cogs.amount,
       })
       setReturns((list) =>
         list.map((r) =>
-          r.id === id ? { ...r, stage: 'posted', postedAt } : r,
+          r.id === id
+            ? {
+                ...r,
+                stage: 'posted',
+                postedAt,
+                ppnRate: tax.ppnRate,
+                priceMode: tax.priceMode,
+                dpp: calc.dpp,
+                ppn: calc.ppn,
+                totalWithTax: calc.total,
+              }
+            : r,
         ),
       )
       appendAudit({
@@ -820,6 +920,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       postJournalEntry,
       mapAccount,
       appendAudit,
+      recordTaxDoc,
       user?.role,
     ],
   )
