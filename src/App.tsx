@@ -4,6 +4,7 @@ import { AppRouter } from '@/app/router'
 import { AuditProvider } from '@/features/audit/audit-store'
 import { AuthProvider } from '@/features/auth/AuthContext'
 import { FinanceProvider } from '@/features/keuangan/finance-store'
+import { BankProvider } from '@/features/keuangan/bank-store'
 import { PeriodProvider } from '@/features/keuangan/period-store'
 import { ExpenseTaxBridge, TaxProvider } from '@/features/keuangan/tax-store'
 import { MasterProvider } from '@/features/master/master-store'
@@ -23,22 +24,24 @@ export default function App() {
         <MasterProvider>
           <FinanceProvider>
             <PeriodProvider>
-              <TaxProvider>
-                <ExpenseTaxBridge />
-                <PayrollProvider>
-                  <PersediaanProvider>
-                    <ProduksiProvider>
-                      <PembelianProvider>
-                        <PenjualanProvider>
-                          <BrowserRouter>
-                            <AppRouter />
-                          </BrowserRouter>
-                        </PenjualanProvider>
-                      </PembelianProvider>
-                    </ProduksiProvider>
-                  </PersediaanProvider>
-                </PayrollProvider>
-              </TaxProvider>
+              <BankProvider>
+                <TaxProvider>
+                  <ExpenseTaxBridge />
+                  <PayrollProvider>
+                    <PersediaanProvider>
+                      <ProduksiProvider>
+                        <PembelianProvider>
+                          <PenjualanProvider>
+                            <BrowserRouter>
+                              <AppRouter />
+                            </BrowserRouter>
+                          </PenjualanProvider>
+                        </PembelianProvider>
+                      </ProduksiProvider>
+                    </PersediaanProvider>
+                  </PayrollProvider>
+                </TaxProvider>
+              </BankProvider>
             </PeriodProvider>
           </FinanceProvider>
         </MasterProvider>
