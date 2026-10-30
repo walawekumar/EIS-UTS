@@ -15,6 +15,8 @@ Sumber kebenaran tipe: `src/features/*/ *-data.ts`. Dokumen ini merangkum entita
 | Batch (giling) / PackRun / LotCost | Produksi | `egabah.produksi.v1` |
 | Cash / Payable / Receivable / Expense | Keuangan | `egabah.keuangan.v1` |
 | TaxDoc / TaxInvoice / TaxSettings | Keuangan (PPN) | `egabah.tax.v1` |
+| PeriodLock / UnlockRequest | Keuangan (periode) | `egabah.period.v1` |
+| BankSession / BankLine | Keuangan (rekon bank) | `egabah.bank.v1` |
 | AuditLog | Sistem | `egabah.audit.v1` |
 
 ## Lokasi (multi-gudang MVP)
@@ -213,11 +215,40 @@ Layar **Kas, Utang, Piutang, Biaya, Payroll** tetap sumber kerja harian (`upsert
 - **Laba rugi:** pendapatan − beban; `salesReturn` tipe `revenue` kontra (mengurangi pendapatan).
 - **Neraca:** aset vs utang + ekuitas + laba rugi berjalan.
 
-### Di luar scope 2a / belum (2c)
+### Di luar scope 2a / belum
 
-Rekonsiliasi bank, tutup buku enforced, integrasi **API DJP** e-Faktur sungguhan, dan **backfill** jurnal untuk transaksi sebelum go-live GL. Gelombang 1 (retur, QC, pack, costing) sudah ada di ops; jurnal auto hanya **forward** dari aktivasi 2a.
+Integrasi **API DJP** e-Faktur sungguhan dan **backfill** jurnal untuk transaksi sebelum go-live GL. Gelombang 1 (retur, QC, pack, costing) sudah ada di ops; jurnal auto hanya **forward** dari aktivasi 2a.
 
 **Gelombang 2b (PPN + e-Faktur mock)** sudah diimplementasi — lihat bagian berikut. Tidak ada backfill `TaxDoc` / jurnal PPN untuk transaksi lama.
+
+## Tutup periode & rekon bank (gelombang 2c)
+
+**Storage:** `egabah.period.v1` (`period-data.ts`, `period-storage.ts`, `PeriodProvider`) dan `egabah.bank.v1` (`bank-data.ts`, `bank-storage.ts`, `BankProvider`).
+
+### Kunci periode
+
+- `PeriodLock`: grain **bulan** (`YYYY-MM`) atau **rentang** kustom; overlap kunci aktif ditolak.
+- Post/void dengan tanggal dokumen di rentang kunci aktif → **`assertPeriodOpen(isoDate)`** mengembalikan pesan error (dipanggil **sebelum** mutasi, tanpa half-post).
+- **Unlock:** `UnlockRequest` + alasan → `requiredRoles` dihitung snapshot dari transaksi di rentang (penjualan, pembelian, produksi, gudang/mutasi, keuangan) → approve **hanya** role yang terdampak → **admin final** → `active=false` + `unlockHistory`. Reject menjaga kunci aktif.
+
+**Call-site gate (contoh):** kirim/void SO, terima/void PO, retur, kas in/out, biaya posted/void, payroll post/void, jurnal manual/reverse/retry, batch start/complete/void, pack post/void, koreksi stok, **penyesuaian rekon bank** (`postAdjustment`).
+
+UI: `/app/keuangan/periode` (nav juga untuk role terdampak unlock).
+
+### Rekon bank
+
+- Satu rekening kas = `AccountMap.cash`; CSV → `BankLine` (tanggal ISO, jumlah bertanda).
+- **Auto-match:** nominal kas **exact** (signed) + tanggal kas (parse `formatDateId` via `parseCashDateToIso`) dalam **±2 hari** → `suggestedCashEntryId`; terima/tolak manual.
+- Match manual / abaikan baris.
+- **Penyesuaian GL-only** (tanpa `CashEntry` baru): JE `sourceKey` `bank:{sessionId}:adj:{lineId}` — Dr/Cr `cash` vs `bankSuspense`; gate periode pada `line.date`. Gagal JE → error ke UI (dual-track toast).
+
+Seed COA + map: **`bankSuspense`** (`acc-bank-suspense`, 1-1600).
+
+UI: `/app/keuangan/rekon-bank` (`admin` \| `keuangan`).
+
+### Out of scope 2c
+
+Feed bank nyata (OFX/API), multi-rekening, kunci otomatis akhir bulan, unlock tanpa admin final, rekon langsung AP/AR, backfill kunci/rekon historis.
 
 ## PPN & e-Faktur (gelombang 2b)
 
