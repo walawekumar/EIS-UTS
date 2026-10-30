@@ -1,14 +1,6 @@
-import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { Outlet } from 'react-router-dom'
 
+/** Induk modul Produksi — state dari ProduksiProvider di App. */
 export function ProduksiPage() {
-  return (
-    <ModulePlaceholder
-      moduleName="Produksi"
-      notes={[
-        'Batch produksi multi-output',
-        'Input gabah → beras, menir, dedak, sekam',
-        'Hitung rendemen & selisih massa',
-      ]}
-    />
-  )
+  return <Outlet />
 }

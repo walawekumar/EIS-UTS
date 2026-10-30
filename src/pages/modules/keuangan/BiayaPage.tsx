@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
 import {
-  DetailFields,
   FinanceModal,
   ModalActions,
   TextAreaField,
@@ -28,6 +27,12 @@ import {
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
@@ -42,8 +47,7 @@ import {
   type ExpenseRow,
   type ExpenseStatus,
 } from '@/features/keuangan/keuangan-data'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
   { value: 'all', label: 'Semua kategori' },
@@ -97,10 +101,13 @@ const EMPTY_FORM: FormState = {
 }
 
 export function BiayaPage() {
+  const PAGE_SIZE = usePageSize()
   const { expenses, addExpense, setExpenseStatus } = useFinanceStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sort, setSort] = useState<SortState<BiayaSortKey> | null>({
     key: 'date',
     dir: 'desc',
@@ -123,6 +130,8 @@ export function BiayaPage() {
     const base = expenses.filter((row) => {
       if (filter !== 'all' && row.category !== filter) return false
       if (statusFilter !== 'all' && row.status !== statusFilter) return false
+      if (dateFrom && row.date < dateFrom) return false
+      if (dateTo && row.date > dateTo) return false
       if (!q) return true
       return (
         row.reference.toLowerCase().includes(q) ||
@@ -140,7 +149,7 @@ export function BiayaPage() {
       amount: (r) => r.amount,
       actor: (r) => r.actor,
     })
-  }, [expenses, search, filter, statusFilter, sort])
+  }, [expenses, search, filter, statusFilter, dateFrom, dateTo, sort])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
@@ -204,15 +213,19 @@ export function BiayaPage() {
   }
 
   function handlePrint(row: ExpenseRow) {
-    const ok = printBukti(`Bukti biaya ${row.reference}`, [
-      { label: 'Tanggal', value: row.date },
-      { label: 'Kategori', value: row.category },
-      { label: 'Keterangan', value: row.description },
-      { label: 'Jumlah', value: formatIdr(row.amount) },
-      { label: 'Status', value: EXPENSE_STATUS_LABEL[row.status] },
-      { label: 'Dicatat oleh', value: row.actor },
-      { label: 'Struk', value: row.receiptName ?? '—' },
-    ])
+    const ok = printBukti(
+      `Bukti biaya ${row.reference}`,
+      [
+        { label: 'Nilai biaya', value: formatIdr(row.amount) },
+        { label: 'Tanggal', value: row.date },
+        { label: 'Kategori', value: row.category },
+        { label: 'Keterangan', value: row.description },
+        { label: 'Status', value: EXPENSE_STATUS_LABEL[row.status] },
+        { label: 'Dicatat oleh', value: row.actor },
+        { label: 'Struk', value: row.receiptName ?? '—' },
+      ],
+      { subtitle: row.description, module: 'Keuangan · Biaya' },
+    )
     if (!ok) setToast('Izinkan popup untuk mencetak')
   }
 
@@ -254,6 +267,16 @@ export function BiayaPage() {
             setPage(1)
           }}
           secondaryFilterLabel="Filter status"
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(v) => {
+            setDateFrom(v)
+            setPage(1)
+          }}
+          onDateToChange={(v) => {
+            setDateTo(v)
+            setPage(1)
+          }}
           actionLabel="+ Catat biaya"
           onAction={openForm}
         />
@@ -303,7 +326,7 @@ export function BiayaPage() {
               sort={sort}
               onSort={handleSort}
             />
-            <FinanceTh align="right" className="w-28">
+            <FinanceTh align="center" className="w-28">
               Aksi
             </FinanceTh>
           </FinanceThead>
@@ -343,7 +366,7 @@ export function BiayaPage() {
                   <FinanceTd>
                     <ActorCell name={row.actor} />
                   </FinanceTd>
-                  <FinanceTd align="right">
+                  <FinanceTd align="center">
                     <button
                       type="button"
                       onClick={() => setDetail(row)}
@@ -370,70 +393,14 @@ export function BiayaPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.reference}
-          subtitle="Detail biaya operasional"
+        <BiayaDetailDrawer
+          row={detail}
           onClose={() => setDetail(null)}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              {detail.status === 'draft' ? (
-                <button
-                  type="button"
-                  onClick={() => setStatus(detail, 'posted')}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-                >
-                  Posting
-                </button>
-              ) : null}
-              {detail.status !== 'void' ? (
-                <button
-                  type="button"
-                  onClick={() => setStatus(detail, 'void')}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
-                >
-                  Void
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setStatus(detail, 'draft')}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-                >
-                  Kembalikan draft
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'Tanggal', value: detail.date },
-              { label: 'Kategori', value: detail.category },
-              { label: 'Keterangan', value: detail.description },
-              { label: 'Jumlah', value: formatIdr(detail.amount) },
-              { label: 'Status', value: EXPENSE_STATUS_LABEL[detail.status] },
-              { label: 'Dicatat oleh', value: detail.actor },
-              {
-                label: 'Struk',
-                value: detail.receiptName ?? 'Tidak ada lampiran',
-              },
-            ]}
-          />
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+          onPost={() => setStatus(detail, 'posted')}
+          onVoid={() => setStatus(detail, 'void')}
+          onRestore={() => setStatus(detail, 'draft')}
+        />
       ) : null}
 
       {formOpen ? (
@@ -519,5 +486,118 @@ export function BiayaPage() {
         </FinanceModal>
       ) : null}
     </div>
+  )
+}
+
+function BiayaDetailDrawer({
+  row,
+  onClose,
+  onPrint,
+  onPost,
+  onVoid,
+  onRestore,
+}: {
+  row: ExpenseRow
+  onClose: () => void
+  onPrint: () => void
+  onPost: () => void
+  onVoid: () => void
+  onRestore: () => void
+}) {
+  const heroTone =
+    row.status === 'posted' ? 'good' : row.status === 'void' ? 'danger' : 'warn'
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={row.reference}
+      subtitle={row.date}
+      badge={
+        <StatusPill
+          label={EXPENSE_STATUS_LABEL[row.status]}
+          tone={STATUS_TONE[row.status]}
+        />
+      }
+      footer={
+        <>
+          {row.status === 'draft' ? (
+            <button
+              type="button"
+              onClick={onPost}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              Posting biaya
+            </button>
+          ) : null}
+          {row.status !== 'void' ? (
+            <button
+              type="button"
+              onClick={onVoid}
+              className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+            >
+              Void
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onRestore}
+              className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
+            >
+              Kembalikan draft
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
+          >
+            Cetak bukti
+          </button>
+        </>
+      }
+    >
+      <DrawerHero
+        label="Nilai biaya"
+        amount={formatIdr(row.amount)}
+        tone={heroTone}
+        hint={EXPENSE_STATUS_LABEL[row.status]}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[12px] text-muted">Keterangan</p>
+        <p className="mt-1 text-[14px] leading-snug font-medium text-ink">
+          {row.description}
+        </p>
+        <p className="mt-1.5 text-[12px] text-muted">Dicatat oleh {row.actor}</p>
+      </div>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Referensi', row.reference],
+            ['Tanggal', row.date],
+            ['Kategori', row.category],
+            ['Status', EXPENSE_STATUS_LABEL[row.status]],
+            ['Jumlah', formatIdr(row.amount)],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Bukti">
+        {row.receiptName ? (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5">
+            <p className="text-[11px] text-muted">Lampiran struk</p>
+            <p className="num mt-1 truncate text-[13px] font-medium text-brand-900">
+              {row.receiptName}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
+            Tidak ada lampiran struk.
+          </p>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }

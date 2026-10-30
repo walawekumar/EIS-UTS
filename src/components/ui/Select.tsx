@@ -221,7 +221,7 @@ export function Select<T extends string>({
               bottom: pos.bottom,
               zIndex: 100,
             }}
-            className="scrollbar-none overflow-y-auto overscroll-contain rounded-xl border border-line bg-white py-1 shadow-[0_16px_40px_rgba(20,32,25,0.16)] outline-none"
+            className="scrollbar-none overflow-y-auto overscroll-contain rounded-xl border border-line bg-panel py-1 shadow-[0_16px_40px_rgba(20,32,25,0.16)] outline-none"
           >
             {options.map((opt, index) => {
               const isSelected = opt.value === value
@@ -236,7 +236,7 @@ export function Select<T extends string>({
                   onClick={() => choose(opt.value)}
                   className={[
                     'flex w-full items-start gap-2.5 px-3 py-2 text-left transition',
-                    isActive ? 'bg-brand-50' : 'bg-white',
+                    isActive ? 'bg-brand-50' : 'bg-panel',
                   ].join(' ')}
                 >
                   <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-brand-700">
@@ -276,7 +276,7 @@ export function Select<T extends string>({
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
         className={[
-          'flex h-11 w-full items-center gap-2.5 rounded-xl border bg-white px-3 text-left transition',
+          'flex h-11 w-full items-center gap-2.5 rounded-xl border bg-panel px-3 text-left transition',
           open
             ? 'border-brand-600 ring-2 ring-brand-100'
             : 'border-line hover:border-brand-300',

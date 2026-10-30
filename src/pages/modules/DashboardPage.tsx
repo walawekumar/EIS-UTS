@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityTable } from '@/components/dashboard/ActivityTable'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import { MetricCard } from '@/components/dashboard/MetricCard'
@@ -6,8 +6,14 @@ import { MiniCalendar } from '@/components/dashboard/MiniCalendar'
 import { RangeTabs } from '@/components/dashboard/RangeTabs'
 import { StockSnapshot } from '@/components/dashboard/StockSnapshot'
 import { TrendChart } from '@/components/dashboard/TrendChart'
+import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
-import { DASHBOARD_BY_ROLE } from '@/features/dashboard/dashboard-data'
+import { buildLiveDashboard } from '@/features/dashboard/build-live-dashboard'
+import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { usePembelian } from '@/features/pembelian/PembelianContext'
+import { usePenjualan } from '@/features/penjualan/PenjualanContext'
+import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
+import { useProduksi } from '@/features/produksi/ProduksiContext'
 
 const RANGES = [
   { id: '7d', label: '7H' },
@@ -18,8 +24,39 @@ const RANGES = [
 export function DashboardPage() {
   const { user } = useAuth()
   const role = user?.role ?? 'admin'
-  const view = DASHBOARD_BY_ROLE[role]
+  const { stocks } = usePersediaanStore()
+  const { purchases } = usePembelian()
+  const { orders } = usePenjualan()
+  const { batches } = useProduksi()
+  const { cashEntries, payables, receivables } = useFinanceStore()
+  const { logs } = useAuditStore()
   const [range, setRange] = useState('7d')
+
+  const view = useMemo(
+    () =>
+      buildLiveDashboard({
+        role,
+        stocks,
+        purchases,
+        orders,
+        batches,
+        cash: cashEntries,
+        payables,
+        receivables,
+        audit: logs,
+      }),
+    [
+      role,
+      stocks,
+      purchases,
+      orders,
+      batches,
+      cashEntries,
+      payables,
+      receivables,
+      logs,
+    ],
+  )
   const cards = view.metrics.slice(0, 4)
 
   return (

@@ -1,10 +1,6 @@
-import { ModulePlaceholder } from '@/pages/modules/ModulePlaceholder'
+import { Outlet } from 'react-router-dom'
 
+/** Induk modul Penjualan — state dari PenjualanProvider di App. */
 export function PenjualanPage() {
-  return (
-    <ModulePlaceholder
-      moduleName="Penjualan"
-      notes={['Order penjualan', 'Pengiriman & pengurangan stok', 'Tagihan pelanggan']}
-    />
-  )
+  return <Outlet />
 }

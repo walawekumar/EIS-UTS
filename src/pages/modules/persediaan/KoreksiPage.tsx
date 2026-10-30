@@ -29,6 +29,12 @@ import {
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import { printBukti } from '@/components/keuangan/print-bukti'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
@@ -39,8 +45,7 @@ import {
 } from '@/features/persediaan/persediaan-data'
 import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
 import { inDateRange } from '@/features/persediaan/persediaan-utils'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Semua status' },
@@ -59,6 +64,7 @@ type SortKey =
   | 'status'
 
 export function KoreksiPage() {
+  const PAGE_SIZE = usePageSize()
   const { stocks, corrections, addCorrection, voidCorrection } =
     usePersediaanStore()
   const [search, setSearch] = useState('')
@@ -238,7 +244,7 @@ export function KoreksiPage() {
             <FinanceSortTh label="Sesudah" sortKey="afterQty" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
             <FinanceSortTh label="Status" sortKey="status" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
             <FinanceTh>Oleh</FinanceTh>
-            <FinanceTh align="right" className="w-28">Aksi</FinanceTh>
+            <FinanceTh align="center" className="w-28">Aksi</FinanceTh>
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
@@ -273,7 +279,7 @@ export function KoreksiPage() {
                   <FinanceTd>
                     <ActorCell name={row.actor} />
                   </FinanceTd>
-                  <FinanceTd align="right">
+                  <FinanceTd align="center">
                     <button
                       type="button"
                       onClick={() => setDetail(row)}
@@ -298,72 +304,16 @@ export function KoreksiPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.reference}
-          subtitle="Detail koreksi"
+        <KoreksiDetailDrawer
+          row={detail}
           onClose={() => setDetail(null)}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              {detail.status === 'posted' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    voidCorrection(detail.id)
-                    setDetail(null)
-                    setToast(`${detail.reference} di-void · saldo dikembalikan`)
-                  }}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
-                >
-                  Void
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'Tanggal', value: detail.date },
-              { label: 'Produk', value: `${detail.productName} (${detail.sku})` },
-              { label: 'Lokasi', value: detail.location },
-              {
-                label: 'Sebelum',
-                value: formatQty(detail.beforeQty, detail.unit),
-              },
-              {
-                label: 'Sesudah',
-                value: formatQty(detail.afterQty, detail.unit),
-              },
-              {
-                label: 'Selisih',
-                value: formatQty(
-                  detail.afterQty - detail.beforeQty,
-                  detail.unit,
-                ),
-              },
-              { label: 'Alasan', value: detail.reason },
-              {
-                label: 'Status',
-                value: detail.status === 'posted' ? 'Posted' : 'Void',
-              },
-              { label: 'Oleh', value: detail.actor },
-              { label: 'Bukti', value: detail.receiptName ?? 'Tidak ada' },
-            ]}
-          />
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+          onVoid={() => {
+            voidCorrection(detail.id)
+            setDetail(null)
+            setToast(`${detail.reference} di-void · saldo dikembalikan`)
+          }}
+        />
       ) : null}
 
       {formOpen && selected ? (
@@ -433,5 +383,104 @@ export function KoreksiPage() {
         </FinanceModal>
       ) : null}
     </div>
+  )
+}
+
+function KoreksiDetailDrawer({
+  row,
+  onClose,
+  onPrint,
+  onVoid,
+}: {
+  row: CorrectionRow
+  onClose: () => void
+  onPrint: () => void
+  onVoid: () => void
+}) {
+  const delta = row.afterQty - row.beforeQty
+  const posted = row.status === 'posted'
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={row.reference}
+      subtitle={row.date}
+      badge={
+        <StatusPill
+          label={posted ? 'Posted' : 'Void'}
+          tone={posted ? 'good' : 'muted'}
+        />
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            Cetak bukti
+          </button>
+          {posted ? (
+            <button
+              type="button"
+              onClick={onVoid}
+              className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+            >
+              Void koreksi
+            </button>
+          ) : null}
+        </>
+      }
+    >
+      <DrawerHero
+        label="Saldo sesudah koreksi"
+        amount={formatQty(row.afterQty, row.unit)}
+        tone={posted ? 'default' : 'warn'}
+        hint={`Sebelum ${formatQty(row.beforeQty, row.unit)} · selisih ${formatQty(delta, row.unit)}`}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[14px] font-medium text-ink">{row.productName}</p>
+        <p className="mt-0.5 font-mono text-[12px] text-muted">
+          {row.sku} · {row.location}
+        </p>
+        <p className="mt-1.5 text-[12px] text-muted">Dicatat oleh {row.actor}</p>
+      </div>
+
+      <DrawerSection label="Alasan">
+        <p className="rounded-xl border border-line/80 bg-surface/70 px-3 py-2.5 text-[13px] leading-snug text-ink">
+          {row.reason}
+        </p>
+      </DrawerSection>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Referensi', row.reference],
+            ['Tanggal', row.date],
+            ['Sebelum', formatQty(row.beforeQty, row.unit)],
+            ['Sesudah', formatQty(row.afterQty, row.unit)],
+            ['Selisih', formatQty(delta, row.unit)],
+            ['Status', posted ? 'Posted' : 'Void'],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Bukti">
+        {row.receiptName ? (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5">
+            <p className="text-[11px] text-muted">Lampiran</p>
+            <p className="num mt-1 truncate text-[13px] font-medium text-brand-900">
+              {row.receiptName}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
+            Tidak ada lampiran bukti.
+          </p>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }

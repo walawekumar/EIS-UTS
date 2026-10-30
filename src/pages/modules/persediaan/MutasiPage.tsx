@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
 import {
-  DetailFields,
   FinanceModal,
   ModalActions,
   TextAreaField,
 } from '@/components/keuangan/FinanceModal'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { FinancePager } from '@/components/keuangan/FinancePager'
 import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
@@ -46,8 +51,7 @@ import {
   exportMutasiCsv,
   inDateRange,
 } from '@/features/persediaan/persediaan-utils'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const TYPE_FILTERS = [
   { value: 'all', label: 'Semua jenis' },
@@ -68,6 +72,7 @@ type FormState = {
 }
 
 export function MutasiPage() {
+  const PAGE_SIZE = usePageSize()
   const [searchParams, setSearchParams] = useSearchParams()
   const { stocks, movements, addMovement } = usePersediaanStore()
   const [search, setSearch] = useState('')
@@ -245,9 +250,6 @@ export function MutasiPage() {
     if (!ok) setToast('Izinkan popup untuk mencetak')
   }
 
-  const tone = (type: MovementType) =>
-    type === 'in' ? 'good' : type === 'out' ? 'warn' : 'neutral'
-
   function LocationCell({ row }: { row: MovementRow }) {
     if (row.type === 'in') {
       return (
@@ -334,7 +336,7 @@ export function MutasiPage() {
             <FinanceTh>Lokasi</FinanceTh>
             <FinanceSortTh label="Jumlah" sortKey="qty" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
             <FinanceSortTh label="Oleh" sortKey="actor" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
-            <FinanceTh align="right" className="w-28">Aksi</FinanceTh>
+            <FinanceTh align="center" className="w-28">Aksi</FinanceTh>
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
@@ -354,7 +356,7 @@ export function MutasiPage() {
                   <FinanceTd>
                     <StatusPill
                       label={MOVEMENT_LABEL[row.type]}
-                      tone={tone(row.type)}
+                      tone={movementTone(row.type)}
                     />
                   </FinanceTd>
                   <FinanceTd>
@@ -370,7 +372,7 @@ export function MutasiPage() {
                   <FinanceTd>
                     <ActorCell name={row.actor} />
                   </FinanceTd>
-                  <FinanceTd align="right">
+                  <FinanceTd align="center">
                     <button
                       type="button"
                       onClick={() => setDetail(row)}
@@ -395,49 +397,11 @@ export function MutasiPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.reference}
-          subtitle="Detail mutasi"
+        <MutasiDetailDrawer
+          row={detail}
           onClose={() => setDetail(null)}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'Tanggal', value: detail.date },
-              { label: 'Jenis', value: MOVEMENT_LABEL[detail.type] },
-              { label: 'Produk', value: `${detail.productName} (${detail.sku})` },
-              ...(detail.type === 'in'
-                ? [{ label: 'Tujuan', value: detail.toLocation }]
-                : detail.type === 'out'
-                  ? [{ label: 'Asal', value: detail.fromLocation }]
-                  : [
-                      { label: 'Dari', value: detail.fromLocation },
-                      { label: 'Ke', value: detail.toLocation },
-                    ]),
-              { label: 'Jumlah', value: formatQty(detail.qty, detail.unit) },
-              { label: 'Keterangan', value: detail.note },
-              { label: 'Oleh', value: detail.actor },
-              { label: 'Bukti', value: detail.receiptName ?? 'Tidak ada' },
-            ]}
-          />
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+        />
       ) : null}
 
       {formOpen && selectedStock ? (
@@ -522,5 +486,95 @@ export function MutasiPage() {
         </FinanceModal>
       ) : null}
     </div>
+  )
+}
+
+function movementTone(type: MovementType) {
+  return type === 'in' ? 'good' : type === 'out' ? 'warn' : 'neutral'
+}
+
+function MutasiDetailDrawer({
+  row,
+  onClose,
+  onPrint,
+}: {
+  row: MovementRow
+  onClose: () => void
+  onPrint: () => void
+}) {
+  const heroTone =
+    row.type === 'in' ? 'good' : row.type === 'out' ? 'warn' : 'default'
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={row.reference}
+      subtitle={row.date}
+      badge={
+        <StatusPill label={MOVEMENT_LABEL[row.type]} tone={movementTone(row.type)} />
+      }
+      footer={
+        <button
+          type="button"
+          onClick={onPrint}
+          className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+        >
+          Cetak bukti
+        </button>
+      }
+    >
+      <DrawerHero
+        label={MOVEMENT_LABEL[row.type]}
+        amount={formatQty(row.qty, row.unit)}
+        tone={heroTone}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[14px] font-medium text-ink">{row.productName}</p>
+        <p className="mt-0.5 font-mono text-[12px] text-muted">{row.sku}</p>
+        <p className="mt-1.5 text-[12px] text-muted">Dicatat oleh {row.actor}</p>
+      </div>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Referensi', row.reference],
+            ['Tanggal', row.date],
+            ['Jenis', MOVEMENT_LABEL[row.type]],
+            ...(row.type === 'in'
+              ? ([['Tujuan', row.toLocation]] as Array<[string, string]>)
+              : row.type === 'out'
+                ? ([['Asal', row.fromLocation]] as Array<[string, string]>)
+                : ([
+                    ['Dari', row.fromLocation],
+                    ['Ke', row.toLocation],
+                  ] as Array<[string, string]>)),
+            ['Jumlah', formatQty(row.qty, row.unit)],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Keterangan">
+        <p className="rounded-xl border border-line/80 bg-surface/70 px-3 py-2.5 text-[13px] leading-snug text-ink">
+          {row.note}
+        </p>
+      </DrawerSection>
+
+      <DrawerSection label="Bukti">
+        {row.receiptName ? (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5">
+            <p className="text-[11px] text-muted">Lampiran</p>
+            <p className="num mt-1 truncate text-[13px] font-medium text-brand-900">
+              {row.receiptName}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
+            Tidak ada lampiran bukti.
+          </p>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }

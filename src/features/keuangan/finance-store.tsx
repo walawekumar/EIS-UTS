@@ -2,16 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
 import { useAuth } from '@/features/auth/AuthContext'
+import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
-  CASH_ENTRIES,
-  EXPENSES,
-  PAYABLES,
-  RECEIVABLES,
   formatDateId,
   nextCashRef,
   nextExpenseRef,
@@ -50,6 +48,33 @@ type AddExpenseInput = {
   receiptName?: string
 }
 
+type UpsertPayableInput = {
+  sourceId: string
+  supplier: string
+  invoice: string
+  dueDateIso: string
+  amount: number
+  paid?: number
+}
+
+type UpsertReceivableInput = {
+  sourceId: string
+  customer: string
+  invoice: string
+  dueDateIso: string
+  amount: number
+  paid?: number
+}
+
+type ApplyLinkedPayInput = {
+  sourceId: string
+  amount: number
+  party: string
+  invoice: string
+  receiptName?: string
+  note?: string
+}
+
 type FinanceStoreValue = {
   cashEntries: CashEntry[]
   payables: PayableRow[]
@@ -61,9 +86,30 @@ type FinanceStoreValue = {
   receiveReceivable: (input: PayInput) => void
   addExpense: (input: AddExpenseInput) => void
   setExpenseStatus: (id: string, status: ExpenseStatus) => void
+  upsertPayableFromPurchase: (input: UpsertPayableInput) => void
+  applyPurchasePayment: (input: ApplyLinkedPayInput) => void
+  upsertReceivableFromSale: (input: UpsertReceivableInput) => void
+  applySalePayment: (input: ApplyLinkedPayInput) => void
+  removeLinkedPayable: (sourceId: string) => void
+  removeLinkedReceivable: (sourceId: string) => void
 }
 
 const FinanceStoreContext = createContext<FinanceStoreValue | null>(null)
+
+function dueLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return formatDateId(d)
+}
+
+function agingFromDue(iso: string): number {
+  const due = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(due.getTime())) return 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.floor((today.getTime() - due.getTime()) / 86_400_000)
+  return Math.max(0, diff)
+}
 
 function prependCash(
   list: CashEntry[],
@@ -100,23 +146,30 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const actor = user?.name ?? 'Pengguna'
 
+  const boot = keuanganRepository.load()
   const [cashEntries, setCashEntries] = useState<CashEntry[]>(() => [
-    ...CASH_ENTRIES,
+    ...boot.cashEntries,
   ])
-  const [payables, setPayables] = useState<PayableRow[]>(() => [...PAYABLES])
+  const [payables, setPayables] = useState<PayableRow[]>(() => [...boot.payables])
   const [receivables, setReceivables] = useState<ReceivableRow[]>(() => [
-    ...RECEIVABLES,
+    ...boot.receivables,
   ])
-  const [expenses, setExpenses] = useState<ExpenseRow[]>(() => [...EXPENSES])
+  const [expenses, setExpenses] = useState<ExpenseRow[]>(() => [...boot.expenses])
+
+  useEffect(() => {
+    keuanganRepository.save({
+      version: 1,
+      cashEntries,
+      payables,
+      receivables,
+      expenses,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [cashEntries, payables, receivables, expenses])
 
   const addCashEntry = useCallback(
     (input: AddCashInput) => {
-      setCashEntries((list) =>
-        prependCash(list, {
-          ...input,
-          actor,
-        }),
-      )
+      setCashEntries((list) => prependCash(list, { ...input, actor }))
     },
     [actor],
   )
@@ -139,7 +192,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           }
         }),
       )
-
       const desc = `Bayar utang ${invoice} · ${party}${
         note?.trim() ? ` — ${note.trim()}` : ''
       }`
@@ -171,7 +223,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           }
         }),
       )
-
       const desc = `Terima piutang ${invoice} · ${party}${
         note?.trim() ? ` — ${note.trim()}` : ''
       }`
@@ -203,7 +254,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           actor,
           receiptName: input.receiptName,
         }
-
         if (input.status === 'posted') {
           setCashEntries((cash) =>
             prependCash(cash, {
@@ -216,7 +266,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             }),
           )
         }
-
         return [entry, ...list]
       })
     },
@@ -247,6 +296,130 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     [actor],
   )
 
+  const upsertPayableFromPurchase = useCallback((input: UpsertPayableInput) => {
+    const id = `ap-${input.sourceId}`
+    const agingDays = agingFromDue(input.dueDateIso)
+    const paid = input.paid ?? 0
+    setPayables((list) => {
+      const row: PayableRow = {
+        id,
+        supplier: input.supplier,
+        invoice: input.invoice,
+        dueDate: dueLabel(input.dueDateIso),
+        amount: input.amount,
+        paid,
+        status: resolvePayableStatus(input.amount, paid, agingDays),
+        agingDays,
+      }
+      const idx = list.findIndex((r) => r.id === id)
+      if (idx >= 0) {
+        const next = [...list]
+        next[idx] = { ...row, receiptName: list[idx].receiptName }
+        return next
+      }
+      return [row, ...list]
+    })
+  }, [])
+
+  const applyPurchasePayment = useCallback(
+    ({ sourceId, amount, party, invoice, receiptName, note }: ApplyLinkedPayInput) => {
+      const id = `ap-${sourceId}`
+      setPayables((list) => {
+        const exists = list.some((r) => r.id === id)
+        if (!exists) return list
+        return list.map((row) => {
+          if (row.id !== id) return row
+          const paid = row.paid + amount
+          return {
+            ...row,
+            paid,
+            status: resolvePayableStatus(row.amount, paid, row.agingDays),
+            receiptName: receiptName ?? row.receiptName,
+          }
+        })
+      })
+      setCashEntries((list) =>
+        prependCash(list, {
+          direction: 'out',
+          category: 'Utang',
+          description: `Bayar pembelian ${invoice} · ${party}${
+            note?.trim() ? ` — ${note.trim()}` : ''
+          }`,
+          amount,
+          actor,
+          receiptName,
+        }),
+      )
+    },
+    [actor],
+  )
+
+  const upsertReceivableFromSale = useCallback((input: UpsertReceivableInput) => {
+    const id = `ar-${input.sourceId}`
+    const agingDays = agingFromDue(input.dueDateIso)
+    const paid = input.paid ?? 0
+    setReceivables((list) => {
+      const row: ReceivableRow = {
+        id,
+        customer: input.customer,
+        invoice: input.invoice,
+        dueDate: dueLabel(input.dueDateIso),
+        amount: input.amount,
+        paid,
+        status: resolveReceivableStatus(input.amount, paid, agingDays),
+        agingDays,
+      }
+      const idx = list.findIndex((r) => r.id === id)
+      if (idx >= 0) {
+        const next = [...list]
+        next[idx] = { ...row, receiptName: list[idx].receiptName }
+        return next
+      }
+      return [row, ...list]
+    })
+  }, [])
+
+  const applySalePayment = useCallback(
+    ({ sourceId, amount, party, invoice, receiptName, note }: ApplyLinkedPayInput) => {
+      const id = `ar-${sourceId}`
+      setReceivables((list) => {
+        const exists = list.some((r) => r.id === id)
+        if (!exists) return list
+        return list.map((row) => {
+          if (row.id !== id) return row
+          const paid = row.paid + amount
+          return {
+            ...row,
+            paid,
+            status: resolveReceivableStatus(row.amount, paid, row.agingDays),
+            receiptName: receiptName ?? row.receiptName,
+          }
+        })
+      })
+      setCashEntries((list) =>
+        prependCash(list, {
+          direction: 'in',
+          category: 'Piutang',
+          description: `Terima penjualan ${invoice} · ${party}${
+            note?.trim() ? ` — ${note.trim()}` : ''
+          }`,
+          amount,
+          actor,
+          receiptName,
+        }),
+      )
+    },
+    [actor],
+  )
+
+  const removeLinkedPayable = useCallback((sourceId: string) => {
+    setPayables((list) => list.filter((r) => r.id !== `ap-${sourceId}`))
+  }, [])
+
+  const removeLinkedReceivable = useCallback((sourceId: string) => {
+    setReceivables((list) => list.filter((r) => r.id !== `ar-${sourceId}`))
+  }, [])
+
   const value = useMemo(
     () => ({
       cashEntries,
@@ -259,6 +432,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       receiveReceivable,
       addExpense,
       setExpenseStatus,
+      upsertPayableFromPurchase,
+      applyPurchasePayment,
+      upsertReceivableFromSale,
+      applySalePayment,
+      removeLinkedPayable,
+      removeLinkedReceivable,
     }),
     [
       cashEntries,
@@ -271,6 +450,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       receiveReceivable,
       addExpense,
       setExpenseStatus,
+      upsertPayableFromPurchase,
+      applyPurchasePayment,
+      upsertReceivableFromSale,
+      applySalePayment,
+      removeLinkedPayable,
+      removeLinkedReceivable,
     ],
   )
 

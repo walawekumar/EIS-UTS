@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
 import {
-  DetailFields,
-  FinanceModal,
-} from '@/components/keuangan/FinanceModal'
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { FinancePager } from '@/components/keuangan/FinancePager'
 import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
@@ -39,8 +41,7 @@ import {
   exportSaldoCsv,
   formatDelta,
 } from '@/features/persediaan/persediaan-utils'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const CATEGORY_FILTERS = [
   { value: 'all', label: 'Semua kategori' },
@@ -66,6 +67,7 @@ type SortKey =
   | 'updatedAt'
 
 export function SaldoPage() {
+  const PAGE_SIZE = usePageSize()
   const navigate = useNavigate()
   const { stocks, movements, corrections } = usePersediaanStore()
   const [search, setSearch] = useState('')
@@ -195,7 +197,7 @@ export function SaldoPage() {
             <FinanceSortTh label="Saldo" sortKey="qty" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
             <FinanceSortTh label="Min" sortKey="minQty" sort={sort} onSort={(k) => { setSort((p) => toggleSort(p, k)); setPage(1) }} />
             <FinanceTh>Status</FinanceTh>
-            <FinanceTh align="right" className="w-36">Aksi</FinanceTh>
+            <FinanceTh align="center" className="w-36">Aksi</FinanceTh>
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
@@ -229,8 +231,8 @@ export function SaldoPage() {
                         tone={low ? 'warn' : 'good'}
                       />
                     </FinanceTd>
-                    <FinanceTd align="right">
-                      <div className="inline-flex items-center justify-end gap-0.5">
+                    <FinanceTd align="center">
+                      <div className="inline-flex items-center justify-center gap-0.5">
                         {low ? (
                           <button
                             type="button"
@@ -268,98 +270,120 @@ export function SaldoPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.name}
-          subtitle={`Kartu stok · ${detail.sku}`}
+        <SaldoDetailDrawer
+          row={detail}
+          ledger={ledger}
           onClose={() => setDetail(null)}
-          wide
-          footer={
-            <div className="flex flex-wrap gap-2">
-              {isLowStock(detail) ? (
-                <button
-                  type="button"
-                  onClick={() => goMutasiMasuk(detail)}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-amber-300 bg-amber-50 text-[14px] font-semibold text-amber-900 transition hover:bg-amber-100"
-                >
-                  Catat masuk
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'SKU', value: detail.sku },
-              { label: 'Kategori', value: CATEGORY_LABEL[detail.category] },
-              { label: 'Lokasi', value: detail.location },
-              { label: 'Saldo', value: formatQty(detail.qty, detail.unit) },
-              { label: 'Min. stok', value: formatQty(detail.minQty, detail.unit) },
-              {
-                label: 'Status',
-                value: isLowStock(detail) ? 'Stok rendah' : 'Aman',
-              },
-              { label: 'Diperbarui', value: detail.updatedAt },
-            ]}
-          />
-
-          <div className="mt-4">
-            <h3 className="text-[13px] font-semibold text-ink">
-              Riwayat kartu stok
-            </h3>
-            <p className="mt-0.5 text-[12px] text-muted">
-              Mutasi dan koreksi untuk SKU + lokasi ini
-            </p>
-            {ledger.length === 0 ? (
-              <p className="mt-3 rounded-xl border border-dashed border-line px-3 py-4 text-center text-[12px] text-muted">
-                Belum ada riwayat.
-              </p>
-            ) : (
-              <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
-                {ledger.map((entry) => (
-                  <li
-                    key={`${entry.kind}-${entry.id}`}
-                    className="rounded-xl border border-line bg-surface/60 px-3 py-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-ink">
-                          {entry.reference} · {entry.label}
-                          {entry.status === 'void' ? ' (void)' : ''}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11px] text-muted">
-                          {entry.date} · {entry.note}
-                        </p>
-                      </div>
-                      <span
-                        className={[
-                          'shrink-0 font-mono text-[12px] font-semibold',
-                          entry.delta >= 0 ? 'text-brand-800' : 'text-amber-800',
-                        ].join(' ')}
-                      >
-                        {formatDelta(entry.delta, entry.unit)}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+          onGoMutasiMasuk={() => goMutasiMasuk(detail)}
+        />
       ) : null}
     </div>
+  )
+}
+
+function SaldoDetailDrawer({
+  row,
+  ledger,
+  onClose,
+  onPrint,
+  onGoMutasiMasuk,
+}: {
+  row: StockRow
+  ledger: ReturnType<typeof buildStockLedger>
+  onClose: () => void
+  onPrint: () => void
+  onGoMutasiMasuk: () => void
+}) {
+  const low = isLowStock(row)
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={row.name}
+      subtitle={`Kartu stok · ${row.sku}`}
+      badge={
+        <StatusPill label={low ? 'Rendah' : 'Aman'} tone={low ? 'warn' : 'good'} />
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            Cetak bukti
+          </button>
+          {low ? (
+            <button
+              type="button"
+              onClick={onGoMutasiMasuk}
+              className="h-11 w-full rounded-xl border border-amber-300 bg-amber-50 text-[14px] font-semibold text-amber-900 transition hover:bg-amber-100"
+            >
+              Catat masuk
+            </button>
+          ) : null}
+        </>
+      }
+    >
+      <DrawerHero
+        label="Saldo saat ini"
+        amount={formatQty(row.qty, row.unit)}
+        tone={low ? 'warn' : 'good'}
+        hint={`Min. stok ${formatQty(row.minQty, row.unit)} · diperbarui ${row.updatedAt}`}
+      />
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['SKU', row.sku],
+            ['Kategori', CATEGORY_LABEL[row.category]],
+            ['Lokasi', row.location],
+            ['Saldo', formatQty(row.qty, row.unit)],
+            ['Min. stok', formatQty(row.minQty, row.unit)],
+            ['Status', low ? 'Stok rendah' : 'Aman'],
+            ['Diperbarui', row.updatedAt],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Riwayat kartu stok">
+        {ledger.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[12px] text-muted">
+            Belum ada riwayat mutasi atau koreksi untuk SKU + lokasi ini.
+          </p>
+        ) : (
+          <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+            {ledger.map((entry) => (
+              <li
+                key={`${entry.kind}-${entry.id}`}
+                className="rounded-xl border border-line bg-surface/60 px-3 py-2.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-ink">
+                      {entry.reference} · {entry.label}
+                      {entry.status === 'void' ? ' (void)' : ''}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted">
+                      {entry.date} · {entry.note}
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      'shrink-0 font-mono text-[12px] font-semibold',
+                      entry.delta >= 0 ? 'text-brand-800' : 'text-amber-800',
+                    ].join(' ')}
+                  >
+                    {formatDelta(entry.delta, entry.unit)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }

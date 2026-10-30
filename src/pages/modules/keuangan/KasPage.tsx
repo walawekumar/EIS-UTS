@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
 import {
-  DetailFields,
   FinanceModal,
   ModalActions,
   TextAreaField,
@@ -28,11 +27,18 @@ import {
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { EyeIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { readAppSettings } from '@/features/settings/app-settings'
 import {
   CASH_CATEGORIES,
   buildKasStats,
@@ -41,8 +47,7 @@ import {
   type CashDirection,
   type CashEntry,
 } from '@/features/keuangan/keuangan-data'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
   { value: 'all', label: 'Semua mutasi' },
@@ -77,10 +82,13 @@ const EMPTY_FORM: FormState = {
 }
 
 export function KasPage() {
+  const PAGE_SIZE = usePageSize()
   const { cashEntries, addCashEntry, removeCashEntry } = useFinanceStore()
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sort, setSort] = useState<SortState<KasSortKey> | null>({
     key: 'date',
     dir: 'desc',
@@ -103,6 +111,8 @@ export function KasPage() {
     const q = search.trim().toLowerCase()
     const base = cashEntries.filter((row) => {
       if (filter !== 'all' && row.direction !== filter) return false
+      if (dateFrom && row.date < dateFrom) return false
+      if (dateTo && row.date > dateTo) return false
       if (!q) return true
       return (
         row.reference.toLowerCase().includes(q) ||
@@ -120,7 +130,7 @@ export function KasPage() {
       balance: (r) => r.balance,
       actor: (r) => r.actor,
     })
-  }, [cashEntries, search, filter, sort])
+  }, [cashEntries, search, filter, dateFrom, dateTo, sort])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
@@ -175,6 +185,14 @@ export function KasPage() {
     notify('Mutasi kas dicatat')
   }
 
+  function requestDelete(entry: CashEntry) {
+    if (readAppSettings().prefs.confirmDelete) {
+      setConfirmDelete(entry)
+      return
+    }
+    removeEntry(entry)
+  }
+
   function removeEntry(entry: CashEntry) {
     removeCashEntry(entry.id)
     setConfirmDelete(null)
@@ -183,16 +201,22 @@ export function KasPage() {
   }
 
   function handlePrint(entry: CashEntry) {
-    const ok = printBukti(`Bukti ${entry.reference}`, [
-      { label: 'Tanggal', value: entry.date },
-      { label: 'Arah', value: entry.direction === 'in' ? 'Masuk' : 'Keluar' },
-      { label: 'Kategori', value: entry.category },
-      { label: 'Keterangan', value: entry.description },
-      { label: 'Jumlah', value: formatIdr(entry.amount) },
-      { label: 'Saldo setelah', value: formatIdr(entry.balance) },
-      { label: 'Dicatat oleh', value: entry.actor },
-      { label: 'Struk', value: entry.receiptName ?? '—' },
-    ])
+    const ok = printBukti(
+      `Bukti ${entry.reference}`,
+      [
+        {
+          label: entry.direction === 'in' ? 'Kas masuk' : 'Kas keluar',
+          value: `${entry.direction === 'in' ? '+' : '−'}${formatIdr(entry.amount)}`,
+        },
+        { label: 'Tanggal', value: entry.date },
+        { label: 'Kategori', value: entry.category },
+        { label: 'Keterangan', value: entry.description },
+        { label: 'Saldo setelah', value: formatIdr(entry.balance) },
+        { label: 'Dicatat oleh', value: entry.actor },
+        { label: 'Struk', value: entry.receiptName ?? '—' },
+      ],
+      { subtitle: entry.description, module: 'Keuangan · Kas' },
+    )
     if (!ok) notify('Izinkan popup untuk mencetak')
   }
 
@@ -222,6 +246,16 @@ export function KasPage() {
           filterOptions={FILTERS}
           onFilterChange={(v) => {
             setFilter(v)
+            setPage(1)
+          }}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(v) => {
+            setDateFrom(v)
+            setPage(1)
+          }}
+          onDateToChange={(v) => {
+            setDateTo(v)
             setPage(1)
           }}
           actionLabel="+ Catat mutasi"
@@ -273,7 +307,7 @@ export function KasPage() {
               sort={sort}
               onSort={handleSort}
             />
-            <FinanceTh align="right" className="w-28">
+            <FinanceTh align="center" className="w-28">
               Aksi
             </FinanceTh>
           </FinanceThead>
@@ -325,8 +359,8 @@ export function KasPage() {
                   <FinanceTd>
                     <ActorCell name={row.actor} />
                   </FinanceTd>
-                  <FinanceTd align="right">
-                    <div className="inline-flex items-center justify-end gap-0.5">
+                  <FinanceTd align="center">
+                    <div className="inline-flex items-center justify-center gap-0.5">
                       <button
                         type="button"
                         onClick={() => setDetail(row)}
@@ -338,7 +372,7 @@ export function KasPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setConfirmDelete(row)}
+                        onClick={() => requestDelete(row)}
                         className="rounded-xl p-2 text-muted transition hover:bg-red-50 hover:text-red-700"
                         aria-label={`Hapus ${row.reference}`}
                         title="Hapus"
@@ -363,55 +397,15 @@ export function KasPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.reference}
-          subtitle="Detail mutasi kas"
+        <KasDetailDrawer
+          entry={detail}
           onClose={() => setDetail(null)}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDelete(detail)
-                  setDetail(null)
-                }}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
-              >
-                Hapus
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'Tanggal', value: detail.date },
-              { label: 'Arah', value: detail.direction === 'in' ? 'Masuk' : 'Keluar' },
-              { label: 'Kategori', value: detail.category },
-              { label: 'Keterangan', value: detail.description },
-              { label: 'Jumlah', value: formatIdr(detail.amount) },
-              { label: 'Saldo setelah', value: formatIdr(detail.balance) },
-              { label: 'Dicatat oleh', value: detail.actor },
-              {
-                label: 'Struk',
-                value: detail.receiptName ?? 'Tidak ada lampiran',
-              },
-            ]}
-          />
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+          onDelete={() => {
+            requestDelete(detail)
+            setDetail(null)
+          }}
+        />
       ) : null}
 
       {formOpen ? (
@@ -515,6 +509,96 @@ export function KasPage() {
         </FinanceModal>
       ) : null}
     </div>
+  )
+}
+
+function KasDetailDrawer({
+  entry,
+  onClose,
+  onPrint,
+  onDelete,
+}: {
+  entry: CashEntry
+  onClose: () => void
+  onPrint: () => void
+  onDelete: () => void
+}) {
+  const isIn = entry.direction === 'in'
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={entry.reference}
+      subtitle={entry.date}
+      badge={
+        <StatusPill
+          label={isIn ? 'Masuk' : 'Keluar'}
+          tone={isIn ? 'good' : 'warn'}
+        />
+      }
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            Cetak bukti
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+          >
+            Hapus mutasi
+          </button>
+        </>
+      }
+    >
+      <DrawerHero
+        label={isIn ? 'Kas masuk' : 'Kas keluar'}
+        amount={`${isIn ? '+' : '−'}${formatIdr(entry.amount)}`}
+        tone={isIn ? 'good' : 'warn'}
+        hint={`Saldo setelah: ${formatIdr(entry.balance)}`}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[12px] text-muted">Keterangan</p>
+        <p className="mt-1 text-[14px] leading-snug font-medium text-ink">
+          {entry.description}
+        </p>
+        <p className="mt-1.5 text-[12px] text-muted">Dicatat oleh {entry.actor}</p>
+      </div>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Referensi', entry.reference],
+            ['Tanggal', entry.date],
+            ['Kategori', entry.category],
+            ['Arah', isIn ? 'Masuk' : 'Keluar'],
+            ['Jumlah', formatIdr(entry.amount)],
+            ['Saldo setelah', formatIdr(entry.balance)],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Bukti">
+        {entry.receiptName ? (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5">
+            <p className="text-[11px] text-muted">Lampiran struk</p>
+            <p className="num mt-1 truncate text-[13px] font-medium text-brand-900">
+              {entry.receiptName}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
+            Tidak ada lampiran struk.
+          </p>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }
 

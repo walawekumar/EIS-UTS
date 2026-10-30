@@ -27,6 +27,12 @@ import {
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
+import {
+  DetailDrawer,
+  DrawerFacts,
+  DrawerHero,
+  DrawerSection,
+} from '@/components/ops/DetailDrawer'
 import { EyeIcon } from '@/components/ui/icons'
 import { TextField } from '@/components/ui/TextField'
 import { printBukti } from '@/components/keuangan/print-bukti'
@@ -39,8 +45,7 @@ import {
   type ReceivableRow,
   type ReceivableStatus,
 } from '@/features/keuangan/keuangan-data'
-
-const PAGE_SIZE = 6
+import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
   { value: 'all', label: 'Semua status' },
@@ -70,9 +75,12 @@ const STATUS_TONE: Record<
 }
 
 export function PiutangPage() {
+  const PAGE_SIZE = usePageSize()
   const { receivables, receiveReceivable } = useFinanceStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sort, setSort] = useState<SortState<PiutangSortKey> | null>({
     key: 'dueDate',
     dir: 'asc',
@@ -93,6 +101,8 @@ export function PiutangPage() {
     const q = search.trim().toLowerCase()
     const base = receivables.filter((row) => {
       if (filter !== 'all' && row.status !== filter) return false
+      if (dateFrom && row.dueDate < dateFrom) return false
+      if (dateTo && row.dueDate > dateTo) return false
       if (!q) return true
       return (
         row.customer.toLowerCase().includes(q) ||
@@ -108,7 +118,7 @@ export function PiutangPage() {
       amount: (r) => r.amount,
       sisa: (r) => r.amount - r.paid,
     })
-  }, [receivables, search, filter, sort])
+  }, [receivables, search, filter, dateFrom, dateTo, sort])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
@@ -166,16 +176,20 @@ export function PiutangPage() {
   }
 
   function handlePrint(row: ReceivableRow) {
-    const ok = printBukti(`Bukti piutang ${row.invoice}`, [
-      { label: 'Pelanggan', value: row.customer },
-      { label: 'Invoice', value: row.invoice },
-      { label: 'Jatuh tempo', value: row.dueDate },
-      { label: 'Nilai', value: formatIdr(row.amount) },
-      { label: 'Sudah diterima', value: formatIdr(row.paid) },
-      { label: 'Sisa', value: formatIdr(row.amount - row.paid) },
-      { label: 'Status', value: RECEIVABLE_STATUS_LABEL[row.status] },
-      { label: 'Struk', value: row.receiptName ?? '—' },
-    ])
+    const ok = printBukti(
+      `Bukti piutang ${row.invoice}`,
+      [
+        { label: 'Sisa piutang', value: formatIdr(row.amount - row.paid) },
+        { label: 'Pelanggan', value: row.customer },
+        { label: 'Invoice', value: row.invoice },
+        { label: 'Jatuh tempo', value: row.dueDate },
+        { label: 'Nilai tagihan', value: formatIdr(row.amount) },
+        { label: 'Sudah diterima', value: formatIdr(row.paid) },
+        { label: 'Status', value: RECEIVABLE_STATUS_LABEL[row.status] },
+        { label: 'Struk', value: row.receiptName ?? '—' },
+      ],
+      { subtitle: row.customer, module: 'Keuangan · Piutang' },
+    )
     if (!ok) setToast('Izinkan popup untuk mencetak')
   }
 
@@ -207,6 +221,16 @@ export function PiutangPage() {
           filterOptions={FILTERS}
           onFilterChange={(v) => {
             setFilter(v)
+            setPage(1)
+          }}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(v) => {
+            setDateFrom(v)
+            setPage(1)
+          }}
+          onDateToChange={(v) => {
+            setDateTo(v)
             setPage(1)
           }}
           actionLabel="+ Terima bayar"
@@ -256,7 +280,7 @@ export function PiutangPage() {
               sort={sort}
               onSort={handleSort}
             />
-            <FinanceTh align="right" className="w-28">
+            <FinanceTh align="center" className="w-28">
               Aksi
             </FinanceTh>
           </FinanceThead>
@@ -298,8 +322,8 @@ export function PiutangPage() {
                     <FinanceTd mono className="font-medium whitespace-nowrap">
                       {formatIdr(sisa)}
                     </FinanceTd>
-                    <FinanceTd align="right">
-                      <div className="inline-flex items-center justify-end gap-0.5">
+                    <FinanceTd align="center">
+                      <div className="inline-flex items-center justify-center gap-0.5">
                         <button
                           type="button"
                           onClick={() => setDetail(row)}
@@ -337,67 +361,15 @@ export function PiutangPage() {
       </section>
 
       {detail ? (
-        <FinanceModal
-          title={detail.invoice}
-          subtitle="Detail piutang pelanggan"
+        <PiutangDetailDrawer
+          row={detail}
           onClose={() => setDetail(null)}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePrint(detail)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Cetak
-              </button>
-              {detail.status !== 'paid' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openRecv(detail)
-                    setDetail(null)
-                  }}
-                  className="h-11 min-w-[7.5rem] flex-1 rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-                >
-                  Terima bayar
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="h-11 min-w-[7.5rem] flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
-              >
-                Tutup
-              </button>
-            </div>
-          }
-        >
-          <DetailFields
-            fields={[
-              { label: 'Pelanggan', value: detail.customer },
-              { label: 'Invoice', value: detail.invoice },
-              { label: 'Jatuh tempo', value: detail.dueDate },
-              {
-                label: 'Aging',
-                value:
-                  detail.agingDays > 0
-                    ? `${detail.agingDays} hari terlambat`
-                    : 'Belum jatuh tempo / tepat waktu',
-              },
-              { label: 'Nilai', value: formatIdr(detail.amount) },
-              { label: 'Sudah diterima', value: formatIdr(detail.paid) },
-              { label: 'Sisa', value: formatIdr(detail.amount - detail.paid) },
-              {
-                label: 'Status',
-                value: RECEIVABLE_STATUS_LABEL[detail.status],
-              },
-              {
-                label: 'Struk terakhir',
-                value: detail.receiptName ?? 'Belum ada',
-              },
-            ]}
-          />
-        </FinanceModal>
+          onPrint={() => handlePrint(detail)}
+          onReceive={() => {
+            openRecv(detail)
+            setDetail(null)
+          }}
+        />
       ) : null}
 
       {recvTarget ? (
@@ -457,11 +429,149 @@ export function PiutangPage() {
             <ReceiptUpload
               value={recvReceipt}
               onChange={setRecvReceipt}
-              label="Upload struk penerimaan"
+              label="Nota / bukti penerimaan"
+              requiredMark
             />
           </div>
         </FinanceModal>
       ) : null}
     </div>
+  )
+}
+
+function PiutangDetailDrawer({
+  row,
+  onClose,
+  onPrint,
+  onReceive,
+}: {
+  row: ReceivableRow
+  onClose: () => void
+  onPrint: () => void
+  onReceive: () => void
+}) {
+  const sisa = row.amount - row.paid
+  const paidPct =
+    row.amount > 0 ? Math.min(100, Math.round((row.paid / row.amount) * 100)) : 0
+  const heroTone =
+    row.status === 'paid'
+      ? 'good'
+      : row.status === 'overdue'
+        ? 'danger'
+        : row.status === 'partial'
+          ? 'warn'
+          : 'default'
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      title={row.invoice}
+      subtitle={`Jatuh tempo ${row.dueDate}`}
+      badge={
+        <StatusPill
+          label={RECEIVABLE_STATUS_LABEL[row.status]}
+          tone={STATUS_TONE[row.status]}
+        />
+      }
+      footer={
+        <>
+          {row.status !== 'paid' ? (
+            <button
+              type="button"
+              onClick={onReceive}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              Terima bayar
+            </button>
+          ) : (
+            <p className="text-center text-[13px] text-brand-800">
+              Piutang sudah lunas.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={onPrint}
+            className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
+          >
+            Cetak bukti
+          </button>
+        </>
+      }
+    >
+      <DrawerHero
+        label="Sisa piutang"
+        amount={sisa === 0 ? 'Lunas' : formatIdr(sisa)}
+        tone={heroTone}
+        hint={`Total ${formatIdr(row.amount)} · diterima ${formatIdr(row.paid)}`}
+      />
+
+      <div className="mb-4 rounded-2xl border border-line/80 bg-surface/80 px-3.5 py-3">
+        <p className="text-[12px] text-muted">Pelanggan</p>
+        <p className="mt-1 text-[14px] font-medium text-ink">{row.customer}</p>
+        {row.agingDays > 0 ? (
+          <p className="mt-1.5 text-[12px] font-medium text-red-700">
+            Terlambat {row.agingDays} hari
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[12px] text-muted">Belum lewat jatuh tempo</p>
+        )}
+      </div>
+
+      <DrawerSection label="Progress pelunasan">
+        <div className="rounded-xl border border-line/80 bg-surface/70 px-3 py-3">
+          <div className="mb-2 flex items-baseline justify-between gap-2 text-[12px]">
+            <span className="text-muted">Terbayar</span>
+            <span className="num font-semibold text-ink">{paidPct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-line/70">
+            <div
+              className={[
+                'h-full rounded-full transition-[width]',
+                row.status === 'overdue' ? 'bg-red-500' : 'bg-brand-600',
+              ].join(' ')}
+              style={{ width: `${paidPct}%` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between gap-2 font-mono text-[11px] text-muted">
+            <span>{formatIdr(row.paid)}</span>
+            <span>{formatIdr(row.amount)}</span>
+          </div>
+        </div>
+      </DrawerSection>
+
+      <DrawerSection label="Rincian">
+        <DrawerFacts
+          items={[
+            ['Invoice', row.invoice],
+            ['Jatuh tempo', row.dueDate],
+            ['Nilai tagihan', formatIdr(row.amount)],
+            ['Sudah diterima', formatIdr(row.paid)],
+            ['Sisa', formatIdr(sisa)],
+            [
+              'Aging',
+              row.agingDays > 0
+                ? `${row.agingDays} hari terlambat`
+                : 'Tepat waktu',
+            ],
+          ]}
+        />
+      </DrawerSection>
+
+      <DrawerSection label="Bukti">
+        {row.receiptName ? (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5">
+            <p className="text-[11px] text-muted">Struk terakhir</p>
+            <p className="num mt-1 truncate text-[13px] font-medium text-brand-900">
+              {row.receiptName}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
+            Belum ada bukti pembayaran. Lampirkan saat terima bayar.
+          </p>
+        )}
+      </DrawerSection>
+    </DetailDrawer>
   )
 }
