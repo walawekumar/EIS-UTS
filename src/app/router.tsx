@@ -28,6 +28,7 @@ import { PenjualanPage } from '@/pages/modules/PenjualanPage'
 import { OrderPage } from '@/pages/modules/penjualan/OrderPage'
 import { PengirimanPage } from '@/pages/modules/penjualan/PengirimanPage'
 import { TagihanPage } from '@/pages/modules/penjualan/TagihanPage'
+import { ReturPage as PenjualanReturPage } from '@/pages/modules/penjualan/ReturPage'
 import { ProduksiPage } from '@/pages/modules/ProduksiPage'
 import { BatchPage } from '@/pages/modules/produksi/BatchPage'
 import { InputOutputPage } from '@/pages/modules/produksi/InputOutputPage'
@@ -146,6 +147,7 @@ export function AppRouter() {
               <Route index element={<OrderPage />} />
               <Route path="pengiriman" element={<PengirimanPage />} />
               <Route path="tagihan" element={<TagihanPage />} />
+              <Route path="retur" element={<PenjualanReturPage />} />
             </Route>
           </Route>
 

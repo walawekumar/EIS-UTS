@@ -133,6 +133,12 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/app/penjualan/tagihan',
         roles: ['admin', 'penjualan'],
       },
+      {
+        id: 'penjualan-retur',
+        label: 'Retur',
+        path: '/app/penjualan/retur',
+        roles: ['admin', 'penjualan', 'keuangan'],
+      },
     ],
   },
   {
