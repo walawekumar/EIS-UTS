@@ -92,6 +92,8 @@ type FinanceStoreValue = {
   applySalePayment: (input: ApplyLinkedPayInput) => void
   removeLinkedPayable: (sourceId: string) => void
   removeLinkedReceivable: (sourceId: string) => void
+  creditPayable: (invoice: string, amount: number) => void
+  creditReceivable: (invoice: string, amount: number) => void
 }
 
 const FinanceStoreContext = createContext<FinanceStoreValue | null>(null)
@@ -420,6 +422,36 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setReceivables((list) => list.filter((r) => r.id !== `ar-${sourceId}`))
   }, [])
 
+  const creditPayable = useCallback((invoice: string, credit: number) => {
+    if (credit <= 0) return
+    setPayables((list) =>
+      list.map((row) => {
+        if (row.invoice !== invoice) return row
+        const amount = Math.max(row.paid, row.amount - credit)
+        return {
+          ...row,
+          amount,
+          status: resolvePayableStatus(amount, row.paid, row.agingDays),
+        }
+      }),
+    )
+  }, [])
+
+  const creditReceivable = useCallback((invoice: string, credit: number) => {
+    if (credit <= 0) return
+    setReceivables((list) =>
+      list.map((row) => {
+        if (row.invoice !== invoice) return row
+        const amount = Math.max(row.paid, row.amount - credit)
+        return {
+          ...row,
+          amount,
+          status: resolveReceivableStatus(amount, row.paid, row.agingDays),
+        }
+      }),
+    )
+  }, [])
+
   const value = useMemo(
     () => ({
       cashEntries,
@@ -438,6 +470,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       applySalePayment,
       removeLinkedPayable,
       removeLinkedReceivable,
+      creditPayable,
+      creditReceivable,
     }),
     [
       cashEntries,
@@ -456,6 +490,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       applySalePayment,
       removeLinkedPayable,
       removeLinkedReceivable,
+      creditPayable,
+      creditReceivable,
     ],
   )
 
