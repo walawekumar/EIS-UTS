@@ -453,7 +453,9 @@ function PayrollDetailDrawer({
     userRole === 'keuangan' &&
     run.status === 'menunggu_approve' &&
     !hasApproval(run.approvals, 'keuangan')
-  const canCair = run.status === 'siap_cair'
+  const canCairFinance =
+    run.status === 'siap_cair' &&
+    (userRole === 'keuangan' || userRole === 'admin')
 
   function applyLines(lines: PayrollLine[]) {
     if (needsEditConfirm) setConfirmEdit({ lines })
@@ -537,7 +539,7 @@ function PayrollDetailDrawer({
                 Approve sebagai Keuangan
               </button>
             ) : null}
-            {canCair ? (
+            {canCairFinance ? (
               <button
                 type="button"
                 onClick={handleCairkan}

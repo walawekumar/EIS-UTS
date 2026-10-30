@@ -86,13 +86,13 @@ type PenerimaanViewProps = {
   selectedId: string | null
   onSelect: (id: string | null) => void
   onSaveWeighing: (id: string, input: WeighingInput) => void
-  onConfirm: (id: string, input: WeighingInput) => void
+  onConfirm: (
+    id: string,
+    input: WeighingInput,
+    purchaseProof?: ProofAttachment | string,
+  ) => string | undefined
   onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
-  onUpdatePurchaseProof: (
-    id: string,
-    purchaseProof: ProofAttachment | string | undefined,
-  ) => void
   onCompletePurchase: (id: string) => string | undefined
 }
 
@@ -104,7 +104,6 @@ export function PenerimaanView({
   onConfirm,
   onVoid,
   onGoTo,
-  onUpdatePurchaseProof,
   onCompletePurchase,
 }: PenerimaanViewProps) {
   const PAGE_SIZE = usePageSize()
@@ -206,11 +205,13 @@ export function PenerimaanView({
   useEffect(() => {
     if (!selectedId) return
     const found = purchases.find((p) => p.id === selectedId)
-    if (
-      found &&
-      (isPurchaseAwaitingWeigh(found.stage) || found.stage === 'ditimbang')
-    ) {
+    if (!found) return
+    if (isPurchaseAwaitingWeigh(found.stage) || found.stage === 'ditimbang') {
       openWork(found)
+      return
+    }
+    if (found.stage === 'menunggu_selesai' || found.stage === 'selesai') {
+      setDetail(found)
     }
   }, [selectedId, purchases])
 
@@ -445,10 +446,11 @@ export function PenerimaanView({
             )
           }}
           onConfirm={(input, purchaseProof) => {
-            if (purchaseProof) {
-              onUpdatePurchaseProof(work.id, purchaseProof)
+            const err = onConfirm(work.id, input, purchaseProof)
+            if (err) {
+              setToast(err)
+              return
             }
-            onConfirm(work.id, input)
             setToast(
               `${work.id} berat dikonfirmasi${
                 input.receiptName ? ` · bukti ${input.receiptName}` : ''

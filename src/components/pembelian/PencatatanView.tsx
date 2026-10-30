@@ -139,6 +139,7 @@ type PencatatanViewProps = {
   onSubmitPurchase: (id: string) => string | undefined
   onApprovePurchase: (id: string) => string | undefined
   onRejectPurchase: (id: string, reason: string) => string | undefined
+  onReopenDraft: (id: string) => string | undefined
   onUpdateInvoiceProof: (
     id: string,
     invoiceProof: Purchase['invoiceProof'],
@@ -155,6 +156,7 @@ export function PencatatanView({
   onSubmitPurchase,
   onApprovePurchase,
   onRejectPurchase,
+  onReopenDraft,
   onUpdateInvoiceProof,
 }: PencatatanViewProps) {
   const PAGE_SIZE = usePageSize()
@@ -438,6 +440,14 @@ export function PencatatanView({
             }
             setToast('Pengajuan ditolak')
           }}
+          onReopenDraft={() => {
+            const err = onReopenDraft(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
+            setToast(`${detail.id} kembali ke draft — perbarui invoice lalu ajukan`)
+          }}
           onUpdateInvoiceProof={(proof) =>
             onUpdateInvoiceProof(detail.id, proof)
           }
@@ -511,6 +521,7 @@ function PurchaseDetailDrawer({
   onSubmitPurchase,
   onApprovePurchase,
   onRejectPurchase,
+  onReopenDraft,
   onUpdateInvoiceProof,
   onError,
 }: {
@@ -522,6 +533,7 @@ function PurchaseDetailDrawer({
   onSubmitPurchase: () => void
   onApprovePurchase: () => void
   onRejectPurchase: (reason: string) => void
+  onReopenDraft: () => void
   onUpdateInvoiceProof: (proof: Purchase['invoiceProof']) => void
   onError: (message: string) => void
 }) {
@@ -622,6 +634,15 @@ function PurchaseDetailDrawer({
               className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
             >
               Ajukan ke keuangan
+            </button>
+          ) : null}
+          {p.stage === 'ditolak' && canPembelian ? (
+            <button
+              type="button"
+              onClick={onReopenDraft}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              Edit ulang
             </button>
           ) : null}
           {p.stage === 'diajukan' && canFinance ? (

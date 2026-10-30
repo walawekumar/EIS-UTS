@@ -12,6 +12,7 @@ export function PencatatanPage() {
     submitPurchase,
     approvePurchase,
     rejectPurchase,
+    reopenPurchaseDraft,
     updatePurchaseProofs,
   } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
@@ -32,6 +33,7 @@ export function PencatatanPage() {
         onSubmitPurchase={submitPurchase}
         onApprovePurchase={approvePurchase}
         onRejectPurchase={rejectPurchase}
+        onReopenDraft={reopenPurchaseDraft}
         onUpdateInvoiceProof={(id, invoiceProof) =>
           updatePurchaseProofs(id, { invoiceProof })
         }

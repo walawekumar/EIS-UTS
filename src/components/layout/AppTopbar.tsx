@@ -14,9 +14,10 @@ function formatToday(date = new Date()): string {
 type AppTopbarProps = {
   title: string
   onMenuToggle?: () => void
+  mobileNavOpen?: boolean
 }
 
-export function AppTopbar({ title, onMenuToggle }: AppTopbarProps) {
+export function AppTopbar({ title, onMenuToggle, mobileNavOpen }: AppTopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-panel px-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -24,6 +25,7 @@ export function AppTopbar({ title, onMenuToggle }: AppTopbarProps) {
           <button
             type="button"
             aria-label="Menu"
+            aria-expanded={mobileNavOpen ?? false}
             onClick={onMenuToggle}
             className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line text-ink transition hover:bg-brand-50 md:hidden"
           >

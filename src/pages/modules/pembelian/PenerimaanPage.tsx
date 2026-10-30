@@ -7,7 +7,6 @@ export function PenerimaanPage() {
     saveWeighing,
     confirmWeighing,
     voidPurchase,
-    updatePurchaseProofs,
     completePurchase,
   } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
@@ -21,18 +20,14 @@ export function PenerimaanPage() {
         saveWeighing(id, input)
         select(id)
       }}
-      onConfirm={(id, input) => {
-        confirmWeighing(id, input)
-        select(id)
-      }}
+      onConfirm={(id, input, purchaseProof) =>
+        confirmWeighing(id, input, purchaseProof)
+      }
       onVoid={(id, reason) => {
         voidPurchase(id, reason)
         select(null)
       }}
       onGoTo={goTo}
-      onUpdatePurchaseProof={(id, purchaseProof) =>
-        updatePurchaseProofs(id, { purchaseProof })
-      }
       onCompletePurchase={completePurchase}
     />
   )

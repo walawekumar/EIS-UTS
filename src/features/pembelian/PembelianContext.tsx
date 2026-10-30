@@ -63,7 +63,12 @@ type PembelianContextValue = {
   rejectPurchase: (id: string, reason: string) => string | undefined
   completePurchase: (id: string) => string | undefined
   saveWeighing: (id: string, input: WeighingInput) => string | undefined
-  confirmWeighing: (id: string, input: WeighingInput) => string | undefined
+  confirmWeighing: (
+    id: string,
+    input: WeighingInput,
+    purchaseProof?: Purchase['purchaseProof'],
+  ) => string | undefined
+  reopenPurchaseDraft: (id: string) => string | undefined
   addPayment: (id: string, payment: NewPayment) => string | undefined
   updatePurchaseProofs: (
     id: string,
@@ -345,8 +350,34 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     [items, patch, user?.role],
   )
 
+  const reopenPurchaseDraft = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
+        return 'Hanya petugas pembelian atau admin yang dapat mengedit ulang.'
+      }
+      const current = items.find((p) => p.id === id)
+      if (!current) return 'Dokumen pembelian tidak ditemukan.'
+      if (current.stage !== 'ditolak') {
+        return 'Hanya pengajuan ditolak yang dapat diedit ulang.'
+      }
+      patch(id, () => ({ stage: 'draft', rejectReason: undefined }))
+      appendAudit({
+        action: 'update',
+        entity: 'purchase',
+        entityId: id,
+        note: 'Kembali ke draft setelah ditolak',
+      })
+      return undefined
+    },
+    [items, patch, appendAudit, user?.role],
+  )
+
   const confirmWeighing = useCallback(
-    (id: string, input: WeighingInput): string | undefined => {
+    (
+      id: string,
+      input: WeighingInput,
+      purchaseProof?: Purchase['purchaseProof'],
+    ): string | undefined => {
       if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
         return 'Hanya petugas pembelian atau admin yang dapat mengonfirmasi timbang.'
       }
@@ -359,6 +390,10 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (!current) return 'Dokumen pembelian tidak ditemukan.'
       if (current.stage !== 'ditimbang') {
         return 'Simpan hasil timbang terlebih dahulu sebelum konfirmasi.'
+      }
+      const proof = purchaseProof ?? current.purchaseProof
+      if (!hasProof(proof)) {
+        return 'Lampirkan struk beli sebelum konfirmasi penerimaan.'
       }
 
       const weighing = {
@@ -380,6 +415,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         dueDate,
         effectivePrice: unitPrice,
         lotId,
+        purchaseProof: proof,
       }
       const summary = summarize(next)
       const supplier = getSupplier(next.supplierId)
@@ -477,6 +513,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       completePurchase,
       saveWeighing,
       confirmWeighing,
+      reopenPurchaseDraft,
       addPayment,
       updatePurchaseProofs,
     }),
@@ -491,6 +528,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       completePurchase,
       saveWeighing,
       confirmWeighing,
+      reopenPurchaseDraft,
       addPayment,
       updatePurchaseProofs,
     ],
