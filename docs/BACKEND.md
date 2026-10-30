@@ -21,11 +21,20 @@ Factory generik: `src/lib/create-local-repository.ts`.
 Domain & status: `docs/DOMAIN.md`.  
 Sync multi-tab (pra-cloud): `src/features/sync/sync-bus.ts`.
 
-## Arah Supabase
+## Supabase DB-A (Master + Auth)
 
-1. Tambah `@supabase/supabase-js` + env `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
-2. Ganti body `load` / `save` di tiap `*Repository` (atau buat `supabaseRepository` dengan interface yang sama).
-3. Auth: ganti `demo-users.ts` + `AuthContext.login` dengan `supabase.auth.signInWithPassword`.
-4. Idealnya ganti dump penuh jadi `select` / `upsert` per tabel + realtime (ganti `publishSync` / `subscribeSync`).
+- Env: lihat `.env.example` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
+- Migrasi: `supabase/migrations/20261030_master_rbac.sql`
+- Seed: `docs/supabase-seed-master.md` + `supabase/seed/20261030_master_data.sql`
+- Client: `src/lib/supabase-client.ts`
+- Cloud master: `src/features/master/master-cloud.ts`
+- Auth: `AuthContext` memakai Supabase bila env ada; else `demo-users`
+
+Modul lain (persediaan, ops, keuangan, …) masih localStorage.
+
+## Arah berikutnya
+
+1. Ganti body `load` / `save` modul operasional ke tabel Supabase + RLS.
+2. Idealnya `select` / `upsert` per tabel + realtime (ganti `publishSync` / `subscribeSync`).
 
 Integrasi antar modul (utang, piutang, kas, stok, produksi) sudah terjadi di context React; backend hanya perlu menyimpan hasil transaksi yang sama.

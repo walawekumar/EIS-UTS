@@ -1,7 +1,7 @@
 # Spek: Supabase fondasi — Master + RBAC (gelombang DB-A)
 
 Tanggal: 2026-10-30  
-Status: approved (user: pendekatan 1 + Master/RBAC + alur data)  
+Status: approved (user: acc → plan)  
 Pra-syarat: fitur operasional (s.d. 2c) masih localStorage; spek ini hanya memindahkan **auth + master** ke cloud.
 
 ## Tujuan
