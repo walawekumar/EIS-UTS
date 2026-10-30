@@ -64,6 +64,11 @@ export type ExpensePostTax = {
   priceMode: PriceMode
 }
 
+/** Nilai keluar kas/jurnal (termasuk PPN bila ada snapshot). */
+export function expenseDisplayAmount(row: ExpenseRow): number {
+  return row.totalWithTax ?? row.amount
+}
+
 /** Tax settings first, then app finance.ppnRate, then 11% exclusive. */
 export function resolveExpenseTaxDefaults(settings: {
   defaultRate?: number
@@ -626,11 +631,14 @@ export function buildPiutangStats(rows: ReceivableRow[]): MetricCardData[] {
 
 export function buildBiayaStats(rows: ExpenseRow[]): MetricCardData[] {
   const active = rows.filter((r) => r.status !== 'void')
-  const total = active.reduce((s, r) => s + r.amount, 0)
+  const total = active.reduce((s, r) => s + expenseDisplayAmount(r), 0)
   const drafts = rows.filter((r) => r.status === 'draft')
   const byCat = new Map<string, number>()
   for (const row of active) {
-    byCat.set(row.category, (byCat.get(row.category) ?? 0) + row.amount)
+    byCat.set(
+      row.category,
+      (byCat.get(row.category) ?? 0) + expenseDisplayAmount(row),
+    )
   }
   let topCat = '—'
   let topSum = 0

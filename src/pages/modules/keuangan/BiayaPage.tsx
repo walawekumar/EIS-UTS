@@ -45,6 +45,7 @@ import {
   EXPENSE_CATEGORIES,
   EXPENSE_STATUS_LABEL,
   buildBiayaStats,
+  expenseDisplayAmount,
   formatIdr,
   parseIdrInput,
   resolveExpenseTaxDefaults,
@@ -154,7 +155,7 @@ export function BiayaPage() {
       date: (r) => r.date,
       status: (r) => r.status,
       description: (r) => r.description,
-      amount: (r) => r.amount,
+      amount: (r) => expenseDisplayAmount(r),
       actor: (r) => r.actor,
     })
   }, [expenses, search, filter, statusFilter, dateFrom, dateTo, sort])
@@ -235,7 +236,7 @@ export function BiayaPage() {
     const ok = printBukti(
       `Bukti biaya ${row.reference}`,
       [
-        { label: 'Nilai biaya', value: formatIdr(row.amount) },
+        { label: 'Nilai biaya', value: formatIdr(expenseDisplayAmount(row)) },
         { label: 'Tanggal', value: row.date },
         { label: 'Kategori', value: row.category },
         { label: 'Keterangan', value: row.description },
@@ -380,7 +381,7 @@ export function BiayaPage() {
                     {row.description}
                   </FinanceTd>
                   <FinanceTd mono className="font-medium whitespace-nowrap">
-                    {formatIdr(row.amount)}
+                    {formatIdr(expenseDisplayAmount(row))}
                   </FinanceTd>
                   <FinanceTd>
                     <ActorCell name={row.actor} />
@@ -534,6 +535,9 @@ function BiayaDetailDrawer({
 }) {
   const heroTone =
     row.status === 'posted' ? 'good' : row.status === 'void' ? 'danger' : 'warn'
+  const displayTotal = expenseDisplayAmount(row)
+  const hasTaxSnapshot =
+    row.dpp != null && row.ppn != null && row.totalWithTax != null
 
   return (
     <DetailDrawer
@@ -587,7 +591,7 @@ function BiayaDetailDrawer({
     >
       <DrawerHero
         label="Nilai biaya"
-        amount={formatIdr(row.amount)}
+        amount={formatIdr(displayTotal)}
         tone={heroTone}
         hint={EXPENSE_STATUS_LABEL[row.status]}
       />
@@ -607,10 +611,22 @@ function BiayaDetailDrawer({
             ['Tanggal', row.date],
             ['Kategori', row.category],
             ['Status', EXPENSE_STATUS_LABEL[row.status]],
-            ['Jumlah', formatIdr(row.amount)],
+            ['Jumlah', formatIdr(displayTotal)],
           ]}
         />
       </DrawerSection>
+
+      {hasTaxSnapshot ? (
+        <DrawerSection label="PPN">
+          <DrawerFacts
+            items={[
+              ['DPP', formatIdr(row.dpp!)],
+              ['PPN', formatIdr(row.ppn!)],
+              ['Total', formatIdr(row.totalWithTax!)],
+            ]}
+          />
+        </DrawerSection>
+      ) : null}
 
       <DrawerSection label="Bukti">
         {row.receiptName ? (
