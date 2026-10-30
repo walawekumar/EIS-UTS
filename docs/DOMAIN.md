@@ -14,6 +14,7 @@ Sumber kebenaran tipe: `src/features/*/ *-data.ts`. Dokumen ini merangkum entita
 | Stock / Movement / Correction | Persediaan | `egabah.persediaan.v1` |
 | Batch (giling) / PackRun / LotCost | Produksi | `egabah.produksi.v1` |
 | Cash / Payable / Receivable / Expense | Keuangan | `egabah.keuangan.v1` |
+| TaxDoc / TaxInvoice / TaxSettings | Keuangan (PPN) | `egabah.tax.v1` |
 | AuditLog | Sistem | `egabah.audit.v1` |
 
 ## Lokasi (multi-gudang MVP)
@@ -185,7 +186,7 @@ Nilai gabah dari PO terkait lot; alokasi ops manual atau proporsional qty batch 
 | Entitas | File | Keterangan |
 | --- | --- | --- |
 | `Account` | `gl-data.ts` | `code`, `name`, `type` (`asset` \| `liability` \| `equity` \| `revenue` \| `expense`), `isPostable`, `active`, `system` |
-| `AccountMap` | ↑ | Kunci posting tetap (`cash`, `ap`, `ar`, `inventoryGabah`, `inventoryBeras`, `wip`, `cogs`, `sales`, `salesReturn`, …) → `accountId` |
+| `AccountMap` | ↑ | Kunci posting tetap (`cash`, `ap`, `ar`, `inventoryGabah`, `inventoryBeras`, `wip`, `cogs`, `sales`, `salesReturn`, `ppnOut`, `ppnIn`, …) → `accountId` |
 | `JournalEntry` / `JournalLine` | ↑ | Double-entry; `sourceType` `auto` \| `manual` \| `opening` \| `reverse`; void via `voidedAt` + pasangan reverse |
 | `FailedJournalPost` | ↑ | Antrean tipis jika ops sukses tetapi `postJournal` gagal — `{ sourceKey, payload, error, createdAt }`; retry dari UI Jurnal |
 
@@ -212,9 +213,65 @@ Layar **Kas, Utang, Piutang, Biaya, Payroll** tetap sumber kerja harian (`upsert
 - **Laba rugi:** pendapatan − beban; `salesReturn` tipe `revenue` kontra (mengurangi pendapatan).
 - **Neraca:** aset vs utang + ekuitas + laba rugi berjalan.
 
-### Di luar scope 2a
+### Di luar scope 2a / belum (2c)
 
-PPN / e-Faktur, rekonsiliasi bank, tutup buku enforced, dan **backfill** jurnal untuk transaksi sebelum go-live GL. Gelombang 1 (retur, QC, pack, costing) sudah ada di ops; jurnal auto hanya **forward** dari aktivasi 2a.
+Rekonsiliasi bank, tutup buku enforced, integrasi **API DJP** e-Faktur sungguhan, dan **backfill** jurnal untuk transaksi sebelum go-live GL. Gelombang 1 (retur, QC, pack, costing) sudah ada di ops; jurnal auto hanya **forward** dari aktivasi 2a.
+
+**Gelombang 2b (PPN + e-Faktur mock)** sudah diimplementasi — lihat bagian berikut. Tidak ada backfill `TaxDoc` / jurnal PPN untuk transaksi lama.
+
+## PPN & e-Faktur (gelombang 2b)
+
+**Storage:** `egabah.tax.v1` (`tax-data.ts`, `tax-storage.ts`, `TaxProvider` / `useTaxStore`). Tipe sumber kebenaran selaras dengan snapshot pajak di dokumen ops.
+
+### Entitas pajak
+
+| Entitas | Keterangan |
+| --- | --- |
+| `TaxSettings` | `npwp`, `invoicePrefix`, `nextSeq`, `defaultRate` (`0` \| `11`), `defaultPriceMode` (`exclusive` \| `inclusive`) |
+| `TaxDoc` | Jejak pajak per sumber: `sourceType` (`sale` \| `purchase` \| `expense` \| `saleReturn` \| `purchaseReturn`), `sourceId`, `date`, `ppnRate`, `priceMode`, `dpp`, `ppn`, `total`, `partyName?`, `supplierFakturNo?` (pembelian), `voidedAt?` |
+| `TaxInvoice` | Faktur pajak keluaran **mock** (bukan DJP): `number`, `taxDocId`, `saleOrderId`, `status` (`draft` \| `sent` \| `failed` \| `void`), `dpp` / `ppn` / `total`, `sentAt?`, `failReason?` |
+
+`TaxSnapshotFields` (`ppnRate`, `priceMode`, `dpp`, `ppn`, `totalWithTax`) disalin ke **SaleOrder**, **SaleReturn**, **Purchase**, **PurchaseReturn**, dan baris **Expense** saat post/kirim/terima.
+
+### `computePpn` (`tax-compute.ts`)
+
+Input: `subtotal` (nilai baris/dokumen sebelum pajak menurut mode), `rate`, `priceMode`. Semua rupiah dibulatkan integer.
+
+| Rate | Mode | Hasil |
+| --- | --- | --- |
+| `0` | apa pun | `dpp = subtotal`, `ppn = 0`, `total = subtotal` |
+| `11` | `exclusive` | `dpp = subtotal`, `ppn = round(dpp × 11%)`, `total = dpp + ppn` |
+| `11` | `inclusive` | `total = subtotal`, `dpp = round(total ÷ 1,11)`, `ppn = total − dpp` |
+
+Default UI: `TaxSettings`, lalu `readAppSettings().finance.ppnRate`, lalu 11% exclusive (`resolve*TaxDefaults` per modul).
+
+### Dual-track: total ops vs DPP/PPN di GL
+
+- **Subledger (AR / AP / kas / piutang):** nominal outstanding dan pembayaran memakai **`calc.total`** (tersimpan sebagai `totalWithTax` pada dokumen sumber).
+- **GL:** pendapatan / persediaan / beban memakai **`dpp`**; PPN memakai akun map **`ppnOut`** (keluaran, kredit saat jual) atau **`ppnIn`** (masukan, debit saat beli/biaya).
+- Ringkasan daftar (`summarize` penjualan/pembelian): `totalWithTax ??` fallback subtotal lama (data pra-PPN).
+- Gagal `postJournal` setelah ops sukses → `FailedJournalPost` + **`journalError` toast** di halaman pemicu (ops tidak di-rollback), sama pola gelombang 2a.
+
+### Mapping akun PPN
+
+Seed COA: `acc-ppn-out` (utang PPN keluaran), `acc-ppn-in` (aset PPN masukan). Kunci `AccountMap`: `ppnOut`, `ppnIn` — dapat diubah di **Keuangan → Pemetaan akun**.
+
+### Jurnal otomatis (contoh)
+
+| Event | Ops (total) | Baris GL (selain COGS/stok yang sudah ada) |
+| --- | --- | --- |
+| Kirim SO | AR / kas `total` | Cr `sales` `dpp`; jika `ppn > 0` Cr `ppnOut` `ppn` |
+| Retur jual posted | Kurangi AR `total` | Dr `salesReturn` `dpp`; jika PPN Dr `ppnOut` |
+| Terima PO | AP `total` | Dr `inventoryGabah` `dpp`; jika PPN Dr `ppnIn` |
+| Retur beli posted | Kurangi AP `total` | Cr persediaan `dpp`; jika PPN Cr `ppnIn` |
+| Biaya posted | Kas out `total` | Dr `expenseOps` `dpp`; jika PPN Dr `ppnIn` |
+
+Void dokumen sumber → reverse jurnal + **`voidTaxForSource`** (`TaxDoc.voidedAt`, `TaxInvoice` → `void`).
+
+### `TaxInvoice` & e-Faktur UI
+
+- Dibuat hanya saat **kirim penjualan** dengan **`ppn > 0`** (`recordSaleInvoice`); tarif 0% → **tanpa** `TaxInvoice`.
+- Halaman **`/app/keuangan/e-faktur`**: daftar faktur, filter, drawer detail, pengaturan NPWP/prefix/default, **unduh CSV** (`buildEfakturCsv`), **kirim mock** (`sendInvoiceMock` → `sent` atau `failed` jika simulasi gagal). **Tidak** memanggil API Coretax/DJP.
 
 ## Produksi — struktur batch
 
