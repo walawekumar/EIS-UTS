@@ -14,6 +14,7 @@ import { downloadCsv } from '@/features/persediaan/persediaan-utils'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import { usePembelian } from '@/features/pembelian/PembelianContext'
 import {
+  formatRupiah,
   isPurchaseReceivedForAp,
   summarize as sumPurchase,
 } from '@/features/pembelian/pembelian-data'
@@ -22,7 +23,7 @@ import { summarize as sumSale } from '@/features/penjualan/penjualan-data'
 import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
 import { isLowStock } from '@/features/persediaan/persediaan-data'
 import { useProduksi } from '@/features/produksi/ProduksiContext'
-import { actualRendemen } from '@/features/produksi/produksi-data'
+import { actualRendemen, type LotCost } from '@/features/produksi/produksi-data'
 import { downloadBackup } from '@/features/backup/backup'
 
 type Tab = 'ringkas' | 'aging' | 'stok' | 'produksi'
@@ -40,7 +41,7 @@ export function LaporanPage() {
   const { purchases } = usePembelian()
   const { orders } = usePenjualan()
   const { stocks } = usePersediaanStore()
-  const { batches } = useProduksi()
+  const { batches, lotCosts } = useProduksi()
   const [tab, setTab] = useState<Tab>('ringkas')
   const [toast, setToast] = useState<string | null>(null)
 
@@ -61,6 +62,29 @@ export function LaporanPage() {
     .reduce((s, e) => s + e.amount, 0)
   const cashBal = cashEntries[0]?.balance ?? 0
   const low = stocks.filter(isLowStock)
+
+  const purchaseByLotId = useMemo(() => {
+    const map = new Map<string, (typeof purchases)[number]>()
+    for (const p of purchases) {
+      if (p.lotId) map.set(p.lotId, p)
+    }
+    return map
+  }, [purchases])
+
+  const batchById = useMemo(() => {
+    const map = new Map<string, (typeof batches)[number]>()
+    for (const b of batches) map.set(b.id, b)
+    return map
+  }, [batches])
+
+  const costingRows = useMemo(() => {
+    const latestByLot = new Map<string, LotCost>()
+    for (const row of lotCosts) {
+      const prev = latestByLot.get(row.lotId)
+      if (!prev || row.at.localeCompare(prev.at) > 0) latestByLot.set(row.lotId, row)
+    }
+    return [...latestByLot.values()].sort((a, b) => b.at.localeCompare(a.at))
+  }, [lotCosts])
 
   const stats = useMemo(
     () => [
@@ -276,35 +300,104 @@ export function LaporanPage() {
         ) : null}
 
         {tab === 'produksi' ? (
-          <FinanceTable>
-            <FinanceThead>
-              <FinanceTh>Batch</FinanceTh>
-              <FinanceTh>Target</FinanceTh>
-              <FinanceTh>Aktual</FinanceTh>
-              <FinanceTh>Δ</FinanceTh>
-              <FinanceTh>Status</FinanceTh>
-            </FinanceThead>
-            <tbody>
-              {batches.map((b) => {
-                const act = actualRendemen(b)
-                const d = act - b.targetRendemen
-                return (
-                  <FinanceTr key={b.id}>
-                    <FinanceTd mono>{b.id}</FinanceTd>
-                    <FinanceTd mono>{b.targetRendemen.toFixed(1)}%</FinanceTd>
-                    <FinanceTd mono>{act.toFixed(1)}%</FinanceTd>
-                    <FinanceTd>
-                      <StatusPill
-                        label={`${d >= 0 ? '+' : ''}${d.toFixed(1)}`}
-                        tone={d >= 0 ? 'good' : 'warn'}
-                      />
-                    </FinanceTd>
-                    <FinanceTd>{b.stage}</FinanceTd>
-                  </FinanceTr>
-                )
-              })}
-            </tbody>
-          </FinanceTable>
+          <div className="space-y-6">
+            <div>
+              <h3 className="mb-2 text-[13px] font-semibold text-ink">Rendemen batch</h3>
+              <FinanceTable>
+                <FinanceThead>
+                  <FinanceTh>Batch</FinanceTh>
+                  <FinanceTh>Target</FinanceTh>
+                  <FinanceTh>Aktual</FinanceTh>
+                  <FinanceTh>Δ</FinanceTh>
+                  <FinanceTh>Status</FinanceTh>
+                </FinanceThead>
+                <tbody>
+                  {batches.map((b) => {
+                    const act = actualRendemen(b)
+                    const d = act - b.targetRendemen
+                    return (
+                      <FinanceTr key={b.id}>
+                        <FinanceTd mono>{b.id}</FinanceTd>
+                        <FinanceTd mono>{b.targetRendemen.toFixed(1)}%</FinanceTd>
+                        <FinanceTd mono>{act.toFixed(1)}%</FinanceTd>
+                        <FinanceTd>
+                          <StatusPill
+                            label={`${d >= 0 ? '+' : ''}${d.toFixed(1)}`}
+                            tone={d >= 0 ? 'good' : 'warn'}
+                          />
+                        </FinanceTd>
+                        <FinanceTd>{b.stage}</FinanceTd>
+                      </FinanceTr>
+                    )
+                  })}
+                </tbody>
+              </FinanceTable>
+            </div>
+
+            <div>
+              <h3 className="mb-0.5 text-[13px] font-semibold text-ink">
+                Costing & rendemen per lot
+              </h3>
+              <p className="mb-2 text-[12px] text-muted">
+                Snapshot biaya/kg beras terakhir per lot (gabah + alokasi ops)
+              </p>
+              <FinanceTable>
+                <FinanceThead>
+                  <FinanceTh>Lot</FinanceTh>
+                  <FinanceTh>Batch</FinanceTh>
+                  <FinanceTh>PO / pemasok</FinanceTh>
+                  <FinanceTh>Rendemen</FinanceTh>
+                  <FinanceTh>Cost/kg</FinanceTh>
+                  <FinanceTh>Nilai gabah</FinanceTh>
+                  <FinanceTh>Alokasi ops</FinanceTh>
+                  <FinanceTh>Metode</FinanceTh>
+                </FinanceThead>
+                <tbody>
+                  {costingRows.length === 0 ? (
+                    <FinanceEmptyRow
+                      colSpan={8}
+                      message="Belum ada snapshot costing. Selesaikan batch atau hitung ulang di Rendemen."
+                    />
+                  ) : (
+                    costingRows.map((row) => {
+                      const batch = batchById.get(row.batchId)
+                      const purchase = purchaseByLotId.get(row.lotId)
+                      const act = batch ? actualRendemen(batch) : null
+                      return (
+                        <FinanceTr key={`${row.lotId}-${row.batchId}-${row.at}`}>
+                          <FinanceTd mono>{row.lotId}</FinanceTd>
+                          <FinanceTd mono>{row.batchId}</FinanceTd>
+                          <FinanceTd>
+                            {purchase ? (
+                              <>
+                                <p className="font-medium text-ink">{purchase.id}</p>
+                                <p className="text-[11px] text-muted">{purchase.supplier}</p>
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </FinanceTd>
+                          <FinanceTd mono>
+                            {act != null ? `${act.toFixed(1)}%` : '—'}
+                          </FinanceTd>
+                          <FinanceTd mono>
+                            {row.costPerKgBeras > 0
+                              ? formatRupiah(row.costPerKgBeras)
+                              : '—'}
+                          </FinanceTd>
+                          <FinanceTd mono>{formatRupiah(row.grainValue)}</FinanceTd>
+                          <FinanceTd mono>{formatRupiah(row.allocatedOps)}</FinanceTd>
+                          <FinanceTd>
+                            {row.method === 'manual' ? 'Manual' : 'Proporsional'}
+                          </FinanceTd>
+                        </FinanceTr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </FinanceTable>
+            </div>
+          </div>
         ) : null}
       </section>
     </div>

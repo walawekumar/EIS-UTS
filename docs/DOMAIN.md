@@ -9,10 +9,10 @@ Sumber kebenaran tipe: `src/features/*/ *-data.ts`. Dokumen ini merangkum entita
 | Partner (pemasok/pelanggan) | Master | `egabah.master.v1` |
 | Produk / SKU | Master | ↑ |
 | Pengguna & peran | Master | ↑ |
-| Purchase | Pembelian | `egabah.pembelian.v1` |
-| SaleOrder | Penjualan | `egabah.penjualan.v1` |
+| Purchase / PurchaseReturn / LotQc | Pembelian | `egabah.pembelian.v1` |
+| SaleOrder / SaleReturn | Penjualan | `egabah.penjualan.v1` |
 | Stock / Movement / Correction | Persediaan | `egabah.persediaan.v1` |
-| Batch (giling) | Produksi | `egabah.produksi.v1` |
+| Batch (giling) / PackRun / LotCost | Produksi | `egabah.produksi.v1` |
 | Cash / Payable / Receivable / Expense | Keuangan | `egabah.keuangan.v1` |
 | AuditLog | Sistem | `egabah.audit.v1` |
 
@@ -111,6 +111,71 @@ Helper approval: `src/features/workflow/approvals.ts` (`ApprovalStamp`, `hasAppr
 - Void setelah dikirim: reverse stok + hapus AR tertaut (`voidedAt`).
 - Hard-delete hanya tahap awal (`dibuat`).
 - Limit kredit pelanggan dicek saat kirim dengan settlement `kredit`.
+
+### Pembelian — retur — `ReturnStage` (`PurchaseReturn`)
+
+Storage: array `returns` di `egabah.pembelian.v1` (migrasi bundle menambah `returns: []` bila absen).
+
+```
+draft → diajukan → disetujui → posted
+                 ↘ ditolak (edit → draft → ajukan ulang)
+```
+
+| Field inti | Keterangan |
+| --- | --- |
+| `id`, `purchaseId`, `lotId?` | Soft-link ke PO / lot timbang |
+| `lines[]` | `{ sku, qty }` — qty ≤ sisa setelah retur posted sebelumnya |
+| `reason`, `stage`, `approvals?`, `postedAt?` | |
+
+| Aksi | Peran | Efek |
+| --- | --- | --- |
+| Ajukan | pembelian, admin | — |
+| Approve / tolak / post | keuangan, admin | Post: stok **out** (kembali ke pemasok); **`creditPayable`** kurangi outstanding AP PO asal (bukan hard-delete PO) |
+
+Hard-delete hanya `draft` / `ditolak`. Konfirmasi lewat `ConfirmDialog` / `PromptDialog`, bukan native.
+
+### Penjualan — retur — `ReturnStage` (`SaleReturn`)
+
+Storage: array `returns` di `egabah.penjualan.v1`.
+
+Alur stage sama dengan retur pembelian. Post: stok **in**; **`creditReceivable`** kurangi outstanding AR order asal. Peran: ajukan = penjualan\|admin; approve/post = keuangan\|admin.
+
+### Pembelian — QC lot — `LotQc`
+
+Key = `lotId` dari timbang PO. Satu record aktif per lot (upsert) di `lotQc` pada `egabah.pembelian.v1`.
+
+| Field | Keterangan |
+| --- | --- |
+| `moisture`, `impurity`, `brokenPct` | Angka % |
+| `grade` | `A` \| `B` \| `C` \| `reject` |
+| `passed` | boolean |
+| `overrideReason?` | Wajib jika terima barang saat `!passed` (override admin, teraudit) |
+
+**Gate penerimaan:** konfirmasi terima PO membutuhkan QC `passed` **atau** override admin + alasan. Isi QC: pembelian\|gudang\|admin; override: admin saja.
+
+### Produksi — packing — `PackRun`
+
+Dari batch `done`: pecah satu output giling ke SKU kemasan/grade. Storage: `packRuns` di `egabah.produksi.v1`.
+
+```
+draft → posted  (koreksi material = void pack + buat baru)
+```
+
+Post: stok **out** SKU sumber giling; **in** ke baris kemasan/grade. Tolak jika stok sumber kurang. Peran: produksi\|admin.
+
+### Produksi — costing lot — `LotCost` (snapshot)
+
+Storage: `lotCosts` di `egabah.produksi.v1`. Bukan workflow approve; dihitung/disimpan saat batch selesai atau hitung ulang dari UI Rendemen.
+
+```
+costPerKgBeras = (nilaiGabahEfektifLot + alokasiBiayaOps) / qtyBerasHasil
+```
+
+Nilai gabah dari PO terkait lot; alokasi ops manual atau proporsional qty batch vs biaya `posted` periode (`method`: `manual` \| `proportional`). Snapshot tidak berubah saat master harga berubah. Tampil di **Rendemen** (ranking) dan **Laporan** (tab Produksi → blok costing per lot).
+
+## Akuntansi (gelombang 1)
+
+Transaksi di atas (retur, pack, costing) **belum** menulis jurnal COA. AP/AR disentuh hanya lewat `creditPayable` / `creditReceivable` pada post retur; pack dan `LotCost` hanya stok + snapshot nilai.
 
 ## Produksi — struktur batch
 
