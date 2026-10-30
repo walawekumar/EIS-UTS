@@ -1,7 +1,7 @@
 # Spek: Polish GL 2a — LotCost COGS + toast gagal jurnal
 
 Tanggal: 2026-10-30  
-Status: draft (menunggu review user)  
+Status: approved (user: continue → plan → SDD)  
 Pra-syarat: gelombang 2a (COA + jurnal + laporan GL) sudah di `main`
 
 ## Tujuan
