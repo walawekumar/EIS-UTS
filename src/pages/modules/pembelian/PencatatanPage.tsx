@@ -44,9 +44,13 @@ export function PencatatanPage() {
         nextId={nextPurchaseId(purchases)}
         onClose={() => setFormOpen(false)}
         onSave={(data) => {
-          const id = createPurchase(data)
+          const result = createPurchase(data)
+          if (!result.ok) {
+            window.alert(result.error)
+            return
+          }
           setFormOpen(false)
-          select(id)
+          select(result.id)
         }}
       />
     </>

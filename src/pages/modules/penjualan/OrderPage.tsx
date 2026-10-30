@@ -28,9 +28,13 @@ export function OrderPage() {
         nextId={nextOrderId(orders)}
         onClose={() => setFormOpen(false)}
         onSave={(data) => {
-          const id = createOrder(data)
+          const result = createOrder(data)
+          if (!result.ok) {
+            window.alert(result.error)
+            return
+          }
           setFormOpen(false)
-          select(id)
+          select(result.id)
         }}
       />
     </>

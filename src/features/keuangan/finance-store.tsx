@@ -26,6 +26,11 @@ import {
 } from '@/features/keuangan/gl-journal'
 import { glRepository, normalizeGlSnapshot } from '@/features/keuangan/gl-storage'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import {
+  parseCashDateToIso,
+  todayIsoDate,
+} from '@/features/keuangan/period-helpers'
 import { computePpn } from '@/features/keuangan/tax-compute'
 import type { PpnRate, PriceMode, TaxDoc } from '@/features/keuangan/tax-data'
 import {
@@ -150,10 +155,10 @@ type FinanceStoreValue = {
   setAccountActive: (id: string, active: boolean) => string | undefined
   setAccountMap: (map: AccountMap) => void
   mapAccount: (key: AccountMapKey) => string
-  addCashEntry: (input: AddCashInput) => void
-  removeCashEntry: (id: string) => void
-  payPayable: (input: PayInput) => void
-  receiveReceivable: (input: PayInput) => void
+  addCashEntry: (input: AddCashInput) => string | undefined
+  removeCashEntry: (id: string) => string | undefined
+  payPayable: (input: PayInput) => string | undefined
+  receiveReceivable: (input: PayInput) => string | undefined
   addExpense: (input: AddExpenseInput) => string | undefined
   setExpenseStatus: (id: string, status: ExpenseStatus) => string | undefined
   upsertPayableFromPurchase: (input: UpsertPayableInput) => void
@@ -181,14 +186,6 @@ function agingFromDue(iso: string): number {
   today.setHours(0, 0, 0, 0)
   const diff = Math.floor((today.getTime() - due.getTime()) / 86_400_000)
   return Math.max(0, diff)
-}
-
-function todayGlDate(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function prependCash(
@@ -290,7 +287,7 @@ function recordExpenseTaxDoc(
   expenseTaxBridge.recordTaxDoc?.({
     sourceType: 'expense',
     sourceId: expenseId,
-    date: todayGlDate(),
+    date: todayIsoDate(),
     ppnRate: tax.ppnRate,
     priceMode: tax.priceMode,
     dpp: calc.dpp,
@@ -358,18 +355,36 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   }, [accounts, accountMap, journals, failedPosts])
 
   const addCashEntry = useCallback(
-    (input: AddCashInput) => {
+    (input: AddCashInput): string | undefined => {
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       setCashEntries((list) => prependCash(list, { ...input, actor }))
+      return undefined
     },
     [actor],
   )
 
-  const removeCashEntry = useCallback((id: string) => {
-    setCashEntries((list) => list.filter((e) => e.id !== id))
+  const removeCashEntry = useCallback((id: string): string | undefined => {
+    let blocked: string | undefined
+    setCashEntries((list) => {
+      const entry = list.find((e) => e.id === id)
+      if (!entry) return list
+      const iso = parseCashDateToIso(entry.date)
+      if (!iso) return list
+      const locked = assertPeriodOpen(iso)
+      if (locked) {
+        blocked = locked
+        return list
+      }
+      return list.filter((e) => e.id !== id)
+    })
+    return blocked
   }, [])
 
   const payPayable = useCallback(
-    ({ id, amount, invoice, party, note, receiptName }: PayInput) => {
+    ({ id, amount, invoice, party, note, receiptName }: PayInput): string | undefined => {
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       setPayables((list) =>
         list.map((row) => {
           if (row.id !== id) return row
@@ -395,12 +410,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           receiptName,
         }),
       )
+      return undefined
     },
     [actor],
   )
 
   const receiveReceivable = useCallback(
-    ({ id, amount, invoice, party, note, receiptName }: PayInput) => {
+    ({ id, amount, invoice, party, note, receiptName }: PayInput): string | undefined => {
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       setReceivables((list) =>
         list.map((row) => {
           if (row.id !== id) return row
@@ -426,6 +444,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           receiptName,
         }),
       )
+      return undefined
     },
     [actor],
   )
@@ -649,6 +668,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const postJournalEntry = useCallback(
     (input: PostJournalEntryInput): string | undefined => {
+      const locked = assertPeriodOpen(input.date)
+      if (locked) return locked
       const { accounts: accts, journals: jrn, failedPosts: failed } =
         glRef.current
       const result = postJournal({
@@ -697,11 +718,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const reverseJournalEntry = useCallback(
     (opts: { sourceKey?: string; id?: string }): string | undefined => {
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       const { journals: jrn } = glRef.current
       const result = reverseJournal(jrn, {
         ...opts,
         createdBy: actor,
-        date: todayGlDate(),
+        date: todayIsoDate(),
       })
       if (!result.ok) return result.error
       glRef.current = { ...glRef.current, journals: result.journals }
@@ -717,6 +740,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         (f) => f.sourceKey === sourceKey,
       )
       if (!item) return 'Antrian jurnal gagal tidak ditemukan.'
+      const locked = assertPeriodOpen(item.payload.date)
+      if (locked) return locked
       return postJournalEntry({
         date: item.payload.date,
         memo: item.payload.memo,
@@ -731,6 +756,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const addExpense = useCallback(
     (input: AddExpenseInput): string | undefined => {
+      if (input.status === 'posted') {
+        const locked = assertPeriodOpen(todayIsoDate())
+        if (locked) return locked
+      }
       const id = `e-${Date.now()}`
       const tax = resolveExpensePostTax({}, input)
       const calc =
@@ -781,7 +810,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         recordExpenseTaxDoc(id, input.description, tax, calc)
         const memo = `Biaya operasional · ${input.description}`
         return postExpenseJournal(postJournalEntry, mapAccount, {
-          date: todayGlDate(),
+          date: todayIsoDate(),
           memo,
           sourceKey: `ex:${id}:post`,
           dpp: calc.dpp,
@@ -796,14 +825,24 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const setExpenseStatus = useCallback(
     (id: string, status: ExpenseStatus): string | undefined => {
+      const prev = expenses.find((e) => e.id === id)
+      if (!prev) return 'Biaya tidak ditemukan.'
+      if (prev.status !== 'posted' && status === 'posted') {
+        const locked = assertPeriodOpen(todayIsoDate())
+        if (locked) return locked
+      }
+      if (prev.status === 'posted' && status !== 'posted') {
+        const locked = assertPeriodOpen(todayIsoDate())
+        if (locked) return locked
+      }
       let journalError: string | undefined
       setExpenses((list) => {
-        const prev = list.find((e) => e.id === id)
-        if (!prev) return list
-        if (prev.status !== 'posted' && status === 'posted') {
-          const tax = resolveExpensePostTax(prev)
+        const row = list.find((e) => e.id === id)
+        if (!row) return list
+        if (row.status !== 'posted' && status === 'posted') {
+          const tax = resolveExpensePostTax(row)
           const calc = computePpn({
-            subtotal: prev.amount,
+            subtotal: row.amount,
             rate: tax.ppnRate,
             priceMode: tax.priceMode,
           })
@@ -811,16 +850,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             prependCash(cash, {
               direction: 'out',
               category: 'Operasional',
-              description: `Biaya ${prev.reference} · ${prev.description}`,
+              description: `Biaya ${row.reference} · ${row.description}`,
               amount: calc.total,
               actor,
-              receiptName: prev.receiptName,
+              receiptName: row.receiptName,
             }),
           )
-          recordExpenseTaxDoc(id, prev.description, tax, calc)
-          const memo = `Biaya ${prev.reference} · ${prev.description}`
+          recordExpenseTaxDoc(id, row.description, tax, calc)
+          const memo = `Biaya ${row.reference} · ${row.description}`
           journalError = postExpenseJournal(postJournalEntry, mapAccount, {
-            date: todayGlDate(),
+            date: todayIsoDate(),
             memo,
             sourceKey: `ex:${id}:post`,
             dpp: calc.dpp,
@@ -841,16 +880,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
               : item,
           )
         }
-        if (prev.status === 'posted' && status !== 'posted') {
-          const cashAmount = prev.totalWithTax ?? prev.amount
+        if (row.status === 'posted' && status !== 'posted') {
+          const cashAmount = row.totalWithTax ?? row.amount
           setCashEntries((cash) =>
             prependCash(cash, {
               direction: 'in',
               category: 'Operasional',
-              description: `Void biaya ${prev.reference} · ${prev.description}`,
+              description: `Void biaya ${row.reference} · ${row.description}`,
               amount: cashAmount,
               actor,
-              receiptName: prev.receiptName,
+              receiptName: row.receiptName,
             }),
           )
           expenseTaxBridge.voidTaxForSource?.('expense', id)
@@ -864,7 +903,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       })
       return journalError
     },
-    [actor, postJournalEntry, mapAccount, reverseJournalEntry],
+    [actor, expenses, postJournalEntry, mapAccount, reverseJournalEntry],
   )
 
   const value = useMemo(

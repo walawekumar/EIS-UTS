@@ -155,7 +155,7 @@ export function KoreksiPage() {
     setErrors(next)
     if (Object.keys(next).length) return
 
-    addCorrection({
+    const err = addCorrection({
       sku: selected.sku,
       productName: selected.name,
       location: selected.location,
@@ -165,6 +165,10 @@ export function KoreksiPage() {
       reason: reason.trim(),
       receiptName: receipt?.name,
     })
+    if (err) {
+      setToast(err)
+      return
+    }
     setFormOpen(false)
     setReceipt(null)
     setPage(1)
@@ -309,7 +313,11 @@ export function KoreksiPage() {
           onClose={() => setDetail(null)}
           onPrint={() => handlePrint(detail)}
           onVoid={() => {
-            voidCorrection(detail.id)
+            const err = voidCorrection(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
             setDetail(null)
             setToast(`${detail.reference} di-void · saldo dikembalikan`)
           }}

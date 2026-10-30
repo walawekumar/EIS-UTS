@@ -157,7 +157,7 @@ export function PiutangPage() {
       return
     }
 
-    receiveReceivable({
+    const err = receiveReceivable({
       id: recvTarget.id,
       amount,
       invoice: recvTarget.invoice,
@@ -165,6 +165,10 @@ export function PiutangPage() {
       note: recvNote,
       receiptName: recvReceipt?.name,
     })
+    if (err) {
+      setRecvError(err)
+      return
+    }
     setRecvTarget(null)
     setRecvReceipt(null)
     setDetail(null)

@@ -170,7 +170,7 @@ export function KasPage() {
   function submitForm() {
     if (!validate()) return
     const amount = parseIdrInput(form.amount)
-    addCashEntry({
+    const err = addCashEntry({
       direction: form.direction,
       category: form.category,
       description: form.note.trim()
@@ -179,6 +179,10 @@ export function KasPage() {
       amount,
       receiptName: receipt?.name,
     })
+    if (err) {
+      notify(err)
+      return
+    }
     setFormOpen(false)
     setReceipt(null)
     setPage(1)
@@ -194,7 +198,12 @@ export function KasPage() {
   }
 
   function removeEntry(entry: CashEntry) {
-    removeCashEntry(entry.id)
+    const err = removeCashEntry(entry.id)
+    if (err) {
+      notify(err)
+      setConfirmDelete(null)
+      return
+    }
     setConfirmDelete(null)
     if (detail?.id === entry.id) setDetail(null)
     notify(`${entry.reference} dihapus`)

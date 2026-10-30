@@ -14,6 +14,8 @@ import { useAuth } from '@/features/auth/AuthContext'
 import type { AccountMapKey, JournalLine } from '@/features/keuangan/gl-data'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import { computePpn } from '@/features/keuangan/tax-compute'
 import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
 import { useTaxStore } from '@/features/keuangan/tax-store'
@@ -55,6 +57,10 @@ import {
 import { upsertApproval } from '@/features/workflow/approvals'
 import { hasProof } from '@/features/workflow/proof'
 import type { UserRole } from '@/types/auth'
+
+export type CreatePurchaseResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string }
 
 export type PembelianSection = 'pencatatan' | 'penerimaan' | 'pembayaran'
 
@@ -273,7 +279,7 @@ function postPembelianReturnJournal(
 
 type PembelianContextValue = {
   purchases: Purchase[]
-  createPurchase: (data: NewPurchase) => string
+  createPurchase: (data: NewPurchase) => CreatePurchaseResult
   deletePurchase: (id: string) => void
   voidPurchase: (id: string, reason: string) => string | undefined
   submitPurchase: (id: string) => string | undefined
@@ -358,14 +364,16 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const createPurchase = useCallback(
-    (data: NewPurchase) => {
+    (data: NewPurchase): CreatePurchaseResult => {
+      const locked = assertPeriodOpen(data.date)
+      if (locked) return { ok: false, error: locked }
       const id = nextPurchaseId(
         items,
         new Date(`${data.date}T00:00:00`),
         getPurchasePrefix(),
       )
       setItems((list) => [{ ...data, id, stage: 'draft', payments: [] }, ...list])
-      return id
+      return { ok: true, id }
     },
     [items],
   )
@@ -415,6 +423,8 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (returns.some((r) => r.purchaseId === id && r.stage === 'posted')) {
         return 'Void ditolak: masih ada retur posted. Void/batalkan retur dulu.'
       }
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       const calc = current.weighing
         ? calcWeighing(current.grain, current.weighing)
         : null
@@ -651,6 +661,8 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         }
       }
       const today = todayIso()
+      const locked = assertPeriodOpen(today)
+      if (locked) return { ok: false, error: locked }
       const termDays = getPaymentTermDays()
       const dueDate = addDays(today, termDays)
       const { receiptName, ...measures } = input
@@ -818,6 +830,9 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
           error: 'Pembayaran hanya setelah penerimaan dikonfirmasi.',
         }
       }
+      const payDate = journalDateFromIso(payment.date)
+      const locked = assertPeriodOpen(payDate)
+      if (locked) return { ok: false, error: locked }
       const payId = nextPaymentId(items)
       const receiptName =
         payment.receiptName ??
@@ -1054,6 +1069,10 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       }
       const qtyError = returnQtyError(purchase, current.lines, returns)
       if (qtyError) return { ok: false, error: qtyError }
+
+      const postDate = todayIsoDate()
+      const locked = assertPeriodOpen(postDate)
+      if (locked) return { ok: false, error: locked }
 
       const unitPrice = purchaseUnitPrice(purchase)
       const subtotal = current.lines.reduce(

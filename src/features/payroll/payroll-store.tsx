@@ -12,6 +12,8 @@ import { useAuth } from '@/features/auth/AuthContext'
 import { type AccountMapKey } from '@/features/keuangan/gl-data'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import {
   nextPayrollId,
   runTotal,
@@ -37,7 +39,7 @@ type PayrollStoreValue = {
   approveAsAdmin: (id: string) => string | undefined
   approveAsKeuangan: (id: string) => string | undefined
   postRun: (id: string, proof: ProofAttachment | string) => DualTrackResult
-  voidRun: (id: string) => void
+  voidRun: (id: string) => string | undefined
   deleteRun: (id: string) => void
 }
 
@@ -58,14 +60,6 @@ function stamp(role: 'admin' | 'keuangan', name: string): ApprovalStamp {
     by: name,
     at: new Date().toISOString(),
   }
-}
-
-function todayGlDate(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function postPayrollJournal(
@@ -302,8 +296,10 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       if (!hasProof(proof)) {
         return { ok: false, error: 'Lampirkan bukti transfer sebelum cair' }
       }
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return { ok: false, error: locked }
       const total = runTotal(current)
-      addCashEntry({
+      const cashErr = addCashEntry({
         direction: 'out',
         category: 'Payroll',
         description: `Gaji ${current.period} · ${current.id}${
@@ -311,6 +307,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         }`,
         amount: total,
       })
+      if (cashErr) return { ok: false, error: cashErr }
       setRuns((list) =>
         list.map((r) =>
           r.id === id
@@ -324,7 +321,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         ),
       )
       const journalError = postPayrollJournal(postJournalEntry, mapAccount, {
-        date: todayGlDate(),
+        date: todayIsoDate(),
         memo: `Payroll ${current.period} · ${current.id}`,
         sourceKey: `payrun:${id}:post`,
         amount: total,
@@ -343,17 +340,21 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
   )
 
   const voidRun = useCallback(
-    (id: string) => {
+    (id: string): string | undefined => {
       const current = runs.find((r) => r.id === id)
-      if (!current || current.status === 'void') return
+      if (!current || current.status === 'void') return undefined
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       if (current.status === 'posted') {
-        addCashEntry({
+        const cashErr = addCashEntry({
           direction: 'in',
           category: 'Payroll',
           description: `Void gaji ${current.period} · ${current.id}`,
           amount: runTotal(current),
         })
-        reverseJournalEntry({ sourceKey: `payrun:${id}:post` })
+        if (cashErr) return cashErr
+        const revErr = reverseJournalEntry({ sourceKey: `payrun:${id}:post` })
+        if (revErr) return revErr
       }
       setRuns((list) =>
         list.map((r) =>
@@ -368,6 +369,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: 'Void payroll',
       })
+      return undefined
     },
     [runs, addCashEntry, reverseJournalEntry, appendAudit],
   )

@@ -52,7 +52,7 @@ type Props = {
   onReject: (id: string, reason: string) => void
   onStart: (id: string) => string | undefined
   onComplete: (id: string) => string | undefined
-  onVoid: (id: string, reason: string) => void
+  onVoid: (id: string, reason: string) => string | undefined
   onDelete: (id: string) => void
   onGoTo: (section: 'input-output' | 'rendemen', id: string) => void
 }
@@ -508,8 +508,12 @@ export function BatchView({
         onClose={() => setPromptKind(null)}
         onConfirm={(reason) => {
           if (!detail) return
-          onVoid(detail.id, reason)
+          const err = onVoid(detail.id, reason)
           setPromptKind(null)
+          if (err) {
+            setToast(err)
+            return
+          }
           setToast('Batch di-void')
         }}
       />

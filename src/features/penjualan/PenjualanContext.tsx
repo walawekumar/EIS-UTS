@@ -14,6 +14,8 @@ import type { AccountMapKey, JournalLine } from '@/features/keuangan/gl-data'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { joinJournalErrors } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import { computePpn } from '@/features/keuangan/tax-compute'
 import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
 import { useTaxStore } from '@/features/keuangan/tax-store'
@@ -56,6 +58,10 @@ function journalDateFromIso(iso: string): string {
 }
 
 export type PenjualanActionResult = DualTrackResult
+
+export type CreateOrderResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string }
 
 function postPenjualanPairJournal(
   postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
@@ -276,7 +282,7 @@ export const PENJUALAN_BASE = '/app/penjualan'
 
 type PenjualanContextValue = {
   orders: SaleOrder[]
-  createOrder: (data: NewSaleOrder) => string
+  createOrder: (data: NewSaleOrder) => CreateOrderResult
   deleteOrder: (id: string) => void
   voidOrder: (id: string, reason: string) => string | undefined
   shipOrder: (id: string, input: DeliveryInput) => PenjualanActionResult
@@ -336,7 +342,9 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const createOrder = useCallback(
-    (data: NewSaleOrder) => {
+    (data: NewSaleOrder): CreateOrderResult => {
+      const locked = assertPeriodOpen(data.date)
+      if (locked) return { ok: false, error: locked }
       const id = nextOrderId(
         items,
         new Date(`${data.date}T00:00:00`),
@@ -346,7 +354,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         { ...data, id, stage: 'dibuat', payments: [] },
         ...list,
       ])
-      return id
+      return { ok: true, id }
     },
     [items],
   )
@@ -377,6 +385,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       if (returns.some((r) => r.orderId === id && r.stage === 'posted')) {
         return 'Void ditolak: masih ada retur posted. Void/batalkan retur dulu.'
       }
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       const location = readAppSettings().stock.defaultLocation
       addMovement({
         type: 'in',
@@ -429,6 +439,8 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   const shipOrder = useCallback(
     (id: string, input: DeliveryInput): PenjualanActionResult => {
       const today = todayIso()
+      const locked = assertPeriodOpen(today)
+      if (locked) return { ok: false, error: locked }
       const termDays = getPaymentTermDays()
       const location = readAppSettings().stock.defaultLocation
       const current = items.find((o) => o.id === id)
@@ -599,6 +611,9 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
     (id: string, payment: Omit<Payment, 'id'>): PenjualanActionResult => {
       const current = items.find((o) => o.id === id)
       if (!current) return { ok: false, error: 'Order tidak ditemukan' }
+      const payDate = journalDateFromIso(payment.date)
+      const locked = assertPeriodOpen(payDate)
+      if (locked) return { ok: false, error: locked }
       const payId = nextPaymentId(items)
       const next: SaleOrder = {
         ...current,
@@ -834,6 +849,10 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
       }
       const qtyError = returnQtyError(order, current.lines, returns)
       if (qtyError) return { ok: false, error: qtyError }
+
+      const postDate = todayIsoDate()
+      const locked = assertPeriodOpen(postDate)
+      if (locked) return { ok: false, error: locked }
 
       if (!order.lotId) {
         return {

@@ -389,7 +389,11 @@ export function PayrollPage() {
             setToast('Draft dihapus')
           }}
           onVoid={() => {
-            voidRun(detail.id)
+            const err = voidRun(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
             setToast('Payroll di-void')
             closeDetail()
           }}

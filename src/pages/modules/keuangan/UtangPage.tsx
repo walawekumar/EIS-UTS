@@ -154,7 +154,7 @@ export function UtangPage() {
       return
     }
 
-    payPayable({
+    const err = payPayable({
       id: payTarget.id,
       amount,
       invoice: payTarget.invoice,
@@ -162,6 +162,10 @@ export function UtangPage() {
       note: payNote,
       receiptName: payReceipt?.name,
     })
+    if (err) {
+      setPayError(err)
+      return
+    }
     setPayTarget(null)
     setPayReceipt(null)
     setDetail(null)

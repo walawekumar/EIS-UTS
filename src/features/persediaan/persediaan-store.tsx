@@ -19,6 +19,8 @@ import {
   type StockRow,
 } from '@/features/persediaan/persediaan-data'
 import { persediaanRepository } from '@/features/persediaan/persediaan-storage'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 
 type MovementInput = {
   type: MovementType
@@ -48,8 +50,8 @@ type PersediaanStoreValue = {
   movements: MovementRow[]
   corrections: CorrectionRow[]
   addMovement: (input: MovementInput) => void
-  addCorrection: (input: CorrectionInput) => void
-  voidCorrection: (id: string) => void
+  addCorrection: (input: CorrectionInput) => string | undefined
+  voidCorrection: (id: string) => string | undefined
 }
 
 const PersediaanContext = createContext<PersediaanStoreValue | null>(null)
@@ -210,7 +212,9 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
   )
 
   const addCorrection = useCallback(
-    (input: CorrectionInput) => {
+    (input: CorrectionInput): string | undefined => {
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
       setCorrections((list) => {
         const entry: CorrectionRow = {
           id: `k-${Date.now()}`,
@@ -232,11 +236,14 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
       setStocks((list) =>
         setStockQty(list, input.sku, input.location, input.afterQty),
       )
+      return undefined
     },
     [actor],
   )
 
-  const voidCorrection = useCallback((id: string) => {
+  const voidCorrection = useCallback((id: string): string | undefined => {
+    const locked = assertPeriodOpen(todayIsoDate())
+    if (locked) return locked
     setCorrections((list) => {
       const target = list.find((c) => c.id === id)
       if (!target || target.status === 'void') return list
@@ -249,6 +256,7 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
         c.id === id ? { ...c, status: 'void' as const } : c,
       )
     })
+    return undefined
   }, [])
 
   const value = useMemo(

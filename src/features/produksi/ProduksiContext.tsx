@@ -19,6 +19,8 @@ import {
 import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
 import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
+import { assertPeriodOpen } from '@/features/keuangan/period-gate'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
 import {
@@ -171,7 +173,7 @@ type ProduksiContextValue = {
   rejectBatch: (id: string, reason: string) => void
   startBatch: (id: string) => string | undefined
   completeBatch: (id: string) => string | undefined
-  voidBatch: (id: string, reason: string) => void
+  voidBatch: (id: string, reason: string) => string | undefined
   deleteBatch: (id: string) => void
   createPackRun: (input: NewPackRunInput) => string
   updatePackRun: (id: string, lines: PackRunLine[]) => string | undefined
@@ -567,14 +569,18 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (!current || current.stage !== 'approved') return undefined
       if (current.wipStockPosted) return undefined
 
+      const startedAt = new Date().toISOString()
+      const startDate = journalDateFromIso(startedAt)
+      const locked = assertPeriodOpen(startDate)
+      if (locked) return locked
+
       const available = stockOnHand(stocks, current.inputSku, current.fromLocation)
       if (current.inputQty > available) return undefined
 
       postStartWipStock(current, addMovement, false)
       const wipGrainValue = grainValueForBatch(current)
-      const startedAt = new Date().toISOString()
       const journalError = postPairJournal(postJournalEntry, mapAccount, {
-        date: journalDateFromIso(startedAt),
+        date: startDate,
         memo: `Start batch ${current.id}`,
         sourceKey: `batch:${current.id}:start`,
         amount: wipGrainValue,
@@ -666,6 +672,11 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         return undefined
       }
 
+      const completedAt = new Date().toISOString()
+      const completeDate = journalDateFromIso(completedAt)
+      const locked = assertPeriodOpen(completeDate)
+      if (locked) return locked
+
       let journalError: string | undefined
 
       if (!current.stockPosted) {
@@ -676,7 +687,6 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const completedAt = new Date().toISOString()
       const doneBatch: ProductionBatch = {
         ...current,
         stage: 'done',
@@ -716,7 +726,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
                 batchesForCosting,
               )
               const totalCost = wipGrain + allocatedOps
-              const journalDate = journalDateFromIso(completedAt)
+              const journalDate = completeDate
               const memo = `Complete batch ${doneBatch.id}`
               const lines = [
                 {
@@ -758,10 +768,13 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
   )
 
   const voidBatch = useCallback(
-    (id: string, reason: string) => {
+    (id: string, reason: string): string | undefined => {
       const current = items.find((b) => b.id === id)
-      if (!current) return
-      if (current.stage === 'void' || current.stage === 'draft') return
+      if (!current) return undefined
+      if (current.stage === 'void' || current.stage === 'draft') return undefined
+
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
 
       if (current.stockPosted) {
         if (current.wipStockPosted) {
@@ -789,6 +802,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         }),
         { action: 'void', note: reason },
       )
+      return undefined
     },
     [items, addMovement, patch, reverseJournalEntry],
   )
@@ -911,15 +925,19 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      postPackStock(toPost, batch, addMovement, false)
       const postedAt = new Date().toISOString()
+      const postDate = journalDateFromIso(postedAt)
+      const locked = assertPeriodOpen(postDate)
+      if (locked) return { ok: false, error: locked }
+
+      postPackStock(toPost, batch, addMovement, false)
       const lotCost = lotCosts.find((c) => c.batchId === batch.id)
       const packAmount =
         lotCost && lotCost.costPerKgBeras > 0
           ? lotCost.costPerKgBeras * totalOut
           : 0
       const journalError = postPairJournal(postJournalEntry, mapAccount, {
-        date: journalDateFromIso(postedAt),
+        date: postDate,
         memo: `Pack ${toPost.id} · ${batch.id}`,
         sourceKey: `pack:${toPost.id}:post`,
         amount: packAmount,
@@ -965,6 +983,9 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (!current) return 'Pack run tidak ditemukan.'
       if (current.stage !== 'posted') return 'Hanya pack posted yang dapat di-void.'
       if (current.voidedAt) return 'Pack run sudah di-void.'
+
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
 
       const batch = items.find((b) => b.id === current.batchId)
       if (!batch) return 'Batch produksi tidak ditemukan.'
