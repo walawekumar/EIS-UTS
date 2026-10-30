@@ -22,12 +22,11 @@ import {
 } from '@/features/master/master-cloud'
 import { readAppSettings } from '@/features/settings/app-settings'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase-client'
-import type { AuthUser, UserRole } from '@/types/auth'
+import type { AuthUser } from '@/types/auth'
 
 type LoginInput = {
   email: string
   password: string
-  role: UserRole
   remember?: boolean
 }
 
@@ -58,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(
-    async ({ email, password, role, remember = true }: LoginInput) => {
+    async ({ email, password, remember = true }: LoginInput) => {
       if (!email.trim() || !password.trim()) {
         throw new Error('Email dan kata sandi wajib diisi.')
       }
@@ -83,12 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await sb.auth.signOut()
           throw new Error('Akun nonaktif. Hubungi admin.')
         }
-        if (profile.role !== role) {
-          await sb.auth.signOut()
-          throw new Error(
-            `Akun ini untuk peran ${profile.role}. Pilih peran yang sesuai.`,
-          )
-        }
         const nextUser = authUserFromProfile(profile)
         saveStoredUser(nextUser, remember)
         setUser(nextUser)
@@ -101,11 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!account) {
         throw new Error(
           'Email atau kata sandi salah. Coba admin@egabah.local / demo123',
-        )
-      }
-      if (account.role !== role) {
-        throw new Error(
-          `Akun ini untuk peran ${account.role}. Pilih peran yang sesuai.`,
         )
       }
 
