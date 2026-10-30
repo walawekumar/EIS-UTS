@@ -1,7 +1,7 @@
 # Spek: PPN 11%/0% + e-Faktur mock (gelombang 2b)
 
 Tanggal: 2026-10-30  
-Status: draft (menunggu review user)  
+Status: approved (user: ok → plan)  
 Pra-syarat: gelombang 2a + polish LotCost/toast sudah di `main`
 
 ## Tujuan
