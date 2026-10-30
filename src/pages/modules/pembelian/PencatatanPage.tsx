@@ -5,7 +5,15 @@ import { usePembelian, useSelectedDoc } from '@/features/pembelian/PembelianCont
 import { nextPurchaseId } from '@/features/pembelian/pembelian-data'
 
 export function PencatatanPage() {
-  const { purchases, createPurchase, deletePurchase } = usePembelian()
+  const {
+    purchases,
+    createPurchase,
+    deletePurchase,
+    submitPurchase,
+    approvePurchase,
+    rejectPurchase,
+    updatePurchaseProofs,
+  } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
   const [formOpen, setFormOpen] = useState(false)
 
@@ -21,6 +29,12 @@ export function PencatatanPage() {
           select(null)
         }}
         onGoTo={goTo}
+        onSubmitPurchase={submitPurchase}
+        onApprovePurchase={approvePurchase}
+        onRejectPurchase={rejectPurchase}
+        onUpdateInvoiceProof={(id, invoiceProof) =>
+          updatePurchaseProofs(id, { invoiceProof })
+        }
       />
 
       <PurchaseFormDrawer

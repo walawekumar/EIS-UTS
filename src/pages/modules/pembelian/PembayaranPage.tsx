@@ -11,8 +11,9 @@ export function PembayaranPage() {
       selectedId={selectedId}
       onSelect={select}
       onPay={(id, payment) => {
-        addPayment(id, payment)
+        const err = addPayment(id, payment)
         select(id)
+        return err
       }}
     />
   )

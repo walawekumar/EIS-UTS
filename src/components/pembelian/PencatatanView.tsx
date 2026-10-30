@@ -15,7 +15,12 @@ import {
   toggleSort,
   type SortState,
 } from '@/components/keuangan/FinanceTable'
+import {
+  ReceiptUpload,
+  type ReceiptValue,
+} from '@/components/keuangan/ReceiptUpload'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { proofLabel, proofToReceipt, receiptToProof } from '@/components/pembelian/proof-ui'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import {
@@ -24,7 +29,10 @@ import {
   DrawerHero,
   DrawerSection,
 } from '@/components/ops/DetailDrawer'
+import { PromptDialog } from '@/components/ui/ConfirmDialog'
 import { EyeIcon } from '@/components/ui/icons'
+import { useAuth } from '@/features/auth/AuthContext'
+import { hasProof } from '@/features/workflow/proof'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
 import {
   GRAIN_STANDARD,
@@ -128,6 +136,13 @@ type PencatatanViewProps = {
   onCreate: () => void
   onDelete: (id: string) => void
   onGoTo: (tab: 'penerimaan' | 'pembayaran', id: string) => void
+  onSubmitPurchase: (id: string) => string | undefined
+  onApprovePurchase: (id: string) => string | undefined
+  onRejectPurchase: (id: string, reason: string) => string | undefined
+  onUpdateInvoiceProof: (
+    id: string,
+    invoiceProof: Purchase['invoiceProof'],
+  ) => void
 }
 
 export function PencatatanView({
@@ -137,6 +152,10 @@ export function PencatatanView({
   onCreate,
   onDelete,
   onGoTo,
+  onSubmitPurchase,
+  onApprovePurchase,
+  onRejectPurchase,
+  onUpdateInvoiceProof,
 }: PencatatanViewProps) {
   const PAGE_SIZE = usePageSize()
   const [search, setSearch] = useState('')
@@ -344,15 +363,7 @@ export function PencatatanView({
                         >
                           <EyeIcon className="size-[18px]" />
                         </button>
-                        {!isPurchaseReceivedForAp(p.stage) ? (
-                          <button
-                            type="button"
-                            onClick={() => onGoTo('penerimaan', p.id)}
-                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
-                          >
-                            Timbang
-                          </button>
-                        ) : (
+                        {isPurchaseReceivedForAp(p.stage) ? (
                           <button
                             type="button"
                             onClick={() => onGoTo('pembayaran', p.id)}
@@ -360,7 +371,15 @@ export function PencatatanView({
                           >
                             Bayar
                           </button>
-                        )}
+                        ) : isPurchaseAwaitingWeigh(p.stage) || p.stage === 'ditimbang' ? (
+                          <button
+                            type="button"
+                            onClick={() => onGoTo('penerimaan', p.id)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            {p.stage === 'ditimbang' ? 'Konfirmasi' : 'Timbang'}
+                          </button>
+                        ) : null}
                       </div>
                     </FinanceTd>
                   </FinanceTr>
@@ -395,6 +414,34 @@ export function PencatatanView({
             closeDetail()
             onGoTo(tab, detail.id)
           }}
+          onSubmitPurchase={() => {
+            const err = onSubmitPurchase(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
+            setToast(`${detail.id} diajukan ke keuangan`)
+          }}
+          onApprovePurchase={() => {
+            const err = onApprovePurchase(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
+            setToast('Anggaran disetujui')
+          }}
+          onRejectPurchase={(reason) => {
+            const err = onRejectPurchase(detail.id, reason)
+            if (err) {
+              setToast(err)
+              return
+            }
+            setToast('Pengajuan ditolak')
+          }}
+          onUpdateInvoiceProof={(proof) =>
+            onUpdateInvoiceProof(detail.id, proof)
+          }
+          onError={setToast}
         />
       ) : null}
     </div>
@@ -423,19 +470,73 @@ function printPurchase(p: Purchase) {
   )
 }
 
+function StoredProofPreview({
+  proof,
+}: {
+  proof: NonNullable<Purchase['invoiceProof']>
+}) {
+  const name = proofLabel(proof) ?? '—'
+  if (typeof proof !== 'string' && proof.previewUrl) {
+    const isImage = proof.mime?.startsWith('image/')
+    return (
+      <div className="overflow-hidden rounded-xl border border-line bg-surface/60">
+        {isImage ? (
+          <div className="flex max-h-44 items-center justify-center bg-ink/5 p-2">
+            <img
+              src={proof.previewUrl}
+              alt={name}
+              className="max-h-40 max-w-full rounded-lg object-contain"
+            />
+          </div>
+        ) : (
+          <div className="px-3.5 py-3 text-[13px] font-medium text-ink">{name}</div>
+        )}
+        <p className="border-t border-line px-3 py-2 text-[12px] text-muted">{name}</p>
+      </div>
+    )
+  }
+  return (
+    <p className="rounded-xl border border-line bg-surface/70 px-3 py-2.5 text-[13px] text-ink">
+      {name}
+    </p>
+  )
+}
+
 function PurchaseDetailDrawer({
   purchase: p,
   onClose,
   onPrint,
   onDelete,
   onGoTo,
+  onSubmitPurchase,
+  onApprovePurchase,
+  onRejectPurchase,
+  onUpdateInvoiceProof,
+  onError,
 }: {
   purchase: Purchase
   onClose: () => void
   onPrint: () => void
   onDelete: () => void
   onGoTo: (tab: 'penerimaan' | 'pembayaran') => void
+  onSubmitPurchase: () => void
+  onApprovePurchase: () => void
+  onRejectPurchase: (reason: string) => void
+  onUpdateInvoiceProof: (proof: Purchase['invoiceProof']) => void
+  onError: (message: string) => void
 }) {
+  const { user } = useAuth()
+  const canFinance = user?.role === 'keuangan' || user?.role === 'admin'
+  const canPembelian = user?.role === 'pembelian' || user?.role === 'admin'
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [invoiceReceipt, setInvoiceReceipt] = useState<ReceiptValue>(() =>
+    proofToReceipt(p.invoiceProof),
+  )
+
+  useEffect(() => {
+    setInvoiceReceipt(proofToReceipt(p.invoiceProof))
+  }, [p.id, p.invoiceProof])
+
   const s = summarize(p)
   const supplier = getSupplier(p.supplierId)
   const lastPayment = p.payments.at(-1)
@@ -445,6 +546,20 @@ function PurchaseDetailDrawer({
       label: 'Pembelian dicatat',
       meta: formatDate(p.date, { day: 'numeric', month: 'long' }),
       done: true,
+    },
+    {
+      label: 'Anggaran keuangan',
+      meta: p.budgetApprovedAt
+        ? `Disetujui ${formatDate(p.budgetApprovedAt)}`
+        : p.stage === 'ditolak'
+          ? p.rejectReason ?? 'Ditolak keuangan'
+          : p.stage === 'diajukan'
+            ? 'Menunggu approve keuangan'
+            : 'Setelah invoice diajukan',
+      done:
+        p.stage !== 'draft' &&
+        p.stage !== 'diajukan' &&
+        p.stage !== 'ditolak',
     },
     {
       label: 'Gabah ditimbang',
@@ -494,19 +609,57 @@ function PurchaseDetailDrawer({
           >
             Cetak bukti
           </button>
-          <button
-            type="button"
-            onClick={() =>
-              onGoTo(isPurchaseReceivedForAp(p.stage) ? 'pembayaran' : 'penerimaan')
-            }
-            className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
-          >
-            {isPurchaseReceivedForAp(p.stage)
-              ? 'Lihat pembayaran →'
-              : isPurchaseAwaitingWeigh(p.stage)
-                ? 'Lanjut timbang →'
-                : 'Konfirmasi berat →'}
-          </button>
+          {p.stage === 'draft' && canPembelian ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!hasProof(p.invoiceProof)) {
+                  onError('Lampirkan invoice pemasok sebelum mengajukan ke keuangan.')
+                  return
+                }
+                onSubmitPurchase()
+              }}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              Ajukan ke keuangan
+            </button>
+          ) : null}
+          {p.stage === 'diajukan' && canFinance ? (
+            <>
+              <button
+                type="button"
+                onClick={onApprovePurchase}
+                className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+              >
+                Setujui anggaran
+              </button>
+              <button
+                type="button"
+                onClick={() => setRejectOpen(true)}
+                className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 transition hover:bg-red-50"
+              >
+                Tolak
+              </button>
+            </>
+          ) : null}
+          {(isPurchaseAwaitingWeigh(p.stage) || p.stage === 'ditimbang') && canPembelian ? (
+            <button
+              type="button"
+              onClick={() => onGoTo('penerimaan')}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              {p.stage === 'ditimbang' ? 'Konfirmasi berat →' : 'Lanjut timbang →'}
+            </button>
+          ) : null}
+          {isPurchaseReceivedForAp(p.stage) ? (
+            <button
+              type="button"
+              onClick={() => onGoTo('pembayaran')}
+              className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
+            >
+              Lihat pembayaran →
+            </button>
+          ) : null}
           {canHardDeletePurchase(p.stage) ? (
             <button
               type="button"
@@ -530,6 +683,33 @@ function PurchaseDetailDrawer({
         <p className="text-[13px] font-medium text-ink">{supplier?.name}</p>
         <p className="mt-0.5 text-[12px] text-muted">{supplier?.village}</p>
       </div>
+
+      {p.stage === 'draft' && canPembelian ? (
+        <DrawerSection label="Invoice pemasok">
+          <ReceiptUpload
+            value={invoiceReceipt}
+            onChange={(v) => {
+              setInvoiceReceipt(v)
+              onUpdateInvoiceProof(receiptToProof(v))
+            }}
+            label="Invoice pemasok"
+            requiredMark
+            hint="Wajib sebelum ajukan ke keuangan · JPG, PNG, WEBP, atau PDF"
+          />
+        </DrawerSection>
+      ) : null}
+
+      {hasProof(p.invoiceProof) && p.stage !== 'draft' ? (
+        <DrawerSection label="Invoice pemasok">
+          <StoredProofPreview proof={p.invoiceProof!} />
+        </DrawerSection>
+      ) : null}
+
+      {p.rejectReason ? (
+        <DrawerSection label="Alasan penolakan">
+          <p className="text-[13px] text-red-700">{p.rejectReason}</p>
+        </DrawerSection>
+      ) : null}
 
       <DrawerSection label="Rincian">
         <DrawerFacts
@@ -587,6 +767,21 @@ function PurchaseDetailDrawer({
           })}
         </ol>
       </DrawerSection>
+
+      <PromptDialog
+        open={rejectOpen}
+        title="Tolak pengajuan pembelian"
+        description={`Pengajuan ${p.id} akan ditolak.`}
+        label="Alasan penolakan"
+        placeholder="Contoh: anggaran tidak mencukupi"
+        confirmLabel="Tolak"
+        danger
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => {
+          onRejectPurchase(reason)
+          setRejectOpen(false)
+        }}
+      />
     </DetailDrawer>
   )
 }

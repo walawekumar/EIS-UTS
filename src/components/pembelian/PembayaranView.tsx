@@ -50,6 +50,7 @@ import {
   type PaymentStatus,
   type Purchase,
 } from '@/features/pembelian/pembelian-data'
+import { receiptToProof } from '@/components/pembelian/proof-ui'
 import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
@@ -117,7 +118,7 @@ type PembayaranViewProps = {
   purchases: Purchase[]
   selectedId: string | null
   onSelect: (id: string | null) => void
-  onPay: (id: string, payment: Omit<Payment, 'id'>) => void
+  onPay: (id: string, payment: Omit<Payment, 'id'>) => string | undefined
 }
 
 export function PembayaranView({
@@ -222,13 +223,23 @@ export function PembayaranView({
     const value = parseNumber(amount)
     if (value <= 0) return setError('Isi jumlah pembayaran')
     if (value > s.outstanding) return setError(`Maksimal ${formatRupiah(s.outstanding)}`)
-    if (!receipt) return setReceiptError('Lampirkan bukti pembayaran (foto/galeri)')
-    onPay(payTarget.id, {
+    if (!receipt) {
+      setReceiptError('Lampirkan bukti transfer sebelum mencatat pembayaran')
+      setToast('Lampirkan bukti transfer sebelum mencatat pembayaran')
+      return
+    }
+    const transferProof = receiptToProof(receipt)
+    const err = onPay(payTarget.id, {
       amount: value,
       method,
       date,
       receiptName: receipt.name,
+      transferProof,
     })
+    if (err) {
+      setToast(err)
+      return
+    }
     setPayTarget(null)
     setReceipt(null)
     setDetail(null)
@@ -497,9 +508,10 @@ export function PembayaranView({
                 setReceipt(v)
                 setReceiptError(undefined)
               }}
-              label="Bukti pembayaran"
+              label="Bukti transfer"
               requiredMark
               error={receiptError}
+              hint="Wajib · foto struk transfer atau bukti bayar"
             />
           </div>
         </FinanceModal>

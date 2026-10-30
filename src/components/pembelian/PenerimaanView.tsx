@@ -29,8 +29,12 @@ import {
   DrawerHero,
   DrawerSection,
 } from '@/components/ops/DetailDrawer'
+import { proofLabel, proofToReceipt, receiptToProof } from '@/components/pembelian/proof-ui'
 import { PromptDialog } from '@/components/ui/ConfirmDialog'
 import { EyeIcon } from '@/components/ui/icons'
+import { useAuth } from '@/features/auth/AuthContext'
+import { hasProof } from '@/features/workflow/proof'
+import type { ProofAttachment } from '@/features/workflow/proof'
 import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
@@ -85,6 +89,11 @@ type PenerimaanViewProps = {
   onConfirm: (id: string, input: WeighingInput) => void
   onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
+  onUpdatePurchaseProof: (
+    id: string,
+    purchaseProof: ProofAttachment | string | undefined,
+  ) => void
+  onCompletePurchase: (id: string) => string | undefined
 }
 
 export function PenerimaanView({
@@ -95,6 +104,8 @@ export function PenerimaanView({
   onConfirm,
   onVoid,
   onGoTo,
+  onUpdatePurchaseProof,
+  onCompletePurchase,
 }: PenerimaanViewProps) {
   const PAGE_SIZE = usePageSize()
   const waiting = useMemo(
@@ -195,7 +206,12 @@ export function PenerimaanView({
   useEffect(() => {
     if (!selectedId) return
     const found = purchases.find((p) => p.id === selectedId)
-    if (found && !isPurchaseReceivedForAp(found.stage)) openWork(found)
+    if (
+      found &&
+      (isPurchaseAwaitingWeigh(found.stage) || found.stage === 'ditimbang')
+    ) {
+      openWork(found)
+    }
   }, [selectedId, purchases])
 
   useEffect(() => {
@@ -352,7 +368,7 @@ export function PenerimaanView({
                         >
                           <EyeIcon className="size-[18px]" />
                         </button>
-                        {isPurchaseReceivedForAp(p.stage) ? (
+                        {p.stage === 'selesai' ? (
                           <button
                             type="button"
                             onClick={() => onGoTo('pembayaran', p.id)}
@@ -360,7 +376,7 @@ export function PenerimaanView({
                           >
                             Bayar
                           </button>
-                        ) : (
+                        ) : isPurchaseAwaitingWeigh(p.stage) || p.stage === 'ditimbang' ? (
                           <button
                             type="button"
                             onClick={() => openWork(p)}
@@ -368,7 +384,15 @@ export function PenerimaanView({
                           >
                             {isPurchaseAwaitingWeigh(p.stage) ? 'Timbang' : 'Konfirmasi'}
                           </button>
-                        )}
+                        ) : p.stage === 'menunggu_selesai' ? (
+                          <button
+                            type="button"
+                            onClick={() => setDetail(p)}
+                            className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
+                          >
+                            Selesai
+                          </button>
+                        ) : null}
                       </div>
                     </FinanceTd>
                   </FinanceTr>
@@ -395,6 +419,15 @@ export function PenerimaanView({
             if (!printReceive(detail)) setToast('Izinkan popup untuk mencetak')
           }}
           onVoid={onVoid}
+          onComplete={() => {
+            const err = onCompletePurchase(detail.id)
+            if (err) {
+              setToast(err)
+              return
+            }
+            setToast(`${detail.id} dinyatakan selesai`)
+            setDetail(null)
+          }}
         />
       ) : null}
 
@@ -411,7 +444,10 @@ export function PenerimaanView({
               }`,
             )
           }}
-          onConfirm={(input) => {
+          onConfirm={(input, purchaseProof) => {
+            if (purchaseProof) {
+              onUpdatePurchaseProof(work.id, purchaseProof)
+            }
             onConfirm(work.id, input)
             setToast(
               `${work.id} berat dikonfirmasi${
@@ -457,12 +493,16 @@ function ReceiveDetailDrawer({
   onClose,
   onPrint,
   onVoid,
+  onComplete,
 }: {
   purchase: Purchase
   onClose: () => void
   onPrint: () => void
   onVoid?: (id: string, reason: string) => void
+  onComplete?: () => void
 }) {
+  const { user } = useAuth()
+  const canFinance = user?.role === 'keuangan' || user?.role === 'admin'
   const supplier = getSupplier(p.supplierId)
   const s = summarize(p)
   const std = GRAIN_STANDARD[p.grain]
@@ -502,6 +542,18 @@ function ReceiveDetailDrawer({
           >
             Cetak bukti
           </button>
+          {p.stage === 'menunggu_selesai' &&
+          canFinance &&
+          hasProof(p.purchaseProof) &&
+          onComplete ? (
+            <button
+              type="button"
+              onClick={onComplete}
+              className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white transition hover:bg-brand-900"
+            >
+              Nyatakan selesai
+            </button>
+          ) : null}
           {canVoidPurchase(p.stage) && !p.voidedAt && onVoid ? (
             <button
               type="button"
@@ -543,6 +595,9 @@ function ReceiveDetailDrawer({
               ? ['Bukti timbang', p.weighing.receiptName]
               : null,
             p.note ? ['Catatan', p.note] : null,
+            proofLabel(p.purchaseProof)
+              ? ['Struk beli', proofLabel(p.purchaseProof)!]
+              : null,
           ]}
         />
       </DrawerSection>
@@ -576,7 +631,10 @@ function WeighingModal({
   purchase: Purchase
   onClose: () => void
   onSave: (input: WeighingInput) => void
-  onConfirm: (input: WeighingInput) => void
+  onConfirm: (
+    input: WeighingInput,
+    purchaseProof?: ProofAttachment | string,
+  ) => void
 }) {
   const supplier = getSupplier(p.supplierId)
   const std = GRAIN_STANDARD[p.grain]
@@ -591,6 +649,10 @@ function WeighingModal({
   const [agreed, setAgreed] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptValue>(null)
   const [receiptError, setReceiptError] = useState<string>()
+  const [purchaseReceipt, setPurchaseReceipt] = useState<ReceiptValue>(() =>
+    proofToReceipt(p.purchaseProof),
+  )
+  const [purchaseReceiptError, setPurchaseReceiptError] = useState<string>()
 
   const input: WeighingInput = {
     bruto: parseNumber(form.bruto),
@@ -610,7 +672,7 @@ function WeighingModal({
     setErrors((e) => ({ ...e, [key]: undefined }))
   }
 
-  function validate(): boolean {
+  function validate(forConfirm: boolean): boolean {
     const next: FormErrors = {}
     if (input.bruto <= 0) next.bruto = 'Isi berat bruto'
     if (input.tara < 0) next.tara = 'Tidak boleh negatif'
@@ -626,6 +688,17 @@ function WeighingModal({
       return false
     }
     setReceiptError(undefined)
+
+    if (forConfirm) {
+      const hasPurchaseProof =
+        Boolean(purchaseReceipt) || hasProof(p.purchaseProof)
+      if (!hasPurchaseProof) {
+        setPurchaseReceiptError('Lampirkan struk beli sebelum konfirmasi')
+        return false
+      }
+      setPurchaseReceiptError(undefined)
+    }
+
     return Object.keys(next).length === 0
   }
 
@@ -659,7 +732,7 @@ function WeighingModal({
               <button
                 type="button"
                 onClick={() => {
-                  if (validate()) onSave(input)
+                  if (validate(false)) onSave(input)
                 }}
                 className="h-11 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900"
               >
@@ -670,7 +743,7 @@ function WeighingModal({
                 <button
                   type="button"
                   onClick={() => {
-                    if (validate()) onSave(input)
+                    if (validate(false)) onSave(input)
                   }}
                   className="h-11 rounded-xl border border-line px-4 text-[14px] font-medium text-ink transition hover:bg-surface"
                 >
@@ -680,7 +753,10 @@ function WeighingModal({
                   type="button"
                   disabled={!agreed}
                   onClick={() => {
-                    if (validate()) onConfirm(input)
+                    if (!validate(true)) return
+                    const proof =
+                      receiptToProof(purchaseReceipt) ?? p.purchaseProof
+                    onConfirm(input, proof)
                   }}
                   className="h-11 rounded-xl bg-brand-800 px-4 text-[14px] font-semibold text-white transition hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -785,6 +861,20 @@ function WeighingModal({
               : undefined
           }
         />
+
+        {p.stage === 'ditimbang' ? (
+          <ReceiptUpload
+            value={purchaseReceipt}
+            onChange={(v) => {
+              setPurchaseReceipt(v)
+              setPurchaseReceiptError(undefined)
+            }}
+            label="Struk beli"
+            requiredMark
+            error={purchaseReceiptError}
+            hint="Wajib sebelum konfirmasi penerimaan · struk final dari pemasok"
+          />
+        ) : null}
       </div>
     </FinanceModal>
   )

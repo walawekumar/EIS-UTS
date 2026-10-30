@@ -2,8 +2,14 @@ import { PenerimaanView } from '@/components/pembelian/PenerimaanView'
 import { usePembelian, useSelectedDoc } from '@/features/pembelian/PembelianContext'
 
 export function PenerimaanPage() {
-  const { purchases, saveWeighing, confirmWeighing, voidPurchase } =
-    usePembelian()
+  const {
+    purchases,
+    saveWeighing,
+    confirmWeighing,
+    voidPurchase,
+    updatePurchaseProofs,
+    completePurchase,
+  } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
 
   return (
@@ -24,6 +30,10 @@ export function PenerimaanPage() {
         select(null)
       }}
       onGoTo={goTo}
+      onUpdatePurchaseProof={(id, purchaseProof) =>
+        updatePurchaseProofs(id, { purchaseProof })
+      }
+      onCompletePurchase={completePurchase}
     />
   )
 }
