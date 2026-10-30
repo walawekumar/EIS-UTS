@@ -20,6 +20,7 @@ import {
   toggleSort,
   type SortState,
 } from '@/components/keuangan/FinanceTable'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -107,7 +108,7 @@ type PenerimaanViewProps = {
     id: string,
     input: WeighingInput,
     purchaseProof?: ProofAttachment | string,
-  ) => string | undefined
+  ) => DualTrackResult
   onVoid?: (id: string, reason: string) => void
   onGoTo: (tab: 'pembayaran', id: string) => void
   onCompletePurchase: (id: string) => string | undefined
@@ -477,16 +478,19 @@ export function PenerimaanView({
             )
           }}
           onConfirm={(input, purchaseProof) => {
-            const err = onConfirm(work.id, input, purchaseProof)
-            if (err) {
-              setToast(err)
-              return err
+            const result = onConfirm(work.id, input, purchaseProof)
+            if (!result.ok) {
+              setToast(result.error)
+              return result.error
             }
-            setToast(
-              `${work.id} berat dikonfirmasi${
-                input.receiptName ? ` · bukti ${input.receiptName}` : ''
-              }`,
-            )
+            const base = `${work.id} berat dikonfirmasi${
+              input.receiptName ? ` · bukti ${input.receiptName}` : ''
+            }`
+            if (result.journalError) {
+              setToast(`${base} · jurnal gagal: ${result.journalError}`)
+            } else {
+              setToast(base)
+            }
             closeWork()
             return undefined
           }}

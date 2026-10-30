@@ -385,9 +385,17 @@ export function ReturPage() {
         onClose={() => setPostOpen(false)}
         onConfirm={() => {
           if (!active) return
-          const err = postPurchaseReturn(active.id)
+          const result = postPurchaseReturn(active.id)
           setPostOpen(false)
-          setToast(err ?? `${active.id} diposting`)
+          if (!result.ok) {
+            setToast(result.error)
+          } else if (result.journalError) {
+            setToast(
+              `${active.id} diposting · jurnal gagal: ${result.journalError}`,
+            )
+          } else {
+            setToast(`${active.id} diposting`)
+          }
         }}
       />
 

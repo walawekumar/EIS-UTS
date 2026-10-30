@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { AccountMapKey } from '@/features/keuangan/gl-data'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import {
   addDays,
@@ -159,10 +160,10 @@ function postPembelianJournal(
     debitKey: AccountMapKey
     creditKey: AccountMapKey
   },
-): void {
+): string | undefined {
   const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return
-  postJournalEntry({
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -199,9 +200,9 @@ type PembelianContextValue = {
     id: string,
     input: WeighingInput,
     purchaseProof?: Purchase['purchaseProof'],
-  ) => string | undefined
+  ) => DualTrackResult
   reopenPurchaseDraft: (id: string) => string | undefined
-  addPayment: (id: string, payment: NewPayment) => string | undefined
+  addPayment: (id: string, payment: NewPayment) => DualTrackResult
   updatePurchaseProofs: (
     id: string,
     proofs: {
@@ -215,7 +216,7 @@ type PembelianContextValue = {
   submitPurchaseReturn: (id: string) => string | undefined
   approvePurchaseReturn: (id: string) => string | undefined
   rejectPurchaseReturn: (id: string, reason: string) => string | undefined
-  postPurchaseReturn: (id: string) => string | undefined
+  postPurchaseReturn: (id: string) => DualTrackResult
   upsertLotQc: (input: LotQcInput) => string | undefined
   overrideLotQcReceive: (lotId: string, reason: string) => string | undefined
 }
@@ -544,9 +545,13 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       id: string,
       input: WeighingInput,
       purchaseProof?: Purchase['purchaseProof'],
-    ): string | undefined => {
+    ): DualTrackResult => {
       if (!roleAllowed(user?.role, ['pembelian', 'admin'])) {
-        return 'Hanya petugas pembelian atau admin yang dapat mengonfirmasi timbang.'
+        return {
+          ok: false,
+          error:
+            'Hanya petugas pembelian atau admin yang dapat mengonfirmasi timbang.',
+        }
       }
       const today = todayIso()
       const termDays = getPaymentTermDays()
@@ -554,19 +559,30 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       const { receiptName, ...measures } = input
 
       const current = items.find((p) => p.id === id)
-      if (!current) return 'Dokumen pembelian tidak ditemukan.'
+      if (!current) {
+        return { ok: false, error: 'Dokumen pembelian tidak ditemukan.' }
+      }
       if (current.stage !== 'ditimbang') {
-        return 'Simpan hasil timbang terlebih dahulu sebelum konfirmasi.'
+        return {
+          ok: false,
+          error: 'Simpan hasil timbang terlebih dahulu sebelum konfirmasi.',
+        }
       }
       const proof = purchaseProof ?? current.purchaseProof
       if (!hasProof(proof)) {
-        return 'Lampirkan struk beli sebelum konfirmasi penerimaan.'
+        return {
+          ok: false,
+          error: 'Lampirkan struk beli sebelum konfirmasi penerimaan.',
+        }
       }
       const lotId = current.lotId ?? nextLotId(items, new Date(`${today}T00:00:00`))
       const qc = getLotQc(lotQcRef.current, lotId)
-      if (!qc) return 'QC lot belum diisi.'
+      if (!qc) return { ok: false, error: 'QC lot belum diisi.' }
       if (!qc.passed && !qc.overrideReason) {
-        return 'QC lot belum lulus — perlu override admin.'
+        return {
+          ok: false,
+          error: 'QC lot belum lulus — perlu override admin.',
+        }
       }
 
       const weighing = {
@@ -606,7 +622,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         paid: summary.paid,
       })
 
-      postPembelianJournal(postJournalEntry, mapAccount, {
+      const journalError = postPembelianJournal(postJournalEntry, mapAccount, {
         date: today,
         memo: `Penerimaan gabah ${next.id}`,
         sourceKey: `po:${next.id}:receive`,
@@ -634,7 +650,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: `Lot ${lotId} · harga efektif ${unitPrice}`,
       })
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [
       addMovement,
@@ -648,18 +664,31 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   )
 
   const addPayment = useCallback(
-    (id: string, payment: NewPayment): string | undefined => {
+    (id: string, payment: NewPayment): DualTrackResult => {
       if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
-        return 'Hanya keuangan atau admin yang dapat mencatat pembayaran.'
+        return {
+          ok: false,
+          error: 'Hanya keuangan atau admin yang dapat mencatat pembayaran.',
+        }
       }
       if (!hasProof(payment.transferProof) && !hasProof(payment.receiptName)) {
-        return 'Lampirkan bukti transfer sebelum mencatat pembayaran.'
+        return {
+          ok: false,
+          error: 'Lampirkan bukti transfer sebelum mencatat pembayaran.',
+        }
       }
       const current = items.find((p) => p.id === id)
-      if (!current) return 'Dokumen pembelian tidak ditemukan.'
-      if (current.voidedAt) return 'Dokumen sudah dibatalkan.'
+      if (!current) {
+        return { ok: false, error: 'Dokumen pembelian tidak ditemukan.' }
+      }
+      if (current.voidedAt) {
+        return { ok: false, error: 'Dokumen sudah dibatalkan.' }
+      }
       if (current.stage !== 'menunggu_selesai' && current.stage !== 'selesai') {
-        return 'Pembayaran hanya setelah penerimaan dikonfirmasi.'
+        return {
+          ok: false,
+          error: 'Pembayaran hanya setelah penerimaan dikonfirmasi.',
+        }
       }
       const payId = nextPaymentId(items)
       const receiptName =
@@ -686,7 +715,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         note: payment.method,
       })
 
-      postPembelianJournal(postJournalEntry, mapAccount, {
+      const journalError = postPembelianJournal(postJournalEntry, mapAccount, {
         date: journalDateFromIso(payment.date),
         memo: `Bayar utang ${next.id} · ${payId}`,
         sourceKey: `po:${next.id}:pay:${payId}`,
@@ -694,7 +723,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         debitKey: 'ap',
         creditKey: 'cash',
       })
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [applyPurchasePayment, postJournalEntry, mapAccount, items, user?.role],
   )
@@ -871,20 +900,29 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
   )
 
   const postPurchaseReturn = useCallback(
-    (id: string): string | undefined => {
+    (id: string): DualTrackResult => {
       if (!roleAllowed(user?.role, ['keuangan', 'admin'])) {
-        return 'Hanya keuangan atau admin yang dapat memposting retur.'
+        return {
+          ok: false,
+          error: 'Hanya keuangan atau admin yang dapat memposting retur.',
+        }
       }
       const current = returns.find((r) => r.id === id)
-      if (!current) return 'Dokumen retur tidak ditemukan.'
+      if (!current) {
+        return { ok: false, error: 'Dokumen retur tidak ditemukan.' }
+      }
       if (current.stage !== 'disetujui') {
-        return 'Hanya retur disetujui yang dapat diposting.'
+        return { ok: false, error: 'Hanya retur disetujui yang dapat diposting.' }
       }
       const purchase = items.find((p) => p.id === current.purchaseId)
-      if (!purchase) return 'Dokumen pembelian tidak ditemukan.'
-      if (purchase.voidedAt) return 'Dokumen pembelian sudah dibatalkan.'
+      if (!purchase) {
+        return { ok: false, error: 'Dokumen pembelian tidak ditemukan.' }
+      }
+      if (purchase.voidedAt) {
+        return { ok: false, error: 'Dokumen pembelian sudah dibatalkan.' }
+      }
       const qtyError = returnQtyError(purchase, current.lines, returns)
-      if (qtyError) return qtyError
+      if (qtyError) return { ok: false, error: qtyError }
 
       const unitPrice = purchaseUnitPrice(purchase)
       const credit = current.lines.reduce(
@@ -908,7 +946,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       }
       creditPayable(purchase.id, credit)
 
-      postPembelianJournal(postJournalEntry, mapAccount, {
+      const journalError = postPembelianJournal(postJournalEntry, mapAccount, {
         date: journalDateFromIso(postedAt),
         memo: `Retur pembelian ${current.id} · ${purchase.id}`,
         sourceKey: `pr:${current.id}:post`,
@@ -928,7 +966,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
         entityId: current.id,
         note: `Retur ${purchase.id}`,
       })
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [
       items,

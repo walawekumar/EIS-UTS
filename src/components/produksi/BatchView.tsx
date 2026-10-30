@@ -50,8 +50,8 @@ type Props = {
   onSubmit: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string, reason: string) => void
-  onStart: (id: string) => void
-  onComplete: (id: string) => void
+  onStart: (id: string) => string | undefined
+  onComplete: (id: string) => string | undefined
   onVoid: (id: string, reason: string) => void
   onDelete: (id: string) => void
   onGoTo: (section: 'input-output' | 'rendemen', id: string) => void
@@ -354,8 +354,14 @@ export function BatchView({
                 <button
                   type="button"
                   onClick={() => {
-                    onStart(detail.id)
-                    setToast('Proses giling dimulai')
+                    const je = onStart(detail.id)
+                    if (je) {
+                      setToast(
+                        `Proses giling dimulai · jurnal gagal: ${je}`,
+                      )
+                    } else {
+                      setToast('Proses giling dimulai')
+                    }
                   }}
                   className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
                 >
@@ -366,8 +372,14 @@ export function BatchView({
                 <button
                   type="button"
                   onClick={() => {
-                    onComplete(detail.id)
-                    setToast('Batch selesai — stok diposting')
+                    const je = onComplete(detail.id)
+                    if (je) {
+                      setToast(
+                        `Batch selesai — stok diposting · jurnal gagal: ${je}`,
+                      )
+                    } else {
+                      setToast('Batch selesai — stok diposting')
+                    }
                   }}
                   className="h-11 w-full rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
                 >

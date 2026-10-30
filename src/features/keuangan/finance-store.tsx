@@ -124,8 +124,8 @@ type FinanceStoreValue = {
   removeCashEntry: (id: string) => void
   payPayable: (input: PayInput) => void
   receiveReceivable: (input: PayInput) => void
-  addExpense: (input: AddExpenseInput) => void
-  setExpenseStatus: (id: string, status: ExpenseStatus) => void
+  addExpense: (input: AddExpenseInput) => string | undefined
+  setExpenseStatus: (id: string, status: ExpenseStatus) => string | undefined
   upsertPayableFromPurchase: (input: UpsertPayableInput) => void
   applyPurchasePayment: (input: ApplyLinkedPayInput) => void
   upsertReceivableFromSale: (input: UpsertReceivableInput) => void
@@ -203,10 +203,10 @@ function postAutoPairJournal(
     debitKey: AccountMapKey
     creditKey: AccountMapKey
   },
-): void {
+): string | undefined {
   const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return
-  postJournalEntry({
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -659,7 +659,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   )
 
   const addExpense = useCallback(
-    (input: AddExpenseInput) => {
+    (input: AddExpenseInput): string | undefined => {
       const id = `e-${Date.now()}`
       setExpenses((list) => {
         const entry: ExpenseRow = {
@@ -689,7 +689,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       })
       if (input.status === 'posted') {
         const memo = `Biaya operasional · ${input.description}`
-        postAutoPairJournal(postJournalEntry, mapAccount, {
+        return postAutoPairJournal(postJournalEntry, mapAccount, {
           date: todayGlDate(),
           memo,
           sourceKey: `ex:${id}:post`,
@@ -698,12 +698,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           creditKey: 'cash',
         })
       }
+      return undefined
     },
     [actor, postJournalEntry, mapAccount],
   )
 
   const setExpenseStatus = useCallback(
-    (id: string, status: ExpenseStatus) => {
+    (id: string, status: ExpenseStatus): string | undefined => {
+      let journalError: string | undefined
       setExpenses((list) => {
         const prev = list.find((e) => e.id === id)
         if (!prev) return list
@@ -719,7 +721,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             }),
           )
           const memo = `Biaya ${prev.reference} · ${prev.description}`
-          postAutoPairJournal(postJournalEntry, mapAccount, {
+          journalError = postAutoPairJournal(postJournalEntry, mapAccount, {
             date: todayGlDate(),
             memo,
             sourceKey: `ex:${id}:post`,
@@ -744,6 +746,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           item.id === id ? { ...item, status } : item,
         )
       })
+      return journalError
     },
     [actor, postJournalEntry, mapAccount, reverseJournalEntry],
   )

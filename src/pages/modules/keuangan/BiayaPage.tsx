@@ -183,7 +183,7 @@ export function BiayaPage() {
 
   function submitForm() {
     if (!validate()) return
-    addExpense({
+    const journalError = addExpense({
       category: form.category,
       description: form.note.trim()
         ? `${form.description.trim()} — ${form.note.trim()}`
@@ -195,21 +195,27 @@ export function BiayaPage() {
     setFormOpen(false)
     setReceipt(null)
     setPage(1)
-    setToast(
-      `Biaya dicatat (${EXPENSE_STATUS_LABEL[form.status]})${
-        form.status === 'posted' ? ' · sinkron ke Kas' : ''
-      }`,
-    )
+    const base = `Biaya dicatat (${EXPENSE_STATUS_LABEL[form.status]})${
+      form.status === 'posted' ? ' · sinkron ke Kas' : ''
+    }`
+    if (journalError) {
+      setToast(`${base} · jurnal gagal: ${journalError}`)
+    } else {
+      setToast(base)
+    }
   }
 
   function setStatus(row: ExpenseRow, status: ExpenseStatus) {
-    setExpenseStatus(row.id, status)
+    const journalError = setExpenseStatus(row.id, status)
     setDetail((d) => (d?.id === row.id ? { ...d, status } : d))
-    setToast(
-      `${row.reference} → ${EXPENSE_STATUS_LABEL[status]}${
-        status === 'posted' && row.status !== 'posted' ? ' · sinkron ke Kas' : ''
-      }`,
-    )
+    const base = `${row.reference} → ${EXPENSE_STATUS_LABEL[status]}${
+      status === 'posted' && row.status !== 'posted' ? ' · sinkron ke Kas' : ''
+    }`
+    if (journalError) {
+      setToast(`${base} · jurnal gagal: ${journalError}`)
+    } else {
+      setToast(base)
+    }
   }
 
   function handlePrint(row: ExpenseRow) {

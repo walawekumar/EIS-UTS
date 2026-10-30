@@ -17,6 +17,7 @@ import {
   type Purchase,
 } from '@/features/pembelian/pembelian-data'
 import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
@@ -87,13 +88,13 @@ function postPairJournal(
     debitMemo?: string
     creditMemo?: string
   },
-): void {
+): string | undefined {
   const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
   const debitId = mapAccount(debitKey)
   const creditId = mapAccount(creditKey)
-  if (debitId === creditId) return
-  postJournalEntry({
+  if (debitId === creditId) return undefined
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -168,13 +169,13 @@ type ProduksiContextValue = {
   submitBatch: (id: string) => void
   approveBatch: (id: string) => void
   rejectBatch: (id: string, reason: string) => void
-  startBatch: (id: string) => void
-  completeBatch: (id: string) => void
+  startBatch: (id: string) => string | undefined
+  completeBatch: (id: string) => string | undefined
   voidBatch: (id: string, reason: string) => void
   deleteBatch: (id: string) => void
   createPackRun: (input: NewPackRunInput) => string
   updatePackRun: (id: string, lines: PackRunLine[]) => string | undefined
-  postPackRun: (id: string) => string | undefined
+  postPackRun: (id: string) => DualTrackResult
   voidPackRun: (id: string) => string | undefined
   recalcLotCost: (batchId: string, opts: RecalcLotCostOptions) => string | undefined
 }
@@ -561,18 +562,18 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
   )
 
   const startBatch = useCallback(
-    (id: string) => {
+    (id: string): string | undefined => {
       const current = items.find((b) => b.id === id)
-      if (!current || current.stage !== 'approved') return
-      if (current.wipStockPosted) return
+      if (!current || current.stage !== 'approved') return undefined
+      if (current.wipStockPosted) return undefined
 
       const available = stockOnHand(stocks, current.inputSku, current.fromLocation)
-      if (current.inputQty > available) return
+      if (current.inputQty > available) return undefined
 
       postStartWipStock(current, addMovement, false)
       const wipGrainValue = grainValueForBatch(current)
       const startedAt = new Date().toISOString()
-      postPairJournal(postJournalEntry, mapAccount, {
+      const journalError = postPairJournal(postJournalEntry, mapAccount, {
         date: journalDateFromIso(startedAt),
         memo: `Start batch ${current.id}`,
         sourceKey: `batch:${current.id}:start`,
@@ -592,6 +593,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         }),
         { action: 'start', note: 'Gabah ke WIP' },
       )
+      return journalError
     },
     [items, stocks, addMovement, postJournalEntry, mapAccount, patch],
   )
@@ -654,11 +656,17 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
   )
 
   const completeBatch = useCallback(
-    (id: string) => {
+    (id: string): string | undefined => {
       const current = items.find((b) => b.id === id)
-      if (!current) return
-      if (current.stage !== 'processing' && current.stage !== 'approved') return
-      if (current.inputQty <= 0 || !current.outputs.some((o) => o.qty > 0)) return
+      if (!current) return undefined
+      if (current.stage !== 'processing' && current.stage !== 'approved') {
+        return undefined
+      }
+      if (current.inputQty <= 0 || !current.outputs.some((o) => o.qty > 0)) {
+        return undefined
+      }
+
+      let journalError: string | undefined
 
       if (!current.stockPosted) {
         if (current.wipStockPosted) {
@@ -732,7 +740,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
                   memo: `${memo} — alokasi ops`,
                 })
               }
-              postJournalEntry({
+              journalError = postJournalEntry({
                 date: journalDate,
                 memo,
                 sourceKey: `batch:${doneBatch.id}:done`,
@@ -744,6 +752,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+      return journalError
     },
     [items, addMovement, patch, persistLotCostForBatch, postJournalEntry, mapAccount],
   )
@@ -863,31 +872,43 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
   )
 
   const postPackRun = useCallback(
-    (id: string): string | undefined => {
+    (id: string): DualTrackResult => {
       if (!roleAllowed(user?.role, ['produksi', 'admin'])) {
-        return 'Hanya produksi atau admin yang dapat memposting pack.'
+        return {
+          ok: false,
+          error: 'Hanya produksi atau admin yang dapat memposting pack.',
+        }
       }
       const current = packRuns.find((r) => r.id === id)
-      if (!current) return 'Pack run tidak ditemukan.'
-      if (current.stage !== 'draft') return 'Pack run sudah diposting.'
-      if (current.voidedAt) return 'Pack run sudah dibatalkan.'
+      if (!current) return { ok: false, error: 'Pack run tidak ditemukan.' }
+      if (current.stage !== 'draft') {
+        return { ok: false, error: 'Pack run sudah diposting.' }
+      }
+      if (current.voidedAt) {
+        return { ok: false, error: 'Pack run sudah dibatalkan.' }
+      }
 
       const batch = items.find((b) => b.id === current.batchId)
       if (!batch || batch.stage !== 'done') {
-        return 'Batch produksi harus selesai (done).'
+        return { ok: false, error: 'Batch produksi harus selesai (done).' }
       }
       const activeLines = current.lines.filter((l) => l.qty > 0)
       if (!activeLines.length) {
-        return 'Minimal satu baris pack wajib qty > 0.'
+        return { ok: false, error: 'Minimal satu baris pack wajib qty > 0.' }
       }
 
       const toPost: PackRun = { ...current, lines: activeLines }
       const totalOut = sumPackRunOutQty(toPost)
-      if (totalOut <= 0) return 'Total qty pack tidak valid.'
+      if (totalOut <= 0) {
+        return { ok: false, error: 'Total qty pack tidak valid.' }
+      }
 
       const available = stockOnHand(stocks, current.sourceSku, batch.toLocation)
       if (totalOut > available) {
-        return `Stok ${current.sourceSku} di ${batch.toLocation} tidak cukup (tersedia ${available}).`
+        return {
+          ok: false,
+          error: `Stok ${current.sourceSku} di ${batch.toLocation} tidak cukup (tersedia ${available}).`,
+        }
       }
 
       postPackStock(toPost, batch, addMovement, false)
@@ -897,7 +918,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         lotCost && lotCost.costPerKgBeras > 0
           ? lotCost.costPerKgBeras * totalOut
           : 0
-      postPairJournal(postJournalEntry, mapAccount, {
+      const journalError = postPairJournal(postJournalEntry, mapAccount, {
         date: journalDateFromIso(postedAt),
         memo: `Pack ${toPost.id} · ${batch.id}`,
         sourceKey: `pack:${toPost.id}:post`,
@@ -920,7 +941,7 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         note: `Pack ${batch.id} · ${totalOut} kg`,
       })
       publishSync('produksi', id)
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [
       packRuns,

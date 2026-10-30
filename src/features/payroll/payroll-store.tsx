@@ -10,6 +10,7 @@ import {
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import { type AccountMapKey } from '@/features/keuangan/gl-data'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import {
   nextPayrollId,
@@ -35,7 +36,7 @@ type PayrollStoreValue = {
   submitForApproval: (id: string) => string | undefined
   approveAsAdmin: (id: string) => string | undefined
   approveAsKeuangan: (id: string) => string | undefined
-  postRun: (id: string, proof: ProofAttachment | string) => string | undefined
+  postRun: (id: string, proof: ProofAttachment | string) => DualTrackResult
   voidRun: (id: string) => void
   deleteRun: (id: string) => void
 }
@@ -78,10 +79,10 @@ function postPayrollJournal(
     debitKey: AccountMapKey
     creditKey: AccountMapKey
   },
-): void {
+): string | undefined {
   const { amount, date, memo, sourceKey, debitKey, creditKey } = input
-  if (!Number.isFinite(amount) || amount <= 0) return
-  postJournalEntry({
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+  return postJournalEntry({
     date,
     memo,
     sourceKey,
@@ -286,17 +287,20 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
   )
 
   const postRun = useCallback(
-    (id: string, proof: ProofAttachment | string): string | undefined => {
+    (id: string, proof: ProofAttachment | string): DualTrackResult => {
       const role = user?.role
       if (role !== 'keuangan' && role !== 'admin') {
-        return 'Hanya keuangan atau admin yang bisa mencairkan payroll'
+        return {
+          ok: false,
+          error: 'Hanya keuangan atau admin yang bisa mencairkan payroll',
+        }
       }
       const current = runs.find((r) => r.id === id)
       if (!current || current.status !== 'siap_cair') {
-        return 'Payroll harus siap cair sebelum dicairkan'
+        return { ok: false, error: 'Payroll harus siap cair sebelum dicairkan' }
       }
       if (!hasProof(proof)) {
-        return 'Lampirkan bukti transfer sebelum cair'
+        return { ok: false, error: 'Lampirkan bukti transfer sebelum cair' }
       }
       const total = runTotal(current)
       addCashEntry({
@@ -319,7 +323,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
             : r,
         ),
       )
-      postPayrollJournal(postJournalEntry, mapAccount, {
+      const journalError = postPayrollJournal(postJournalEntry, mapAccount, {
         date: todayGlDate(),
         memo: `Payroll ${current.period} · ${current.id}`,
         sourceKey: `payrun:${id}:post`,
@@ -333,7 +337,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: `Cair payroll ${total}`,
       })
-      return undefined
+      return journalError ? { ok: true, journalError } : { ok: true }
     },
     [runs, user?.role, addCashEntry, postJournalEntry, mapAccount, appendAudit],
   )

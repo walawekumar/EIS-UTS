@@ -369,12 +369,19 @@ export function PayrollPage() {
             else setToast('Approve keuangan tercatat')
           }}
           onPost={(proof) => {
-            const err = postRun(detail.id, proof)
-            if (err) setToast(err)
-            else {
-              setToast('Payroll dicairkan ke kas')
-              closeDetail()
+            const result = postRun(detail.id, proof)
+            if (!result.ok) {
+              setToast(result.error)
+              return
             }
+            if (result.journalError) {
+              setToast(
+                `Payroll dicairkan ke kas · jurnal gagal: ${result.journalError}`,
+              )
+            } else {
+              setToast('Payroll dicairkan ke kas')
+            }
+            closeDetail()
           }}
           onDelete={() => {
             deleteRun(detail.id)

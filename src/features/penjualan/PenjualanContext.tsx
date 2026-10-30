@@ -12,6 +12,8 @@ import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { AccountMapKey } from '@/features/keuangan/gl-data'
 import type { JournalLine } from '@/features/keuangan/gl-data'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
+import { joinJournalErrors } from '@/features/keuangan/dual-track-result'
 import { useFinanceStore } from '@/features/keuangan/finance-store'
 import { lookupCustomer } from '@/features/master/master-storage'
 import { cogsAmountForLot } from '@/features/penjualan/cogs-from-lot'
@@ -51,9 +53,7 @@ function journalDateFromIso(iso: string): string {
   return iso.slice(0, 10)
 }
 
-export type PenjualanActionResult =
-  | { ok: false; error: string }
-  | { ok: true; journalError?: string }
+export type PenjualanActionResult = DualTrackResult
 
 function postPenjualanPairJournal(
   postJournalEntry: ReturnType<typeof useFinanceStore>['postJournalEntry'],
@@ -505,7 +505,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         entityId: id,
         note: input.settlement,
       })
-      const journalError = shipJeErr ?? codJeErr
+      const journalError = joinJournalErrors(shipJeErr, codJeErr)
       return journalError ? { ok: true, journalError } : { ok: true }
     },
     [

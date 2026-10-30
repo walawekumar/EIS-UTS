@@ -20,6 +20,7 @@ import {
   toggleSort,
   type SortState,
 } from '@/components/keuangan/FinanceTable'
+import type { DualTrackResult } from '@/features/keuangan/dual-track-result'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -118,7 +119,10 @@ type PembayaranViewProps = {
   purchases: Purchase[]
   selectedId: string | null
   onSelect: (id: string | null) => void
-  onPay: (id: string, payment: Omit<Payment, 'id'>) => string | undefined
+  onPay: (
+    id: string,
+    payment: Omit<Payment, 'id'>,
+  ) => DualTrackResult
 }
 
 export function PembayaranView({
@@ -229,22 +233,27 @@ export function PembayaranView({
       return
     }
     const transferProof = receiptToProof(receipt)
-    const err = onPay(payTarget.id, {
+    const result = onPay(payTarget.id, {
       amount: value,
       method,
       date,
       receiptName: receipt.name,
       transferProof,
     })
-    if (err) {
-      setToast(err)
+    if (!result.ok) {
+      setToast(result.error)
       return
     }
     setPayTarget(null)
     setReceipt(null)
     setDetail(null)
     onSelect(payTarget.id)
-    setToast(`Pembayaran ${formatRupiah(value)} dicatat · bukti ${receipt.name}`)
+    const base = `Pembayaran ${formatRupiah(value)} dicatat · bukti ${receipt.name}`
+    if (result.journalError) {
+      setToast(`${base} · jurnal gagal: ${result.journalError}`)
+    } else {
+      setToast(base)
+    }
   }
 
   return (
