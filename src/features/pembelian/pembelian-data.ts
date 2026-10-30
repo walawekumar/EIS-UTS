@@ -1,6 +1,63 @@
 import { lookupSupplier } from '@/features/master/master-storage'
 import type { ApprovalStamp } from '@/features/workflow/approvals'
+import type { ReturnStage } from '@/features/workflow/doc-stages'
 import type { ProofAttachment } from '@/features/workflow/proof'
+
+export type PurchaseReturnLine = { sku: string; productName: string; unit: string; qty: number }
+
+export type PurchaseReturn = {
+  id: string
+  purchaseId: string
+  lotId?: string
+  lines: PurchaseReturnLine[]
+  reason: string
+  stage: ReturnStage
+  approvals?: ApprovalStamp[]
+  createdAt: string
+  postedAt?: string
+  rejectedReason?: string
+}
+
+export type LotQcGrade = 'A' | 'B' | 'C' | 'reject'
+
+export type LotQc = {
+  lotId: string
+  purchaseId: string
+  moisture: number
+  impurity: number
+  brokenPct: number
+  grade: LotQcGrade
+  passed: boolean
+  note?: string
+  by: string
+  at: string
+  overrideReason?: string
+}
+
+export function returnedQtyForPurchase(
+  returns: PurchaseReturn[],
+  purchaseId: string,
+  sku: string,
+): number {
+  return returns
+    .filter((r) => r.purchaseId === purchaseId && r.stage === 'posted')
+    .flatMap((r) => r.lines)
+    .filter((l) => l.sku === sku)
+    .reduce((s, l) => s + l.qty, 0)
+}
+
+export function nextPurchaseReturnId(returns: PurchaseReturn[]): string {
+  const n = returns.length + 1
+  return `PR-${String(n).padStart(4, '0')}`
+}
+
+export function getLotQc(list: LotQc[], lotId: string): LotQc | undefined {
+  return list.find((q) => q.lotId === lotId)
+}
+
+export function upsertLotQc(list: LotQc[], row: LotQc): LotQc[] {
+  return [...list.filter((q) => q.lotId !== row.lotId), row]
+}
 
 export type GrainType = 'GKP' | 'GKG'
 
