@@ -11,8 +11,9 @@ export function TagihanPage() {
       selectedId={selectedId}
       onSelect={select}
       onPay={(id, payment) => {
-        addPayment(id, payment)
-        select(id)
+        const result = addPayment(id, payment)
+        if (result.ok) select(id)
+        return result
       }}
     />
   )

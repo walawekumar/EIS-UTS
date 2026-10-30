@@ -49,6 +49,7 @@ import {
   type PaymentStatus,
   type SaleOrder,
 } from '@/features/penjualan/penjualan-data'
+import type { PenjualanActionResult } from '@/features/penjualan/PenjualanContext'
 import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
@@ -116,7 +117,10 @@ type TagihanViewProps = {
   orders: SaleOrder[]
   selectedId: string | null
   onSelect: (id: string | null) => void
-  onPay: (id: string, payment: Omit<Payment, 'id'>) => void
+  onPay: (
+    id: string,
+    payment: Omit<Payment, 'id'>,
+  ) => PenjualanActionResult
 }
 
 export function TagihanView({ orders, selectedId, onSelect, onPay }: TagihanViewProps) {
@@ -217,17 +221,26 @@ export function TagihanView({ orders, selectedId, onSelect, onPay }: TagihanView
     if (value <= 0) return setError('Isi jumlah pembayaran')
     if (value > s.outstanding) return setError(`Maksimal ${formatRupiah(s.outstanding)}`)
     if (!receipt) return setReceiptError('Lampirkan bukti pembayaran (foto/galeri)')
-    onPay(payTarget.id, {
+    const result = onPay(payTarget.id, {
       amount: value,
       method,
       date,
       receiptName: receipt.name,
     })
+    if (!result.ok) {
+      setToast(result.error)
+      return
+    }
     setPayTarget(null)
     setReceipt(null)
     setDetail(null)
     onSelect(payTarget.id)
-    setToast(`Pembayaran ${formatRupiah(value)} dicatat · bukti ${receipt.name}`)
+    const base = `Pembayaran ${formatRupiah(value)} dicatat · bukti ${receipt.name}`
+    setToast(
+      result.journalError
+        ? `${base} · jurnal gagal: ${result.journalError}`
+        : base,
+    )
   }
 
   return (

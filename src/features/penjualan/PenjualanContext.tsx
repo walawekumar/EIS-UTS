@@ -256,7 +256,10 @@ type PenjualanContextValue = {
   deleteOrder: (id: string) => void
   voidOrder: (id: string, reason: string) => void
   shipOrder: (id: string, input: DeliveryInput) => PenjualanActionResult
-  addPayment: (id: string, payment: Omit<Payment, 'id'>) => void
+  addPayment: (
+    id: string,
+    payment: Omit<Payment, 'id'>,
+  ) => PenjualanActionResult
   returns: SaleReturn[]
   createSaleReturn: (input: SaleReturnInput) => string | undefined
   submitSaleReturn: (id: string) => string | undefined
@@ -522,9 +525,9 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const addPayment = useCallback(
-    (id: string, payment: Omit<Payment, 'id'>) => {
+    (id: string, payment: Omit<Payment, 'id'>): PenjualanActionResult => {
       const current = items.find((o) => o.id === id)
-      if (!current) return
+      if (!current) return { ok: false, error: 'Order tidak ditemukan' }
       const payId = nextPaymentId(items)
       const next: SaleOrder = {
         ...current,
@@ -541,14 +544,21 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         receiptName: payment.receiptName,
         note: payment.method,
       })
-      postPenjualanPairJournal(postJournalEntry, mapAccount, {
-        date: journalDateFromIso(payment.date),
-        memo: `Terima piutang ${next.id} · ${customer?.name ?? next.customerId}`,
-        sourceKey: `so:${next.id}:pay:${payId}`,
-        amount: payment.amount,
-        debitKey: 'cash',
-        creditKey: 'ar',
-      })
+      const journalError = postPenjualanPairJournal(
+        postJournalEntry,
+        mapAccount,
+        {
+          date: journalDateFromIso(payment.date),
+          memo: `Terima piutang ${next.id} · ${customer?.name ?? next.customerId}`,
+          sourceKey: `so:${next.id}:pay:${payId}`,
+          amount: payment.amount,
+          debitKey: 'cash',
+          creditKey: 'ar',
+        },
+      )
+      return journalError
+        ? { ok: true, journalError }
+        : { ok: true }
     },
     [applySalePayment, items, postJournalEntry, mapAccount],
   )
