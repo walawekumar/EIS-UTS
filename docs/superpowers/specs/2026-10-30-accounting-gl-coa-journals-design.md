@@ -1,7 +1,7 @@
 # Spek: Akuntansi GL — COA, jurnal otomatis/manual, laporan dasar (gelombang 2a)
 
 Tanggal: 2026-10-30  
-Status: draft (menunggu review user)  
+Status: approved (user: approve)  
 Pra-syarat: gelombang 1 (retur, QC, pack, LotCost) sudah di `main`
 
 ## Tujuan
