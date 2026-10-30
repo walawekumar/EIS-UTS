@@ -538,7 +538,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   )
 
   const setAccountMap = useCallback((map: AccountMap) => {
-    setAccountMapState({ ...map })
+    const nextMap = { ...map }
+    glRef.current = { ...glRef.current, accountMap: nextMap }
+    setAccountMapState(nextMap)
   }, [])
 
   const upsertAccount = useCallback((account: Account): string | undefined => {
@@ -552,28 +554,30 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     const idx = list.findIndex((a) => a.id === account.id)
     if (idx < 0) {
       if (account.system) return 'Akun baru tidak boleh berstatus sistem.'
-      setAccounts([
+      const nextAccounts = [
         { ...account, code, name, system: false },
         ...list,
-      ])
+      ]
+      glRef.current = { ...glRef.current, accounts: nextAccounts }
+      setAccounts(nextAccounts)
       return undefined
     }
     const prev = list[idx]
     if (prev.system) {
-      setAccounts(
-        list.map((a) =>
-          a.id === account.id
-            ? { ...prev, code, name, active: account.active }
-            : a,
-        ),
+      const nextAccounts = list.map((a) =>
+        a.id === account.id
+          ? { ...prev, code, name, active: account.active }
+          : a,
       )
+      glRef.current = { ...glRef.current, accounts: nextAccounts }
+      setAccounts(nextAccounts)
       return undefined
     }
-    setAccounts(
-      list.map((a) =>
-        a.id === account.id ? { ...account, code, name, system: false } : a,
-      ),
+    const nextAccounts = list.map((a) =>
+      a.id === account.id ? { ...account, code, name, system: false } : a,
     )
+    glRef.current = { ...glRef.current, accounts: nextAccounts }
+    setAccounts(nextAccounts)
     return undefined
   }, [])
 
@@ -581,7 +585,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     (id: string, active: boolean): string | undefined => {
       const { accounts: list } = glRef.current
       if (!list.some((a) => a.id === id)) return 'Akun tidak ditemukan.'
-      setAccounts(list.map((a) => (a.id === id ? { ...a, active } : a)))
+      const nextAccounts = list.map((a) =>
+        a.id === id ? { ...a, active } : a,
+      )
+      glRef.current = { ...glRef.current, accounts: nextAccounts }
+      setAccounts(nextAccounts)
       return undefined
     },
     [],
@@ -598,29 +606,37 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         journals: jrn,
       })
       if (result.ok) {
+        const nextFailed = input.sourceKey
+          ? removeFailedPost(failed, input.sourceKey)
+          : failed
+        glRef.current = {
+          ...glRef.current,
+          journals: result.journals,
+          failedPosts: nextFailed,
+        }
         setJournals(result.journals)
         if (input.sourceKey) {
-          setFailedPosts(removeFailedPost(failed, input.sourceKey))
+          setFailedPosts(nextFailed)
         }
         return undefined
       }
       if (input.sourceKey) {
-        setFailedPosts(
-          enqueueFailedPost(failed, {
+        const nextFailed = enqueueFailedPost(failed, {
+          sourceKey: input.sourceKey,
+          payload: {
+            date: input.date,
+            memo: input.memo,
             sourceKey: input.sourceKey,
-            payload: {
-              date: input.date,
-              memo: input.memo,
-              sourceKey: input.sourceKey,
-              sourceType: input.sourceType,
-              manual: input.manual,
-              lines: input.lines,
-              createdBy: actor,
-            },
-            error: result.error,
-            createdAt: new Date().toISOString(),
-          }),
-        )
+            sourceType: input.sourceType,
+            manual: input.manual,
+            lines: input.lines,
+            createdBy: actor,
+          },
+          error: result.error,
+          createdAt: new Date().toISOString(),
+        })
+        glRef.current = { ...glRef.current, failedPosts: nextFailed }
+        setFailedPosts(nextFailed)
       }
       return result.error
     },
@@ -636,6 +652,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: todayGlDate(),
       })
       if (!result.ok) return result.error
+      glRef.current = { ...glRef.current, journals: result.journals }
       setJournals(result.journals)
       return undefined
     },
