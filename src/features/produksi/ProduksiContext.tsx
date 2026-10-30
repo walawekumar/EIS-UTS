@@ -633,11 +633,13 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       if (!batch || batch.stage !== 'done') {
         return 'Batch produksi harus selesai (done).'
       }
-      if (!current.lines.length || !current.lines.every((l) => l.qty > 0)) {
-        return 'Setiap baris pack wajib qty > 0.'
+      const activeLines = current.lines.filter((l) => l.qty > 0)
+      if (!activeLines.length) {
+        return 'Minimal satu baris pack wajib qty > 0.'
       }
 
-      const totalOut = sumPackRunOutQty(current)
+      const toPost: PackRun = { ...current, lines: activeLines }
+      const totalOut = sumPackRunOutQty(toPost)
       if (totalOut <= 0) return 'Total qty pack tidak valid.'
 
       const available = stockOnHand(stocks, current.sourceSku, batch.toLocation)
@@ -645,19 +647,18 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         return `Stok ${current.sourceSku} di ${batch.toLocation} tidak cukup (tersedia ${available}).`
       }
 
-      postPackStock(current, batch, addMovement, false)
+      postPackStock(toPost, batch, addMovement, false)
       const postedAt = new Date().toISOString()
+      const posted = { ...toPost, stage: 'posted' as const, postedAt }
       setPackRuns((list) =>
-        list.map((r) =>
-          r.id === id ? { ...r, stage: 'posted' as const, postedAt } : r,
-        ),
+        list.map((r) => (r.id === id ? posted : r)),
       )
       appendAudit({
         action: 'post',
         entity: 'batch',
         entityId: id,
         before: current,
-        after: { ...current, stage: 'posted', postedAt },
+        after: posted,
         note: `Pack ${batch.id} · ${totalOut} kg`,
       })
       publishSync('produksi', id)

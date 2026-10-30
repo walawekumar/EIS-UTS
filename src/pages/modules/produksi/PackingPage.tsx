@@ -49,6 +49,8 @@ import {
   type PackRunLine,
   type ProductionBatch,
 } from '@/features/produksi/produksi-data'
+import { stockKey } from '@/features/persediaan/persediaan-data'
+import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
 import { usePageSize } from '@/features/settings/usePageSize'
 
 const FILTERS = [
@@ -100,7 +102,7 @@ function parseLinesFromForm(
     next.push({ ...lines[i], qty })
   }
   if (!next.some((l) => l.qty > 0)) return 'Minimal satu baris qty > 0.'
-  return next
+  return next.filter((l) => l.qty > 0)
 }
 
 export function PackingPage() {
@@ -436,6 +438,7 @@ function PackDrawer({
     (row?.lines ?? []).map((l) => String(l.qty).replace('.', ',')),
   )
   const [error, setError] = useState<string | undefined>()
+  const { stocks } = usePersediaanStore()
 
   const batch = doneBatches.find((b) => b.id === batchId)
   const sourceOutputs = useMemo(
@@ -444,6 +447,12 @@ function PackDrawer({
     [batch],
   )
   const sourceLine = sourceOutputs.find((o) => o.sku === sourceSku)
+  const sourceLocation = batch?.toLocation ?? row?.lines[0]?.location
+  const sourceOnHand = useMemo(() => {
+    if (!sourceSku || !sourceLocation) return null
+    const key = stockKey(sourceSku, sourceLocation)
+    return stocks.find((s) => stockKey(s.sku, s.location) === key)?.qty ?? 0
+  }, [stocks, sourceSku, sourceLocation])
 
   useEffect(() => {
     if (!isNew || !batch || !sourceLine) return
@@ -591,6 +600,12 @@ function PackDrawer({
               setError(undefined)
             }}
           />
+          {sourceSku && sourceLocation && sourceOnHand != null ? (
+            <p className="text-[12px] text-muted">
+              Stok {sourceSku} di {sourceLocation}:{' '}
+              <span className="num font-medium text-ink">{formatKg(sourceOnHand)}</span>
+            </p>
+          ) : null}
           {lines.length > 0 ? (
             <PackLinesEditor
               lines={lines}
@@ -607,6 +622,12 @@ function PackDrawer({
         </div>
       ) : editable && row ? (
         <div className="space-y-3">
+          {sourceSku && sourceLocation && sourceOnHand != null ? (
+            <p className="text-[12px] text-muted">
+              Stok sumber {sourceSku} di {sourceLocation}:{' '}
+              <span className="num font-medium text-ink">{formatKg(sourceOnHand)}</span>
+            </p>
+          ) : null}
           <PackLinesEditor
             lines={lines}
             qtyStrings={qtyStrings}
