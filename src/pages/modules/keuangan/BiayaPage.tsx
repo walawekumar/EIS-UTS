@@ -38,10 +38,7 @@ import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import { TaxPostFields } from '@/components/keuangan/TaxPostFields'
-import {
-  expenseTaxBridge,
-  useFinanceStore,
-} from '@/features/keuangan/finance-store'
+import { useFinanceStore } from '@/features/keuangan/finance-store'
 import type { PpnRate, PriceMode } from '@/features/keuangan/tax-data'
 import { useTaxStore } from '@/features/keuangan/tax-store'
 import {
@@ -110,7 +107,7 @@ const EMPTY_FORM: FormState = {
 export function BiayaPage() {
   const PAGE_SIZE = usePageSize()
   const { expenses, addExpense, setExpenseStatus } = useFinanceStore()
-  const { recordTaxDoc, voidTaxForSource, settings } = useTaxStore()
+  const { settings } = useTaxStore()
   const taxDefaults = resolveExpenseTaxDefaults(settings)
   const [ppnRate, setPpnRate] = useState<PpnRate>(taxDefaults.ppnRate)
   const [priceMode, setPriceMode] = useState<PriceMode>(taxDefaults.priceMode)
@@ -176,15 +173,6 @@ export function BiayaPage() {
     const t = window.setTimeout(() => setToast(null), 2400)
     return () => window.clearTimeout(t)
   }, [toast])
-
-  useEffect(() => {
-    expenseTaxBridge.recordTaxDoc = recordTaxDoc
-    expenseTaxBridge.voidTaxForSource = voidTaxForSource
-    return () => {
-      expenseTaxBridge.recordTaxDoc = null
-      expenseTaxBridge.voidTaxForSource = null
-    }
-  }, [recordTaxDoc, voidTaxForSource])
 
   function openForm() {
     const defaults = resolveExpenseTaxDefaults(settings)

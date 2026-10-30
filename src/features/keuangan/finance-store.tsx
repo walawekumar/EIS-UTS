@@ -70,7 +70,7 @@ type AddExpenseInput = {
   priceMode?: PriceMode
 }
 
-/** Registered from BiayaPage (inside TaxProvider) for expense tax docs. */
+/** Registered app-wide by ExpenseTaxBridge (under TaxProvider in App.tsx). */
 export const expenseTaxBridge: {
   recordTaxDoc:
     | ((
@@ -79,6 +79,21 @@ export const expenseTaxBridge: {
     | null
   voidTaxForSource: ((sourceType: 'expense', sourceId: string) => void) | null
 } = { recordTaxDoc: null, voidTaxForSource: null }
+
+type ExpenseTaxBridgeHandlers = {
+  recordTaxDoc: NonNullable<typeof expenseTaxBridge.recordTaxDoc>
+  voidTaxForSource: NonNullable<typeof expenseTaxBridge.voidTaxForSource>
+}
+
+export function setExpenseTaxBridge(bridge: ExpenseTaxBridgeHandlers | null): void {
+  if (bridge) {
+    expenseTaxBridge.recordTaxDoc = bridge.recordTaxDoc
+    expenseTaxBridge.voidTaxForSource = bridge.voidTaxForSource
+  } else {
+    expenseTaxBridge.recordTaxDoc = null
+    expenseTaxBridge.voidTaxForSource = null
+  }
+}
 
 type UpsertPayableInput = {
   sourceId: string

@@ -14,6 +14,7 @@ import {
   type TaxSettings,
   type TaxSourceType,
 } from '@/features/keuangan/tax-data'
+import { setExpenseTaxBridge } from '@/features/keuangan/finance-store'
 import { taxRepository } from '@/features/keuangan/tax-storage'
 
 const INVOICE_SEQ_PAD = 6
@@ -222,4 +223,14 @@ export function useTaxStore(): TaxStoreValue {
     throw new Error('useTaxStore harus dipakai di dalam TaxProvider')
   }
   return ctx
+}
+
+/** Mount once under TaxProvider so finance-store can record expense tax docs. */
+export function ExpenseTaxBridge() {
+  const { recordTaxDoc, voidTaxForSource } = useTaxStore()
+  useEffect(() => {
+    setExpenseTaxBridge({ recordTaxDoc, voidTaxForSource })
+    return () => setExpenseTaxBridge(null)
+  }, [recordTaxDoc, voidTaxForSource])
+  return null
 }
