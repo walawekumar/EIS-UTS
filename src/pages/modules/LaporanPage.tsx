@@ -654,7 +654,7 @@ export function LaporanPage() {
         {tab === 'neraca' ? (
           <div className="space-y-4">
             <p className="text-[12px] text-muted">
-              Aset, utang, modal dari saldo GL + laba rugi berjalan periode ini.
+              Aset, utang, modal dari saldo GL kumulatif (semua jurnal aktif) + laba rugi berjalan.
             </p>
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
