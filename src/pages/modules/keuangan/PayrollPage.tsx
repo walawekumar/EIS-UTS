@@ -336,6 +336,7 @@ export function PayrollPage() {
 
         <FinancePager
           page={safePage}
+          pageSize={PAGE_SIZE}
           pageCount={pageCount}
           total={filtered.length}
           onPageChange={setPage}
@@ -690,7 +691,7 @@ function PayrollDetailDrawer({
           </DrawerSection>
         ) : null}
 
-        {canCair ? (
+        {canCairFinance ? (
           <DrawerSection label="Bukti transfer">
             <ReceiptUpload
               value={receipt}
