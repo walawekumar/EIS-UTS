@@ -10,7 +10,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
-import type { UserRole } from '@/features/auth/auth-data'
+import type { UserRole } from '@/types/auth'
 import {
   calcWeighing,
   effectiveUnitPrice,

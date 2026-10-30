@@ -455,12 +455,11 @@ function PackDrawer({
   }, [stocks, sourceSku, sourceLocation])
 
   useEffect(() => {
-    if (!isNew || !batch || !sourceLine) return
-    if (lines.length > 0 && sourceSku === row?.sourceSku) return
+    if (row != null || !batch || !sourceLine) return
     const suggested = suggestPackLines(sourceLine, batch)
     setLines(suggested)
     setQtyStrings(suggested.map(() => ''))
-  }, [isNew, batch, sourceLine, sourceSku, lines.length, row?.sourceSku])
+  }, [row, batch, sourceLine, sourceSku])
 
   function buildLines(): PackRunLine[] | string {
     return parseLinesFromForm(lines, qtyStrings)
