@@ -24,6 +24,7 @@ import {
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -163,7 +164,7 @@ export function PiutangPage() {
       invoice: recvTarget.invoice,
       party: recvTarget.customer,
       note: recvNote,
-      receiptName: recvReceipt?.name,
+      receiptName: receiptPersistRef(recvReceipt),
     })
     if (err) {
       setRecvError(err)

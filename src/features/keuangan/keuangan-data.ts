@@ -649,6 +649,11 @@ export function buildBiayaStats(rows: ExpenseRow[]): MetricCardData[] {
     }
   }
   const posted = rows.filter((r) => r.status === 'posted').length
+  const denom = Math.max(1, rows.filter((r) => r.status !== 'void').length)
+  const postedPct = Math.round((posted / denom) * 100)
+  const topSharePct =
+    total > 0 ? Math.round((topSum / total) * 100) : 0
+  const draftPct = Math.round((drafts.length / Math.max(1, rows.length)) * 100)
 
   return [
     {
@@ -661,21 +666,21 @@ export function buildBiayaStats(rows: ExpenseRow[]): MetricCardData[] {
     {
       label: 'Sudah posting',
       value: String(posted),
-      delta: `+${posted}`,
-      positive: true,
+      delta: `${postedPct}%`,
+      positive: postedPct >= 50,
       spark: sparkFrom([2, 3, 3, 4, 5, 5, posted || 1]),
     },
     {
       label: 'Kategori terbesar',
       value: topCat,
-      delta: formatIdrShort(topSum),
+      delta: `${topSharePct}%`,
       positive: true,
       spark: sparkFrom([40, 45, 50, 55, 60, 58, 65]),
     },
     {
       label: 'Draft',
       value: String(drafts.length),
-      delta: drafts.length > 0 ? `+${drafts.length}` : '0',
+      delta: drafts.length > 0 ? `${draftPct}%` : '0%',
       positive: drafts.length === 0,
       spark: sparkFrom([5, 4, 4, 3, 3, 2, drafts.length || 1]),
     },

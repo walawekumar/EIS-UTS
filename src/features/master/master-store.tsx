@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -16,7 +17,14 @@ import {
   type MasterUser,
   type PartnerKind,
 } from '@/features/master/master-data'
+import {
+  loadMasterCloud,
+  mapSupabaseError,
+  saveMasterCloud,
+  updateProfileUser,
+} from '@/features/master/master-cloud'
 import { masterRepository } from '@/features/master/master-storage'
+import { isSupabaseConfigured } from '@/lib/supabase-client'
 
 type PartnerInput = Omit<MasterPartner, 'id' | 'kind'>
 type ProductInput = Omit<MasterProduct, 'id'>
@@ -27,6 +35,8 @@ type MasterStoreValue = {
   customers: MasterPartner[]
   products: MasterProduct[]
   users: MasterUser[]
+  cloudReady: boolean
+  persistError: string | null
   upsertPartner: (kind: PartnerKind, data: PartnerInput, id?: string) => string
   setPartnerActive: (kind: PartnerKind, id: string, active: boolean) => void
   removePartner: (kind: PartnerKind, id: string) => void
@@ -40,23 +50,82 @@ type MasterStoreValue = {
 
 const MasterContext = createContext<MasterStoreValue | null>(null)
 
+function snapshotOf(
+  suppliers: MasterPartner[],
+  customers: MasterPartner[],
+  products: MasterProduct[],
+  users: MasterUser[],
+) {
+  return {
+    version: 1 as const,
+    suppliers,
+    customers,
+    products,
+    users,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 export function MasterProvider({ children }: { children: ReactNode }) {
-  const boot = masterRepository.load()
+  const configured = isSupabaseConfigured()
+  const boot = configured
+    ? {
+        suppliers: [] as MasterPartner[],
+        customers: [] as MasterPartner[],
+        products: [] as MasterProduct[],
+        users: [] as MasterUser[],
+      }
+    : masterRepository.load()
+
   const [suppliers, setSuppliers] = useState(() => [...boot.suppliers])
   const [customers, setCustomers] = useState(() => [...boot.customers])
   const [products, setProducts] = useState(() => [...boot.products])
   const [users, setUsers] = useState(() => [...boot.users])
+  const [cloudReady, setCloudReady] = useState(!configured)
+  const [persistError, setPersistError] = useState<string | null>(null)
+  const skipPersist = useRef(configured)
 
   useEffect(() => {
-    masterRepository.save({
-      version: 1,
-      suppliers,
-      customers,
-      products,
-      users,
-      updatedAt: new Date().toISOString(),
-    })
-  }, [suppliers, customers, products, users])
+    if (!configured) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const snap = await loadMasterCloud()
+        if (cancelled) return
+        skipPersist.current = true
+        setSuppliers([...snap.suppliers])
+        setCustomers([...snap.customers])
+        setProducts([...snap.products])
+        setUsers([...snap.users])
+        setPersistError(null)
+        setCloudReady(true)
+      } catch (e) {
+        if (cancelled) return
+        setPersistError(mapSupabaseError(e))
+        setCloudReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [configured])
+
+  useEffect(() => {
+    if (configured) {
+      if (!cloudReady) return
+      if (skipPersist.current) {
+        skipPersist.current = false
+        return
+      }
+      const handle = window.setTimeout(() => {
+        void saveMasterCloud(snapshotOf(suppliers, customers, products, users))
+          .then(() => setPersistError(null))
+          .catch((e) => setPersistError(mapSupabaseError(e)))
+      }, 300)
+      return () => window.clearTimeout(handle)
+    }
+    masterRepository.save(snapshotOf(suppliers, customers, products, users))
+  }, [suppliers, customers, products, users, cloudReady, configured])
 
   const upsertPartner = useCallback(
     (kind: PartnerKind, data: PartnerInput, id?: string) => {
@@ -121,6 +190,23 @@ export function MasterProvider({ children }: { children: ReactNode }) {
     (data: UserInput, id?: string) => {
       const nextId = id ?? nextUserId(data.role, users)
       const row: MasterUser = { ...data, id: nextId }
+      if (configured) {
+        void updateProfileUser(row)
+          .then(() => {
+            setPersistError(null)
+            setUsers((prev) => {
+              const idx = prev.findIndex((u) => u.id === nextId)
+              if (idx >= 0) {
+                const copy = [...prev]
+                copy[idx] = row
+                return copy
+              }
+              return [row, ...prev]
+            })
+          })
+          .catch((e) => setPersistError(mapSupabaseError(e)))
+        return nextId
+      }
       setUsers((prev) => {
         const idx = prev.findIndex((u) => u.id === nextId)
         if (idx >= 0) {
@@ -132,16 +218,50 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       })
       return nextId
     },
-    [users],
+    [users, configured],
   )
 
-  const setUserActive = useCallback((id: string, active: boolean) => {
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, active } : u)))
-  }, [])
+  const setUserActive = useCallback(
+    (id: string, active: boolean) => {
+      if (configured) {
+        const existing = users.find((u) => u.id === id)
+        if (!existing) return
+        const row = { ...existing, active }
+        void updateProfileUser(row)
+          .then(() => {
+            setPersistError(null)
+            setUsers((prev) =>
+              prev.map((u) => (u.id === id ? { ...u, active } : u)),
+            )
+          })
+          .catch((e) => setPersistError(mapSupabaseError(e)))
+        return
+      }
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, active } : u)))
+    },
+    [configured, users],
+  )
 
-  const removeUser = useCallback((id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id))
-  }, [])
+  const removeUser = useCallback(
+    (id: string) => {
+      if (configured) {
+        const existing = users.find((u) => u.id === id)
+        if (!existing) return
+        const row = { ...existing, active: false }
+        void updateProfileUser(row)
+          .then(() => {
+            setPersistError(null)
+            setUsers((prev) =>
+              prev.map((u) => (u.id === id ? { ...u, active: false } : u)),
+            )
+          })
+          .catch((e) => setPersistError(mapSupabaseError(e)))
+        return
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== id))
+    },
+    [configured, users],
+  )
 
   const value = useMemo(
     () => ({
@@ -149,6 +269,8 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       customers,
       products,
       users,
+      cloudReady,
+      persistError,
       upsertPartner,
       setPartnerActive,
       removePartner,
@@ -164,6 +286,8 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       customers,
       products,
       users,
+      cloudReady,
+      persistError,
       upsertPartner,
       setPartnerActive,
       removePartner,
@@ -176,12 +300,25 @@ export function MasterProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <MasterContext.Provider value={value}>{children}</MasterContext.Provider>
+  return (
+    <MasterContext.Provider value={value}>
+      {persistError ? (
+        <div
+          className="bg-red-50 px-3 py-2 text-sm text-red-800"
+          role="alert"
+        >
+          {persistError}
+        </div>
+      ) : null}
+      {children}
+    </MasterContext.Provider>
+  )
 }
 
 export function useMasterStore(): MasterStoreValue {
   const ctx = useContext(MasterContext)
-  if (!ctx) throw new Error('useMasterStore harus dipakai di dalam MasterProvider')
+  if (!ctx) {
+    throw new Error('useMasterStore harus dipakai di dalam MasterProvider')
+  }
   return ctx
 }
-

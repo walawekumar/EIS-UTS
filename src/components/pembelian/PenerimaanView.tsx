@@ -5,6 +5,7 @@ import { FinancePager } from '@/components/keuangan/FinancePager'
 import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import {
@@ -735,7 +736,7 @@ function WeighingModal({
     tara: parseNumber(form.tara),
     moisture: parseNumber(form.moisture),
     impurity: parseNumber(form.impurity),
-    receiptName: receipt?.name ?? p.weighing?.receiptName,
+    receiptName: receiptPersistRef(receipt) ?? p.weighing?.receiptName,
   }
   const calc = calcWeighing(p.grain, input)
   const taxSubtotal = calc.netto * effectiveUnitPrice(p.grain, p.price, input.moisture)

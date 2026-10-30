@@ -24,6 +24,7 @@ import {
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -177,7 +178,7 @@ export function KasPage() {
         ? `${form.description.trim()} — ${form.note.trim()}`
         : form.description.trim(),
       amount,
-      receiptName: receipt?.name,
+      receiptName: receiptPersistRef(receipt),
     })
     if (err) {
       notify(err)

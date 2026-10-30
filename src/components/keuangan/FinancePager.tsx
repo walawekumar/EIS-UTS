@@ -34,55 +34,57 @@ export function FinancePager({
   const items = getPageItems(page, pageCount)
 
   return (
-    <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5 border-t border-line/70 pt-3">
-      <p className="text-[12px] text-muted">
+    <div className="mt-3.5 w-full border-t border-line/70 pt-3">
+      <p className="mb-2.5 text-[12px] text-muted">
         {total === 0
           ? 'Menampilkan 0 dari 0 entri'
           : `Menampilkan ${from}–${to} dari ${total} entri`}
       </p>
 
       {pageCount > 1 ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex w-full items-center gap-1.5">
           <button
             type="button"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
-            className="rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Sebelumnya
           </button>
 
-          {items.map((item, index) =>
-            item === '…' ? (
-              <span
-                key={`e-${index}`}
-                className="flex size-9 items-center justify-center font-mono text-[13px] text-muted"
-              >
-                …
-              </span>
-            ) : (
-              <button
-                key={item}
-                type="button"
-                onClick={() => onPageChange(item)}
-                aria-current={item === page ? 'page' : undefined}
-                className={[
-                  'flex size-8 items-center justify-center rounded-xl font-mono text-[12px] transition',
-                  item === page
-                    ? 'bg-brand-800 font-semibold text-white'
-                    : 'border border-line text-ink hover:bg-brand-50',
-                ].join(' ')}
-              >
-                {item}
-              </button>
-            ),
-          )}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-1">
+            {items.map((item, index) =>
+              item === '…' ? (
+                <span
+                  key={`e-${index}`}
+                  className="flex size-8 items-center justify-center font-mono text-[13px] text-muted"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => onPageChange(item)}
+                  aria-current={item === page ? 'page' : undefined}
+                  className={[
+                    'flex size-8 items-center justify-center rounded-xl font-mono text-[12px] transition',
+                    item === page
+                      ? 'bg-brand-800 font-semibold text-white'
+                      : 'border border-line text-ink hover:bg-brand-50',
+                  ].join(' ')}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
 
           <button
             type="button"
             disabled={page >= pageCount}
             onClick={() => onPageChange(page + 1)}
-            className="rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 rounded-xl border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Berikutnya
           </button>

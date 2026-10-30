@@ -2,31 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { PasswordField } from '@/components/ui/PasswordField'
-import { Select } from '@/components/ui/Select'
 import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
-import { LeafMarkIcon, MailIcon, UserBadgeIcon } from '@/components/ui/icons'
+import { LeafMarkIcon, MailIcon } from '@/components/ui/icons'
 import { useAuth } from '@/features/auth/AuthContext'
 import { readAppSettings } from '@/features/settings/app-settings'
 import { LoginPreview } from '@/pages/login/LoginPreview'
-import { ROLE_LABELS, type UserRole } from '@/types/auth'
-
-const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
-  value,
-  label: ROLE_LABELS[value],
-  description:
-    value === 'admin'
-      ? 'Akses penuh laporan dan master data'
-      : value === 'pembelian'
-        ? 'Pembelian dan penerimaan gabah'
-        : value === 'produksi'
-          ? 'Batch giling dan input-output'
-          : value === 'gudang'
-            ? 'Saldo stok dan koreksi'
-            : value === 'penjualan'
-              ? 'Order, kirim, dan tagihan'
-              : 'Kas, utang, piutang, biaya',
-}))
 
 function resolvePostLoginPath(): string {
   const path = readAppSettings().prefs.defaultModule.trim()
@@ -41,7 +22,6 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('admin@egabah.local')
   const [password, setPassword] = useState('demo123')
-  const [role, setRole] = useState<UserRole>('admin')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,7 +35,7 @@ export function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      await login({ email, password, role, remember })
+      await login({ email, password, remember })
       navigate(resolvePostLoginPath(), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk.')
@@ -76,7 +56,6 @@ export function LoginPage() {
 
       <div className="relative mx-auto flex min-h-screen max-w-[1120px] items-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid w-full rounded-[18px] border border-white/70 bg-white shadow-[0_24px_60px_rgba(20,32,25,0.12)] lg:grid-cols-[0.92fr_1.08fr]">
-          {/* Form */}
           <section className="flex flex-col justify-center rounded-[18px] px-6 py-9 sm:px-10 lg:rounded-l-[18px] lg:rounded-r-none lg:px-12 lg:py-12">
             <div className="mb-8 inline-flex items-center gap-2.5">
               <span className="inline-flex size-9 items-center justify-center rounded-[10px] bg-brand-800 text-white">
@@ -91,12 +70,13 @@ export function LoginPage() {
               Selamat datang di E-Gabah
             </h1>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">
-              Masuk untuk membuka portal modul penggilingan padi.
+              Masuk untuk membuka portal modul penggilingan padi. Peran diambil
+              otomatis dari akun.
             </p>
             <p className="mt-3 max-w-sm text-[12px] leading-relaxed text-muted/90">
-              Akun demo: <span className="font-medium text-ink">admin@egabah.local</span>{' '}
-              / <span className="font-medium text-ink">demo123</span> (sesuaikan peran di
-              bawah).
+              Akun demo:{' '}
+              <span className="font-medium text-ink">admin@egabah.local</span> /{' '}
+              <span className="font-medium text-ink">demo123</span>
             </p>
 
             <form onSubmit={onSubmit} className="mt-8 space-y-4">
@@ -121,16 +101,6 @@ export function LoginPage() {
                 onChange={setPassword}
                 placeholder="Masukkan kata sandi"
                 required
-              />
-
-              <Select
-                id="login-role"
-                label="Peran"
-                requiredMark
-                value={role}
-                onChange={setRole}
-                options={ROLE_OPTIONS}
-                leading={<UserBadgeIcon />}
               />
 
               <div className="pt-1">
@@ -158,7 +128,6 @@ export function LoginPage() {
             </p>
           </section>
 
-          {/* Visual panel */}
           <aside className="hidden lg:block">
             <LoginPreview />
           </aside>

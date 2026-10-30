@@ -19,6 +19,9 @@ dist-ssr
 .worktrees/
 .superpowers/
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   DEFAULT_TAX_SETTINGS,
   type TaxSnapshot,
@@ -25,8 +26,13 @@ function isValid(value: unknown): value is TaxSnapshot {
   )
 }
 
-export const taxRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.tax.v1',
   seed,
   isValid,
+})
+
+export const taxRepository = createCloudBackedRepository({
+  key: 'tax',
+  local: inner,
 })

@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   EMPTY_BANK_SNAPSHOT,
   type BankSnapshot,
@@ -23,8 +24,13 @@ function isValid(value: unknown): value is BankSnapshot {
   )
 }
 
-export const bankRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.bank.v1',
   seed,
   isValid,
+})
+
+export const bankRepository = createCloudBackedRepository({
+  key: 'bank',
+  local: inner,
 })

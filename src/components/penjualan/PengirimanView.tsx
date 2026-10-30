@@ -5,6 +5,7 @@ import { FinancePager } from '@/components/keuangan/FinancePager'
 import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
 import {
   ReceiptUpload,
+  receiptPersistRef,
   type ReceiptValue,
 } from '@/components/keuangan/ReceiptUpload'
 import {
@@ -293,7 +294,8 @@ export function PengirimanView({
       receiptName: shipReceipt!.name,
       settlement,
       payMethod: settlement === 'lunas' ? payMethod : undefined,
-      payReceiptName: settlement === 'lunas' ? payReceipt!.name : undefined,
+      payReceiptName:
+        settlement === 'lunas' ? receiptPersistRef(payReceipt) : undefined,
       ppnRate,
       priceMode,
     }
@@ -307,7 +309,7 @@ export function PengirimanView({
     } else {
       setToast(
         settlement === 'lunas'
-          ? `${work.id} dikirim · lunas · nota ${payReceipt!.name}`
+          ? `${work.id} dikirim · lunas · nota ${receiptPersistRef(payReceipt)}`
           : `${work.id} dikirim · kredit / tempo`,
       )
     }

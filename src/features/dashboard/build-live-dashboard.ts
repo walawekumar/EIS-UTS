@@ -284,8 +284,8 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
   const titles: Record<UserRole, { title: string; description: string; chartTitle: string }> = {
     admin: {
       title: 'Ringkasan operasional',
-      description: 'Data live dari modul — kas, AR/AP, stok',
-      chartTitle: 'Omzet vs pembelian',
+      description: '',
+      chartTitle: 'Posisi ringkas',
     },
     pembelian: {
       title: 'Pembelian',
@@ -315,14 +315,33 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
   }
 
   const meta = titles[input.role]
+  const adminChartLabels = [
+    'Beli',
+    'Jual',
+    'Utang',
+    'Piutang',
+    'Kas',
+    'Margin',
+  ] as const
+  const adminChartValues = [
+    buyValue,
+    saleValue,
+    apSum,
+    arSum,
+    cashBal,
+    Math.max(0, saleValue - buyValue),
+  ].map((n) => Math.max(0, Math.round(n / 1_000_000)))
+
   const chartValues =
     input.role === 'produksi'
       ? doneBatches.slice(0, 7).map((b) => Math.round(actualRendemen(b)))
-      : [buyValue, saleValue, apSum, arSum, cashBal, saleValue - buyValue, cashBal].map(
-          (n) => Math.max(0, Math.round(n / 1_000_000)),
-        )
+      : input.role === 'admin'
+        ? [...adminChartValues]
+        : [buyValue, saleValue, apSum, arSum, cashBal, saleValue - buyValue, cashBal].map(
+            (n) => Math.max(0, Math.round(n / 1_000_000)),
+          )
 
-  while (chartValues.length < 7) chartValues.push(0)
+  while (chartValues.length < (input.role === 'admin' ? 6 : 7)) chartValues.push(0)
 
   return {
     title: meta.title,
@@ -332,12 +351,25 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
     chartUnit: input.role === 'produksi' ? '%' : 'jt Rp',
     chartSeries: [
       {
-        name: input.role === 'produksi' ? 'Rendemen' : 'Indikator',
+        name:
+          input.role === 'produksi'
+            ? 'Rendemen'
+            : input.role === 'admin'
+              ? 'jt Rp'
+              : 'Nilai',
         color: '#1B6B4A',
-        values: chartValues.slice(0, 7),
+        values:
+          input.role === 'admin'
+            ? chartValues.slice(0, 6)
+            : chartValues.slice(0, 7),
       },
     ],
-    chartLabels: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'],
+    chartLabels:
+      input.role === 'admin'
+        ? [...adminChartLabels]
+        : input.role === 'produksi'
+          ? chartValues.slice(0, 7).map((_, i) => `B${i + 1}`)
+          : ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'],
     activities:
       activities.length > 0
         ? activities

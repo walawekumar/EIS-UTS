@@ -25,6 +25,9 @@ type SelectProps<T extends string> = {
   requiredMark?: boolean
   leading?: ReactNode
   placeholder?: string
+  /** Sembunyikan label visual (tetap ada untuk a11y) — baris kontrol padat */
+  hideLabel?: boolean
+  className?: string
 }
 
 type MenuPos = {
@@ -44,6 +47,8 @@ export function Select<T extends string>({
   requiredMark = false,
   leading,
   placeholder = 'Pilih opsi',
+  hideLabel = false,
+  className,
 }: SelectProps<T>) {
   const autoId = useId()
   const fieldId = id ?? autoId
@@ -259,8 +264,15 @@ export function Select<T extends string>({
       : null
 
   return (
-    <div ref={rootRef} className="relative">
-      <span id={`${fieldId}-label`} className="mb-1.5 block text-[13px] font-medium text-ink">
+    <div ref={rootRef} className={['relative', className].filter(Boolean).join(' ')}>
+      <span
+        id={`${fieldId}-label`}
+        className={
+          hideLabel
+            ? 'sr-only'
+            : 'mb-1.5 block text-[13px] font-medium text-ink'
+        }
+      >
         {label}
         {requiredMark ? <span className="ml-0.5 text-brand-600">*</span> : null}
       </span>

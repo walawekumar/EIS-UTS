@@ -15,13 +15,18 @@ import {
   touchActivity,
 } from '@/lib/auth-storage'
 import { findDemoAccount, toAuthUser } from '@/features/auth/demo-users'
+import {
+  authUserFromProfile,
+  loadProfileByUserId,
+  mapSupabaseError,
+} from '@/features/master/master-cloud'
 import { readAppSettings } from '@/features/settings/app-settings'
-import type { AuthUser, UserRole } from '@/types/auth'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase-client'
+import type { AuthUser } from '@/types/auth'
 
 type LoginInput = {
   email: string
   password: string
-  role: UserRole
   remember?: boolean
 }
 
@@ -46,30 +51,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     clearStoredUser()
     setUser(null)
+    if (isSupabaseConfigured()) {
+      void getSupabase()?.auth.signOut()
+    }
   }, [])
 
-  const login = useCallback(async ({ email, password, role, remember = true }: LoginInput) => {
-    if (!email.trim() || !password.trim()) {
-      throw new Error('Email dan kata sandi wajib diisi.')
-    }
+  const login = useCallback(
+    async ({ email, password, remember = true }: LoginInput) => {
+      if (!email.trim() || !password.trim()) {
+        throw new Error('Email dan kata sandi wajib diisi.')
+      }
 
-    await new Promise((resolve) => setTimeout(resolve, 280))
+      if (isSupabaseConfigured()) {
+        const sb = getSupabase()!
+        const { data, error } = await sb.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        })
+        if (error || !data.user) {
+          throw new Error(error?.message ?? 'Gagal masuk.')
+        }
+        let profile
+        try {
+          profile = await loadProfileByUserId(data.user.id)
+        } catch (e) {
+          await sb.auth.signOut()
+          throw new Error(mapSupabaseError(e))
+        }
+        if (!profile.active) {
+          await sb.auth.signOut()
+          throw new Error('Akun nonaktif. Hubungi admin.')
+        }
+        const nextUser = authUserFromProfile(profile)
+        saveStoredUser(nextUser, remember)
+        setUser(nextUser)
+        return
+      }
 
-    const account = findDemoAccount(email, password)
-    if (!account) {
-      throw new Error(
-        'Email atau kata sandi salah. Coba admin@egabah.local / demo123',
-      )
-    }
-    if (account.role !== role) {
-      throw new Error(
-        `Akun ini untuk peran ${account.role}. Pilih peran yang sesuai.`,
-      )
-    }
+      await new Promise((resolve) => setTimeout(resolve, 280))
 
-    const nextUser = toAuthUser(account)
-    saveStoredUser(nextUser, remember)
-    setUser(nextUser)
+      const account = findDemoAccount(email, password)
+      if (!account) {
+        throw new Error(
+          'Email atau kata sandi salah. Coba admin@egabah.local / demo123',
+        )
+      }
+
+      const nextUser = toAuthUser(account)
+      saveStoredUser(nextUser, remember)
+      setUser(nextUser)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+    const sb = getSupabase()
+    if (!sb) return
+    let cancelled = false
+    void (async () => {
+      const { data } = await sb.auth.getSession()
+      const uid = data.session?.user?.id
+      if (!uid) return
+      try {
+        const profile = await loadProfileByUserId(uid)
+        if (cancelled || !profile.active) {
+          if (!cancelled && !profile.active) {
+            clearStoredUser()
+            setUser(null)
+            await sb.auth.signOut()
+          }
+          return
+        }
+        const next = authUserFromProfile(profile)
+        saveStoredUser(next, true)
+        if (!cancelled) setUser(next)
+      } catch {
+        clearStoredUser()
+        if (!cancelled) setUser(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {

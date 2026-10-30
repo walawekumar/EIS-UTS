@@ -1,4 +1,5 @@
 import { createLocalRepository } from '@/lib/create-local-repository'
+import { createCloudBackedRepository } from '@/lib/cloud-backed-repository'
 import {
   CASH_ENTRIES,
   EXPENSES,
@@ -42,8 +43,13 @@ function isValid(value: unknown): value is KeuanganSnapshot {
   )
 }
 
-export const keuanganRepository = createLocalRepository({
+const inner = createLocalRepository({
   key: 'egabah.keuangan.v1',
   seed,
   isValid,
+})
+
+export const keuanganRepository = createCloudBackedRepository({
+  key: 'keuangan',
+  local: inner,
 })

@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DashboardPage } from '@/pages/modules/DashboardPage'
+import { InboxPage } from '@/pages/modules/InboxPage'
 import { AuditPage } from '@/pages/modules/AuditPage'
 import { AccountMapPage } from '@/pages/modules/keuangan/AccountMapPage'
 import { BiayaPage } from '@/pages/modules/keuangan/BiayaPage'
@@ -57,6 +58,18 @@ export function AppRouter() {
             }
           >
             <Route index element={<DashboardPage />} />
+          </Route>
+
+          <Route
+            path="/app/inbox"
+            element={
+              <AppShell
+                title="Kotak masuk"
+                subtitle="Pengajuan menunggu persetujuan — retur, batch, payroll, unlock periode"
+              />
+            }
+          >
+            <Route index element={<InboxPage />} />
           </Route>
 
           <Route

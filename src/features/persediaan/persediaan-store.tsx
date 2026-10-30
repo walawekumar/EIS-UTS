@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -18,9 +19,15 @@ import {
   type MovementType,
   type StockRow,
 } from '@/features/persediaan/persediaan-data'
+import {
+  loadPersediaanCloud,
+  mapSupabaseError,
+  savePersediaanCloud,
+} from '@/features/persediaan/persediaan-cloud'
 import { persediaanRepository } from '@/features/persediaan/persediaan-storage'
 import { assertPeriodOpen } from '@/features/keuangan/period-gate'
 import { todayIsoDate } from '@/features/keuangan/period-helpers'
+import { isSupabaseConfigured } from '@/lib/supabase-client'
 
 type MovementInput = {
   type: MovementType
@@ -49,6 +56,8 @@ type PersediaanStoreValue = {
   stocks: StockRow[]
   movements: MovementRow[]
   corrections: CorrectionRow[]
+  cloudReady: boolean
+  persistError: string | null
   addMovement: (input: MovementInput) => void
   addCorrection: (input: CorrectionInput) => string | undefined
   voidCorrection: (id: string) => string | undefined
@@ -111,35 +120,84 @@ function findCategory(stocks: StockRow[], sku: string): StockRow['category'] {
   return stocks.find((s) => s.sku === sku)?.category ?? 'gabah'
 }
 
+function snapshotOf(
+  stocks: StockRow[],
+  movements: MovementRow[],
+  corrections: CorrectionRow[],
+) {
+  return {
+    version: 1 as const,
+    stocks,
+    movements,
+    corrections,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 export function PersediaanProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const actor = user?.name ?? 'Pengguna'
+  const configured = isSupabaseConfigured()
 
-  const [stocks, setStocks] = useState<StockRow[]>(() => [
-    ...persediaanRepository.load().stocks,
-  ])
+  const boot = configured
+    ? {
+        stocks: [] as StockRow[],
+        movements: [] as MovementRow[],
+        corrections: [] as CorrectionRow[],
+      }
+    : persediaanRepository.load()
+
+  const [stocks, setStocks] = useState<StockRow[]>(() => [...boot.stocks])
   const [movements, setMovements] = useState<MovementRow[]>(() => [
-    ...persediaanRepository.load().movements,
+    ...boot.movements,
   ])
   const [corrections, setCorrections] = useState<CorrectionRow[]>(() => [
-    ...persediaanRepository.load().corrections,
+    ...boot.corrections,
   ])
-  const [hydrated, setHydrated] = useState(false)
+  const [cloudReady, setCloudReady] = useState(!configured)
+  const [persistError, setPersistError] = useState<string | null>(null)
+  const skipPersist = useRef(configured)
 
   useEffect(() => {
-    setHydrated(true)
-  }, [])
+    if (!configured) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const snap = await loadPersediaanCloud()
+        if (cancelled) return
+        skipPersist.current = true
+        setStocks([...snap.stocks])
+        setMovements([...snap.movements])
+        setCorrections([...snap.corrections])
+        setPersistError(null)
+        setCloudReady(true)
+      } catch (e) {
+        if (cancelled) return
+        setPersistError(mapSupabaseError(e))
+        setCloudReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [configured])
 
   useEffect(() => {
-    if (!hydrated) return
-    persediaanRepository.save({
-      version: 1,
-      stocks,
-      movements,
-      corrections,
-      updatedAt: new Date().toISOString(),
-    })
-  }, [stocks, movements, corrections, hydrated])
+    if (configured) {
+      if (!cloudReady) return
+      if (skipPersist.current) {
+        skipPersist.current = false
+        return
+      }
+      const handle = window.setTimeout(() => {
+        void savePersediaanCloud(snapshotOf(stocks, movements, corrections))
+          .then(() => setPersistError(null))
+          .catch((e) => setPersistError(mapSupabaseError(e)))
+      }, 300)
+      return () => window.clearTimeout(handle)
+    }
+    persediaanRepository.save(snapshotOf(stocks, movements, corrections))
+  }, [stocks, movements, corrections, cloudReady, configured])
 
   const addMovement = useCallback(
     (input: MovementInput) => {
@@ -264,15 +322,34 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
       stocks,
       movements,
       corrections,
+      cloudReady,
+      persistError,
       addMovement,
       addCorrection,
       voidCorrection,
     }),
-    [stocks, movements, corrections, addMovement, addCorrection, voidCorrection],
+    [
+      stocks,
+      movements,
+      corrections,
+      cloudReady,
+      persistError,
+      addMovement,
+      addCorrection,
+      voidCorrection,
+    ],
   )
 
   return (
     <PersediaanContext.Provider value={value}>
+      {persistError ? (
+        <div
+          className="bg-red-50 px-3 py-2 text-sm text-red-800"
+          role="alert"
+        >
+          {persistError}
+        </div>
+      ) : null}
       {children}
     </PersediaanContext.Provider>
   )
