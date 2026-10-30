@@ -52,7 +52,7 @@ export function canVoidPurchase(stage: PurchaseStage): boolean {
 }
 
 export function isPurchaseAwaitingWeigh(stage: PurchaseStage): boolean {
-  return stage === 'draft' || stage === 'diajukan' || stage === 'disetujui'
+  return stage === 'disetujui'
 }
 
 export type PaymentStatus = 'lunas' | 'sebagian' | 'belum' | 'terlambat'
@@ -83,7 +83,10 @@ export type Payment = {
   method: PaymentMethod
   /** Nama file bukti transfer / struk bayar */
   receiptName?: string
+  transferProof?: ProofAttachment | string
 }
+
+export type NewPayment = Omit<Payment, 'id'>
 
 export type Purchase = {
   id: string
