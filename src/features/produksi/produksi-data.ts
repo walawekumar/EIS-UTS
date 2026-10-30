@@ -168,6 +168,85 @@ export function nextBatchId(
   return `${head}${String(max + 1).padStart(3, '0')}`
 }
 
+export type PackRunLine = {
+  sku: string
+  productName: string
+  unit: string
+  grade?: 'A' | 'B' | 'C'
+  qty: number
+  bags?: number
+  location: string
+}
+
+export type PackRun = {
+  id: string
+  batchId: string
+  sourceSku: string
+  lines: PackRunLine[]
+  stage: 'draft' | 'posted'
+  createdAt: string
+  postedAt?: string
+  voidedAt?: string
+}
+
+export type LotCost = {
+  lotId: string
+  batchId: string
+  grainValue: number
+  allocatedOps: number
+  berasQty: number
+  costPerKgBeras: number
+  method: 'manual' | 'proportional'
+  at: string
+}
+
+export function computeLotCost(input: {
+  grainValue: number
+  allocatedOps: number
+  berasQty: number
+  method: 'manual' | 'proportional'
+  lotId: string
+  batchId: string
+}): LotCost {
+  const berasQty = input.berasQty
+  const total = input.grainValue + input.allocatedOps
+  const costPerKgBeras =
+    berasQty > 0 ? total / berasQty : 0
+  return {
+    lotId: input.lotId,
+    batchId: input.batchId,
+    grainValue: input.grainValue,
+    allocatedOps: input.allocatedOps,
+    berasQty,
+    costPerKgBeras,
+    method: input.method,
+    at: new Date().toISOString(),
+  }
+}
+
+/** Ekstrak lot dari catatan batch (fallback jika `inputLotId` kosong). */
+export function resolveLotIdFromBatch(batch: ProductionBatch): string | undefined {
+  if (batch.inputLotId?.trim()) return batch.inputLotId.trim()
+  const match = batch.note.match(/LOT-\d{6}-\d{3}/i)
+  return match ? match[0].toUpperCase() : undefined
+}
+
+export function nextPackRunId(list: PackRun[], date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const head = `PKR-${y}${m}-`
+  const max = list.reduce((acc, row) => {
+    if (!row.id.startsWith(head)) return acc
+    const n = Number(row.id.slice(head.length))
+    return Number.isFinite(n) ? Math.max(acc, n) : acc
+  }, 0)
+  return `${head}${String(max + 1).padStart(3, '0')}`
+}
+
+export function sumPackRunOutQty(run: PackRun): number {
+  return run.lines.reduce((s, line) => s + (line.qty || 0), 0)
+}
+
 export function buildBatchStats(batches: ProductionBatch[]): MetricCardData[] {
   const active = batches.filter((b) =>
     ['draft', 'submitted', 'approved', 'processing'].includes(b.stage),

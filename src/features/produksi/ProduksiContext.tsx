@@ -10,22 +10,96 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
+import type { UserRole } from '@/features/auth/auth-data'
 import {
+  effectiveUnitPrice,
+  type Purchase,
+} from '@/features/pembelian/pembelian-data'
+import { pembelianRepository } from '@/features/pembelian/pembelian-storage'
+import { keuanganRepository } from '@/features/keuangan/keuangan-storage'
+import {
+  berasQty,
+  computeLotCost,
   nextBatchId,
+  nextPackRunId,
+  resolveLotIdFromBatch,
+  sumPackRunOutQty,
   type BatchLine,
+  type LotCost,
   type NewBatchInput,
+  type PackRun,
+  type PackRunLine,
   type ProductionBatch,
 } from '@/features/produksi/produksi-data'
 import { produksiRepository } from '@/features/produksi/produksi-storage'
+import { stockKey } from '@/features/persediaan/persediaan-data'
 import { usePersediaanStore } from '@/features/persediaan/persediaan-store'
 import { publishSync } from '@/features/sync/sync-bus'
+
+function roleAllowed(role: UserRole | undefined, allowed: UserRole[]): boolean {
+  if (!role) return false
+  return allowed.includes(role)
+}
+
+function purchaseUnitPrice(purchase: Purchase): number {
+  if (purchase.effectivePrice != null) return purchase.effectivePrice
+  if (purchase.weighing) {
+    return effectiveUnitPrice(
+      purchase.grain,
+      purchase.price,
+      purchase.weighing.moisture,
+    )
+  }
+  return purchase.price
+}
+
+function grainValueForBatch(batch: ProductionBatch, purchase: Purchase): number {
+  const unit = purchaseUnitPrice(purchase)
+  return batch.inputQty * unit
+}
+
+function monthKey(isoDate: string): string {
+  return isoDate.slice(0, 7)
+}
+
+function proportionalOpsForBatch(
+  batch: ProductionBatch,
+  allBatches: ProductionBatch[],
+): number {
+  const key = monthKey(batch.date)
+  const expenses = keuanganRepository.load().expenses
+  const periodTotal = expenses
+    .filter((e) => e.status === 'posted' && e.date.startsWith(key))
+    .reduce((s, e) => s + e.amount, 0)
+  if (periodTotal <= 0) return 0
+
+  const periodInput = allBatches
+    .filter((b) => b.stage === 'done' && b.date.startsWith(key))
+    .reduce((s, b) => s + b.inputQty, 0)
+  if (periodInput <= 0) return 0
+
+  return (periodTotal * batch.inputQty) / periodInput
+}
 
 export type ProduksiSection = 'batch' | 'input-output' | 'rendemen'
 
 export const PRODUKSI_BASE = '/app/produksi'
 
+export type RecalcLotCostOptions = {
+  method: 'manual' | 'proportional'
+  manualOps?: number
+}
+
+export type NewPackRunInput = {
+  batchId: string
+  sourceSku: string
+  lines: PackRunLine[]
+}
+
 type ProduksiContextValue = {
   batches: ProductionBatch[]
+  packRuns: PackRun[]
+  lotCosts: LotCost[]
   createBatch: (data: NewBatchInput) => string
   updateOutputs: (id: string, outputs: BatchLine[]) => void
   submitBatch: (id: string) => void
@@ -35,6 +109,11 @@ type ProduksiContextValue = {
   completeBatch: (id: string) => void
   voidBatch: (id: string, reason: string) => void
   deleteBatch: (id: string) => void
+  createPackRun: (input: NewPackRunInput) => string
+  updatePackRun: (id: string, lines: PackRunLine[]) => string | undefined
+  postPackRun: (id: string) => string | undefined
+  voidPackRun: (id: string) => string | undefined
+  recalcLotCost: (batchId: string, opts: RecalcLotCostOptions) => string | undefined
 }
 
 const ProduksiContext = createContext<ProduksiContextValue | null>(null)
@@ -99,21 +178,97 @@ function postStock(
   }
 }
 
+function postPackStock(
+  run: PackRun,
+  batch: ProductionBatch,
+  addMovement: ReturnType<typeof usePersediaanStore>['addMovement'],
+  reverse: boolean,
+) {
+  const sourceLine = batch.outputs.find((o) => o.sku === run.sourceSku)
+  const sourceName = sourceLine?.productName ?? run.sourceSku
+  const sourceUnit = sourceLine?.unit ?? 'kg'
+  const fromLoc = batch.toLocation
+  const totalOut = sumPackRunOutQty(run)
+  const sign = reverse ? 'Void pack' : 'Pack'
+
+  if (reverse) {
+    addMovement({
+      type: 'in',
+      sku: run.sourceSku,
+      productName: sourceName,
+      unit: sourceUnit,
+      qty: totalOut,
+      fromLocation: '—',
+      toLocation: fromLoc,
+      note: `${sign} ${run.id} — kembalikan ${sourceName}`,
+    })
+    for (const line of run.lines) {
+      if (!line.qty || line.qty <= 0) continue
+      addMovement({
+        type: 'out',
+        sku: line.sku,
+        productName: line.productName,
+        unit: line.unit,
+        qty: line.qty,
+        fromLocation: line.location,
+        toLocation: '—',
+        note: `${sign} ${run.id} — tarik ${line.productName}`,
+      })
+    }
+  } else {
+    addMovement({
+      type: 'out',
+      sku: run.sourceSku,
+      productName: sourceName,
+      unit: sourceUnit,
+      qty: totalOut,
+      fromLocation: fromLoc,
+      toLocation: 'Packing',
+      note: `Pack ${run.id} · batch ${batch.id}`,
+    })
+    for (const line of run.lines) {
+      if (!line.qty || line.qty <= 0) continue
+      addMovement({
+        type: 'in',
+        sku: line.sku,
+        productName: line.productName,
+        unit: line.unit,
+        qty: line.qty,
+        fromLocation: 'Packing',
+        toLocation: line.location,
+        note: `Pack ${run.id} · ${line.grade ? `grade ${line.grade}` : line.productName}`,
+      })
+    }
+  }
+}
+
+function stockOnHand(
+  stocks: ReturnType<typeof usePersediaanStore>['stocks'],
+  sku: string,
+  location: string,
+): number {
+  const row = stocks.find((s) => stockKey(s.sku, s.location) === stockKey(sku, location))
+  return row?.qty ?? 0
+}
+
 export function ProduksiProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { appendAudit } = useAuditStore()
-  const { addMovement } = usePersediaanStore()
-  const [items, setItems] = useState<ProductionBatch[]>(
-    () => produksiRepository.load().batches,
-  )
+  const { stocks, addMovement } = usePersediaanStore()
+  const boot = produksiRepository.load()
+  const [items, setItems] = useState<ProductionBatch[]>(() => boot.batches)
+  const [packRuns, setPackRuns] = useState<PackRun[]>(() => boot.packRuns)
+  const [lotCosts, setLotCosts] = useState<LotCost[]>(() => boot.lotCosts)
 
   useEffect(() => {
     produksiRepository.save({
       version: 1,
       batches: items,
+      packRuns,
+      lotCosts,
       updatedAt: new Date().toISOString(),
     })
-  }, [items])
+  }, [items, packRuns, lotCosts])
 
   const batches = useMemo(
     () =>
@@ -265,6 +420,52 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
     [patch],
   )
 
+  const recalcLotCost = useCallback(
+    (batchId: string, opts: RecalcLotCostOptions): string | undefined => {
+      const batch = items.find((b) => b.id === batchId)
+      if (!batch) return 'Batch tidak ditemukan.'
+      if (batch.stage !== 'done') return 'Costing hanya untuk batch selesai.'
+
+      const lotId = resolveLotIdFromBatch(batch)
+      if (!lotId) return undefined
+
+      const { purchases } = pembelianRepository.load()
+      const purchase = purchases.find(
+        (p) => p.lotId === lotId && !p.voidedAt,
+      )
+      if (!purchase) return `Tidak ada pembelian untuk lot ${lotId}.`
+
+      const qtyBeras = berasQty(batch)
+      const grainValue = grainValueForBatch(batch, purchase)
+      let allocatedOps = 0
+      if (opts.method === 'manual') {
+        allocatedOps = opts.manualOps ?? 0
+        if (!Number.isFinite(allocatedOps) || allocatedOps < 0) {
+          return 'Alokasi biaya manual tidak valid.'
+        }
+      } else {
+        allocatedOps = proportionalOpsForBatch(batch, items)
+      }
+
+      const snapshot = computeLotCost({
+        lotId,
+        batchId,
+        grainValue,
+        allocatedOps,
+        berasQty: qtyBeras,
+        method: opts.method,
+      })
+
+      setLotCosts((list) => [
+        ...list.filter((c) => c.batchId !== batchId),
+        snapshot,
+      ])
+      publishSync('produksi', batchId)
+      return undefined
+    },
+    [items],
+  )
+
   const completeBatch = useCallback(
     (id: string) => {
       const current = items.find((b) => b.id === id)
@@ -287,8 +488,10 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
         }),
         { action: 'post', note: 'Batch selesai — stok diposting' },
       )
+
+      recalcLotCost(id, { method: 'proportional' })
     },
-    [items, addMovement, patch],
+    [items, addMovement, patch, recalcLotCost],
   )
 
   const voidBatch = useCallback(
@@ -336,9 +539,155 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
     [appendAudit],
   )
 
+  const sortedPackRuns = useMemo(
+    () =>
+      [...packRuns].sort((a, b) =>
+        a.createdAt === b.createdAt
+          ? b.id.localeCompare(a.id)
+          : b.createdAt.localeCompare(a.createdAt),
+      ),
+    [packRuns],
+  )
+
+  const createPackRun = useCallback(
+    (input: NewPackRunInput): string => {
+      const batch = items.find((b) => b.id === input.batchId)
+      const id = nextPackRunId(packRuns)
+      const row: PackRun = {
+        id,
+        batchId: input.batchId,
+        sourceSku: input.sourceSku,
+        lines: input.lines,
+        stage: 'draft',
+        createdAt: new Date().toISOString(),
+      }
+      setPackRuns((list) => [row, ...list])
+      appendAudit({
+        action: 'create',
+        entity: 'batch',
+        entityId: id,
+        after: row,
+        note: batch ? `Pack draft · ${batch.id}` : 'Pack draft',
+      })
+      publishSync('produksi', id)
+      return id
+    },
+    [items, packRuns, appendAudit],
+  )
+
+  const updatePackRun = useCallback(
+    (id: string, lines: PackRunLine[]): string | undefined => {
+      const current = packRuns.find((r) => r.id === id)
+      if (!current) return 'Pack run tidak ditemukan.'
+      if (current.stage !== 'draft') return 'Hanya draft pack yang dapat diedit.'
+      if (current.voidedAt) return 'Pack run sudah dibatalkan.'
+      setPackRuns((list) =>
+        list.map((r) => (r.id === id ? { ...r, lines } : r)),
+      )
+      appendAudit({
+        action: 'update',
+        entity: 'batch',
+        entityId: id,
+        before: current,
+        after: { ...current, lines },
+      })
+      publishSync('produksi', id)
+      return undefined
+    },
+    [packRuns, appendAudit],
+  )
+
+  const postPackRun = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['produksi', 'admin'])) {
+        return 'Hanya produksi atau admin yang dapat memposting pack.'
+      }
+      const current = packRuns.find((r) => r.id === id)
+      if (!current) return 'Pack run tidak ditemukan.'
+      if (current.stage !== 'draft') return 'Pack run sudah diposting.'
+      if (current.voidedAt) return 'Pack run sudah dibatalkan.'
+
+      const batch = items.find((b) => b.id === current.batchId)
+      if (!batch || batch.stage !== 'done') {
+        return 'Batch produksi harus selesai (done).'
+      }
+      if (!current.lines.length || !current.lines.every((l) => l.qty > 0)) {
+        return 'Setiap baris pack wajib qty > 0.'
+      }
+
+      const totalOut = sumPackRunOutQty(current)
+      if (totalOut <= 0) return 'Total qty pack tidak valid.'
+
+      const available = stockOnHand(stocks, current.sourceSku, batch.toLocation)
+      if (totalOut > available) {
+        return `Stok ${current.sourceSku} di ${batch.toLocation} tidak cukup (tersedia ${available}).`
+      }
+
+      postPackStock(current, batch, addMovement, false)
+      const postedAt = new Date().toISOString()
+      setPackRuns((list) =>
+        list.map((r) =>
+          r.id === id ? { ...r, stage: 'posted' as const, postedAt } : r,
+        ),
+      )
+      appendAudit({
+        action: 'post',
+        entity: 'batch',
+        entityId: id,
+        before: current,
+        after: { ...current, stage: 'posted', postedAt },
+        note: `Pack ${batch.id} · ${totalOut} kg`,
+      })
+      publishSync('produksi', id)
+      return undefined
+    },
+    [packRuns, items, stocks, addMovement, appendAudit, user?.role],
+  )
+
+  const voidPackRun = useCallback(
+    (id: string): string | undefined => {
+      if (!roleAllowed(user?.role, ['produksi', 'admin'])) {
+        return 'Hanya produksi atau admin yang dapat void pack.'
+      }
+      const current = packRuns.find((r) => r.id === id)
+      if (!current) return 'Pack run tidak ditemukan.'
+      if (current.stage !== 'posted') return 'Hanya pack posted yang dapat di-void.'
+      if (current.voidedAt) return 'Pack run sudah di-void.'
+
+      const batch = items.find((b) => b.id === current.batchId)
+      if (!batch) return 'Batch produksi tidak ditemukan.'
+
+      for (const line of current.lines) {
+        if (!line.qty || line.qty <= 0) continue
+        const onHand = stockOnHand(stocks, line.sku, line.location)
+        if (line.qty > onHand) {
+          return `Stok ${line.sku} di ${line.location} tidak cukup untuk void (${onHand}).`
+        }
+      }
+
+      postPackStock(current, batch, addMovement, true)
+      const voidedAt = new Date().toISOString()
+      setPackRuns((list) =>
+        list.map((r) => (r.id === id ? { ...r, voidedAt } : r)),
+      )
+      appendAudit({
+        action: 'void',
+        entity: 'batch',
+        entityId: id,
+        before: current,
+        after: { ...current, voidedAt },
+      })
+      publishSync('produksi', id)
+      return undefined
+    },
+    [packRuns, items, stocks, addMovement, appendAudit, user?.role],
+  )
+
   const value = useMemo(
     () => ({
       batches,
+      packRuns: sortedPackRuns,
+      lotCosts,
       createBatch,
       updateOutputs,
       submitBatch,
@@ -348,9 +697,16 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       completeBatch,
       voidBatch,
       deleteBatch,
+      createPackRun,
+      updatePackRun,
+      postPackRun,
+      voidPackRun,
+      recalcLotCost,
     }),
     [
       batches,
+      sortedPackRuns,
+      lotCosts,
       createBatch,
       updateOutputs,
       submitBatch,
@@ -360,6 +716,11 @@ export function ProduksiProvider({ children }: { children: ReactNode }) {
       completeBatch,
       voidBatch,
       deleteBatch,
+      createPackRun,
+      updatePackRun,
+      postPackRun,
+      voidPackRun,
+      recalcLotCost,
     ],
   )
 
