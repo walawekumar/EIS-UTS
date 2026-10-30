@@ -412,6 +412,9 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
       if (!canVoidPurchase(current.stage)) {
         return 'Pembelian pada tahap ini tidak dapat dibatalkan.'
       }
+      if (returns.some((r) => r.purchaseId === id && r.stage === 'posted')) {
+        return 'Void ditolak: masih ada retur posted. Void/batalkan retur dulu.'
+      }
       const calc = current.weighing
         ? calcWeighing(current.grain, current.weighing)
         : null
@@ -456,6 +459,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
     },
     [
       items,
+      returns,
       addMovement,
       removeLinkedPayable,
       reverseJournalEntry,

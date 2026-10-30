@@ -116,7 +116,7 @@ type PenerimaanViewProps = {
     purchaseProof: ProofAttachment | string | undefined,
     tax: PurchaseReceiveTax,
   ) => DualTrackResult
-  onVoid?: (id: string, reason: string) => void
+  onVoid?: (id: string, reason: string) => string | undefined
   onGoTo: (tab: 'pembayaran', id: string) => void
   onCompletePurchase: (id: string) => string | undefined
   onOverrideQc: (lotId: string, reason: string) => string | undefined
@@ -457,7 +457,11 @@ export function PenerimaanView({
           onPrint={() => {
             if (!printReceive(detail)) setToast('Izinkan popup untuk mencetak')
           }}
-          onVoid={onVoid}
+          onVoid={(id, reason) => {
+            const err = onVoid?.(id, reason)
+            if (err) setToast(err)
+            return err
+          }}
           onComplete={() => {
             const err = onCompletePurchase(detail.id)
             if (err) {
@@ -544,7 +548,7 @@ function ReceiveDetailDrawer({
   purchase: Purchase
   onClose: () => void
   onPrint: () => void
-  onVoid?: (id: string, reason: string) => void
+  onVoid?: (id: string, reason: string) => string | undefined
   onComplete?: () => void
 }) {
   const { user } = useAuth()
@@ -659,8 +663,9 @@ function ReceiveDetailDrawer({
       danger
       onClose={() => setVoidPromptOpen(false)}
       onConfirm={(reason) => {
-        onVoid?.(p.id, reason)
+        const err = onVoid?.(p.id, reason)
         setVoidPromptOpen(false)
+        if (err) return
         onClose()
       }}
     />

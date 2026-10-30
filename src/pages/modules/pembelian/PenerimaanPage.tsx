@@ -27,8 +27,9 @@ export function PenerimaanPage() {
         confirmWeighing(id, input, purchaseProof, tax)
       }
       onVoid={(id, reason) => {
-        voidPurchase(id, reason)
-        select(null)
+        const err = voidPurchase(id, reason)
+        if (!err) select(null)
+        return err
       }}
       onGoTo={goTo}
       onCompletePurchase={completePurchase}

@@ -278,7 +278,7 @@ type PenjualanContextValue = {
   orders: SaleOrder[]
   createOrder: (data: NewSaleOrder) => string
   deleteOrder: (id: string) => void
-  voidOrder: (id: string, reason: string) => void
+  voidOrder: (id: string, reason: string) => string | undefined
   shipOrder: (id: string, input: DeliveryInput) => PenjualanActionResult
   addPayment: (
     id: string,
@@ -369,9 +369,14 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
   )
 
   const voidOrder = useCallback(
-    (id: string, reason: string) => {
+    (id: string, reason: string): string | undefined => {
       const current = items.find((o) => o.id === id)
-      if (!current || current.voidedAt || current.stage !== 'dikirim') return
+      if (!current || current.voidedAt || current.stage !== 'dikirim') {
+        return 'Order tidak dapat dibatalkan.'
+      }
+      if (returns.some((r) => r.orderId === id && r.stage === 'posted')) {
+        return 'Void ditolak: masih ada retur posted. Void/batalkan retur dulu.'
+      }
       const location = readAppSettings().stock.defaultLocation
       addMovement({
         type: 'in',
@@ -408,9 +413,11 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         note: reason,
         before: current,
       })
+      return undefined
     },
     [
       items,
+      returns,
       addMovement,
       removeLinkedReceivable,
       reverseJournalEntry,
