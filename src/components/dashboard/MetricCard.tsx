@@ -35,8 +35,12 @@ function looksLikePct(delta: string): boolean {
 
 export function MetricCard({ metric }: { metric: MetricCardData }) {
   const pct = looksLikePct(metric.delta)
+  const spark =
+    metric.spark?.length && metric.spark.some((v) => v !== 0)
+      ? metric.spark
+      : null
   return (
-    <article className="flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5 shadow-[0_1px_2px_rgba(20,32,25,0.04)]">
+    <article className="motion-rise flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3.5">
       <div className="min-w-0 flex-1">
         <p className="truncate text-[12px] font-medium text-muted">
           {metric.label}
@@ -44,27 +48,26 @@ export function MetricCard({ metric }: { metric: MetricCardData }) {
         <p className="num mt-1.5 truncate text-[20px] leading-none font-semibold tracking-tight text-ink">
           {metric.value}
         </p>
-        <p className="mt-2">
-          <span
-            className={[
-              'inline-flex max-w-full truncate font-mono text-[11px] font-semibold',
-              pct
-                ? [
-                    'rounded-full px-2 py-0.5',
-                    metric.positive
-                      ? 'bg-brand-50 text-brand-800'
-                      : 'bg-amber-50 text-amber-800',
-                  ].join(' ')
-                : metric.positive
-                  ? 'text-brand-700'
-                  : 'text-amber-700',
-            ].join(' ')}
-          >
-            {metric.delta}
-          </span>
-        </p>
+        {metric.delta.trim() ? (
+          <p className="mt-2">
+            <span
+              className={[
+                'inline-flex max-w-full truncate font-mono text-[11px] font-semibold',
+                pct
+                  ? metric.positive
+                    ? 'text-brand-800'
+                    : 'text-amber-800'
+                  : metric.positive
+                    ? 'text-brand-700'
+                    : 'text-amber-700',
+              ].join(' ')}
+            >
+              {metric.delta}
+            </span>
+          </p>
+        ) : null}
       </div>
-      <Sparkline values={metric.spark} />
+      {spark ? <Sparkline values={spark} /> : null}
     </article>
   )
 }

@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { AuthenticatedProviders } from '@/app/AuthenticatedProviders'
 import { RequireAuth } from '@/app/RequireAuth'
 import { RequireRole } from '@/app/RequireRole'
 import { AppShell } from '@/components/layout/AppShell'
+import { ModuleShell } from '@/components/layout/ModuleShell'
 import { LoginPage } from '@/pages/LoginPage'
+import { PortalPage } from '@/pages/PortalPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DashboardPage } from '@/pages/modules/DashboardPage'
 import { InboxPage } from '@/pages/modules/InboxPage'
@@ -19,6 +22,8 @@ import { PayrollPage } from '@/pages/modules/keuangan/PayrollPage'
 import { PiutangPage } from '@/pages/modules/keuangan/PiutangPage'
 import { UtangPage } from '@/pages/modules/keuangan/UtangPage'
 import { LaporanPage } from '@/pages/modules/LaporanPage'
+import { AbsensiPage } from '@/pages/modules/sdm/AbsensiPage'
+
 import { KoreksiPage } from '@/pages/modules/persediaan/KoreksiPage'
 import { MutasiPage } from '@/pages/modules/persediaan/MutasiPage'
 import { SaldoPage } from '@/pages/modules/persediaan/SaldoPage'
@@ -48,7 +53,20 @@ export function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<RequireAuth />}>
-        <Route path="/portal" element={<Navigate to="/app/dashboard" replace />} />
+        <Route element={<AuthenticatedProviders />}>
+        <Route path="/portal" element={<PortalPage />} />
+
+        <Route
+          path="/absensi"
+          element={
+            <ModuleShell
+              title="E-Absensi"
+              subtitle="Check-in / check-out harian karyawan"
+            />
+          }
+        >
+          <Route index element={<AbsensiPage />} />
+        </Route>
 
         <Route element={<RequireRole />}>
           <Route
@@ -65,7 +83,7 @@ export function AppRouter() {
             element={
               <AppShell
                 title="Kotak masuk"
-                subtitle="Pengajuan menunggu persetujuan — retur, batch, payroll, unlock periode"
+                subtitle="Pengajuan menunggu persetujuan, retur, batch, payroll, unlock periode"
               />
             }
           >
@@ -219,12 +237,13 @@ export function AppRouter() {
             element={
               <AppShell
                 title="Audit Log"
-                subtitle="Jejak perubahan domain sebelum backend"
+                subtitle="Jejak perubahan dokumen dan aksi penting"
               />
             }
           >
             <Route index element={<AuditPage />} />
           </Route>
+        </Route>
         </Route>
       </Route>
 

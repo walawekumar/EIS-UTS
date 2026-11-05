@@ -214,7 +214,7 @@ export function PenggunaPage() {
         { label: 'Jabatan', value: row.title },
         { label: 'Departemen', value: row.department },
         { label: 'Cabang', value: row.branch },
-        { label: 'Telepon', value: row.phone || '—' },
+        { label: 'Telepon', value: row.phone || ',' },
         { label: 'Status', value: row.active ? 'Aktif' : 'Nonaktif' },
       ],
       { subtitle: 'Kartu pengguna', module: 'Master Data · Pengguna' },
@@ -331,7 +331,7 @@ export function PenggunaPage() {
                     <StatusPill label={ROLE_LABELS[row.role]} tone="neutral" />
                   </FinanceTd>
                   <FinanceTd>{row.branch}</FinanceTd>
-                  <FinanceTd mono>{row.phone || '—'}</FinanceTd>
+                  <FinanceTd mono>{row.phone || ','}</FinanceTd>
                   <FinanceTd>
                     <StatusPill
                       label={row.active ? 'Aktif' : 'Nonaktif'}
@@ -428,7 +428,7 @@ export function PenggunaPage() {
                 ['Jabatan', detail.title],
                 ['Departemen', detail.department],
                 ['Cabang', detail.branch],
-                ['Telepon', detail.phone || '—'],
+                ['Telepon', detail.phone || ','],
               ]}
             />
           </DrawerSection>

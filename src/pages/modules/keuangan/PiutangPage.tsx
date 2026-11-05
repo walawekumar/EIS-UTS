@@ -191,7 +191,7 @@ export function PiutangPage() {
         { label: 'Nilai tagihan', value: formatIdr(row.amount) },
         { label: 'Sudah diterima', value: formatIdr(row.paid) },
         { label: 'Status', value: RECEIVABLE_STATUS_LABEL[row.status] },
-        { label: 'Struk', value: row.receiptName ?? '—' },
+        { label: 'Struk', value: row.receiptName ?? ',' },
       ],
       { subtitle: row.customer, module: 'Keuangan · Piutang' },
     )
@@ -293,7 +293,11 @@ export function PiutangPage() {
             {rows.length === 0 ? (
               <FinanceEmptyRow
                 colSpan={8}
-                message="Tidak ada piutang yang cocok."
+                message={
+                  receivables.length === 0
+                    ? 'Belum ada piutang. Muncul setelah penjualan diposting.'
+                    : 'Tidak ada piutang yang cocok dengan filter.'
+                }
               />
             ) : (
               rows.map((row, index) => {

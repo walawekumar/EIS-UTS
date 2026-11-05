@@ -166,7 +166,7 @@ export function BatchView({
           label: 'Neraca massa',
           value: formatQty(massBalance(row), 'kg'),
         },
-        { label: 'Catatan', value: row.note || '—' },
+        { label: 'Catatan', value: row.note || ',' },
       ],
       { subtitle: 'Kartu batch giling', module: 'Produksi' },
     )
@@ -421,7 +421,7 @@ export function BatchView({
                 ['Status', BATCH_STAGE_LABEL[detail.stage]],
                 ['Target rendemen', `${detail.targetRendemen}%`],
                 ['Aktual', `${actualRendemen(detail).toFixed(1)}%`],
-                ['Approve oleh', detail.approvedBy || '—'],
+                ['Approve oleh', detail.approvedBy || ','],
               ]}
             />
           </DrawerSection>

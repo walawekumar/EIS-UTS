@@ -151,23 +151,20 @@ export function PackingPage() {
     {
       label: 'Draft',
       value: String(counts.draft),
-      delta: 'Belum diposting',
+      delta: counts.draft ? 'Belum diposting' : 'Kosong',
       positive: true,
-      spark: [1, 1, 2, 1, 2, 2, 1],
     },
     {
       label: 'Posted',
       value: String(counts.posted),
-      delta: 'Stok kemasan',
+      delta: counts.posted ? 'Stok kemasan' : ',',
       positive: true,
-      spark: [1, 2, 2, 3, 3, 4, 4],
     },
     {
       label: 'Void',
       value: String(counts.void),
-      delta: counts.void ? 'Dibatalkan' : '—',
+      delta: counts.void ? 'Dibatalkan' : ',',
       positive: counts.void === 0,
-      spark: [0, 0, 1, 0, 1, 0, 0],
     },
   ]
 

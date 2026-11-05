@@ -438,7 +438,7 @@ export function PembelianProvider({ children }: { children: ReactNode }) {
           unit: 'kg',
           qty: calc.netto,
           fromLocation: location,
-          toLocation: '—',
+          toLocation: '',
           note: `Void penerimaan ${id}`,
         })
       }

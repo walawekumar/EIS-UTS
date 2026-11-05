@@ -22,3 +22,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   penjualan: 'Petugas Penjualan',
   keuangan: 'Petugas Keuangan',
 }
+
+const USER_ROLES = Object.keys(ROLE_LABELS) as UserRole[]
+
+export function isUserRole(value: unknown): value is UserRole {
+  return typeof value === 'string' && USER_ROLES.some((role) => role === value)
+}

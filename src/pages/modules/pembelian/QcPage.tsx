@@ -111,28 +111,24 @@ export function QcPage() {
       value: String(lots.length),
       delta: 'Dari timbang',
       positive: true,
-      spark: [2, 2, 3, 3, 4, 4, 5],
     },
     {
       label: 'Belum QC',
       value: String(summary.belum),
       delta: summary.belum > 0 ? 'Perlu diisi' : 'Lengkap',
       positive: summary.belum === 0,
-      spark: [2, 2, 1, 2, 1, 1, 1],
     },
     {
       label: 'Lulus',
       value: String(summary.lulus),
       delta: 'Siap terima',
       positive: true,
-      spark: [1, 1, 2, 2, 3, 3, 4],
     },
     {
       label: 'Tidak lulus',
       value: String(summary.gagal),
       delta: 'Perlu override admin',
       positive: summary.gagal === 0,
-      spark: [1, 1, 1, 2, 1, 2, 1],
     },
   ]
 
@@ -255,19 +251,19 @@ export function QcPage() {
                     <FinanceTd>
                       <span className="font-medium">{purchase.id}</span>
                       <span className="mt-0.5 block text-[11px] text-muted">
-                        {supplier?.name ?? '—'} · {purchase.grain}
+                        {supplier?.name ?? ','} · {purchase.grain}
                       </span>
                     </FinanceTd>
                     <FinanceTd mono align="right" muted>
-                      {qc ? `${formatNumber(qc.moisture)}%` : '—'}
+                      {qc ? `${formatNumber(qc.moisture)}%` : ','}
                     </FinanceTd>
                     <FinanceTd mono align="right" muted>
-                      {qc ? `${formatNumber(qc.impurity)}%` : '—'}
+                      {qc ? `${formatNumber(qc.impurity)}%` : ','}
                     </FinanceTd>
                     <FinanceTd mono align="right" muted>
-                      {qc ? `${formatNumber(qc.brokenPct)}%` : '—'}
+                      {qc ? `${formatNumber(qc.brokenPct)}%` : ','}
                     </FinanceTd>
-                    <FinanceTd mono>{qc?.grade ?? '—'}</FinanceTd>
+                    <FinanceTd mono>{qc?.grade ?? ','}</FinanceTd>
                     <FinanceTd>
                       <StatusPill label={qcLabel(qc)} tone={qcTone(qc)} />
                     </FinanceTd>
@@ -370,7 +366,7 @@ function QcDrawer({
       open
       onClose={onClose}
       title={purchase.lotId!}
-      subtitle={`${purchase.id} · ${supplier?.name ?? '—'}`}
+      subtitle={`${purchase.id} · ${supplier?.name ?? ','}`}
       badge={<StatusPill label={qcLabel(qc)} tone={qcTone(qc)} />}
       footer={
         canEdit ? (

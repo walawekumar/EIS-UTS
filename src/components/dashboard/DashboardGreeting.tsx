@@ -8,11 +8,11 @@ function greetingByHour(date = new Date()): string {
   return 'Selamat malam'
 }
 
-/** Sambutan singkat — disesuaikan jam agar terasa personal */
+/** Sambutan singkat, disesuaikan jam agar terasa personal */
 function welcomeByHour(date = new Date()): string {
   const hour = date.getHours()
   if (hour < 11) return 'Semoga langkah pagi ini membawa hasil yang baik.'
-  if (hour < 15) return 'Selamat datang kembali — fokuskan yang penting hari ini.'
+  if (hour < 15) return 'Selamat datang kembali, fokuskan yang penting hari ini.'
   if (hour < 18) return 'Tetap semangat; setiap keputusan hari ini berharga.'
   return 'Terima kasih sudah menyelesaikan hari dengan baik.'
 }

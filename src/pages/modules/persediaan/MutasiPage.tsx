@@ -202,23 +202,27 @@ export function MutasiPage() {
     setErrors(next)
     if (Object.keys(next).length) return
 
-    addMovement({
+    const locked = addMovement({
       type: form.type,
       sku: selectedStock.sku,
       productName: selectedStock.name,
       unit: selectedStock.unit,
       qty,
       fromLocation:
-        form.type === 'in' ? '—' : selectedStock.location,
+        form.type === 'in' ? ',' : selectedStock.location,
       toLocation:
         form.type === 'out'
-          ? '—'
+          ? ','
           : form.type === 'in'
             ? selectedStock.location
             : form.toLocation,
       note: form.note.trim(),
       receiptName: receiptPersistRef(receipt),
     })
+    if (locked) {
+      setToast(locked)
+      return
+    }
     setFormOpen(false)
     setReceipt(null)
     setPage(1)
@@ -246,7 +250,7 @@ export function MutasiPage() {
       { label: 'Jumlah', value: formatQty(row.qty, row.unit) },
       { label: 'Keterangan', value: row.note },
       { label: 'Oleh', value: row.actor },
-      { label: 'Bukti', value: row.receiptName ?? '—' },
+      { label: 'Bukti', value: row.receiptName ?? ',' },
     ])
     if (!ok) setToast('Izinkan popup untuk mencetak')
   }

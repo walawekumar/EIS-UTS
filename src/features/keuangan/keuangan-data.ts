@@ -1,4 +1,5 @@
 import type { MetricCardData } from '@/features/dashboard/dashboard-data'
+import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import type { PpnRate, PriceMode, TaxSnapshotFields } from '@/features/keuangan/tax-data'
 import { readAppSettings } from '@/features/settings/app-settings'
 
@@ -104,14 +105,10 @@ export function formatIdrShort(value: number): string {
   return formatIdr(value)
 }
 
-function sparkFrom(seed: number[], scale = 1): number[] {
-  return seed.map((v) => Math.round(v * scale))
-}
-
 export const CASH_ENTRIES: CashEntry[] = [
   {
     id: 'c1',
-    date: '29 Okt 2026',
+    date: '2026-11-05',
     reference: 'KM-2401',
     description: 'Pelunasan invoice DO-0912',
     category: 'Piutang',
@@ -122,7 +119,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c2',
-    date: '29 Okt 2026',
+    date: '2026-10-29',
     reference: 'KK-1188',
     description: 'Bayar utang pemasok CV Sumber',
     category: 'Utang',
@@ -133,7 +130,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c3',
-    date: '29 Okt 2026',
+    date: '2026-10-29',
     reference: 'KK-1187',
     description: 'Biaya solar mesin giling',
     category: 'Operasional',
@@ -144,7 +141,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c4',
-    date: '28 Okt 2026',
+    date: '2026-10-28',
     reference: 'KM-2398',
     description: 'Uang muka order beras premium',
     category: 'Penjualan',
@@ -155,7 +152,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c5',
-    date: '28 Okt 2026',
+    date: '2026-10-28',
     reference: 'KK-1184',
     description: 'Gaji harian buruh gudang',
     category: 'Tenaga',
@@ -166,7 +163,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c6',
-    date: '27 Okt 2026',
+    date: '2026-10-27',
     reference: 'KM-2391',
     description: 'Transfer pelanggan Toko Berkah',
     category: 'Piutang',
@@ -177,7 +174,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c7',
-    date: '27 Okt 2026',
+    date: '2026-10-27',
     reference: 'KK-1179',
     description: 'Pembelian karung & tali',
     category: 'Operasional',
@@ -188,7 +185,7 @@ export const CASH_ENTRIES: CashEntry[] = [
   },
   {
     id: 'c8',
-    date: '26 Okt 2026',
+    date: '2026-10-26',
     reference: 'KM-2384',
     description: 'Setoran tunai counter',
     category: 'Lainnya',
@@ -204,7 +201,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p1',
     supplier: 'CV Sumber Gabah',
     invoice: 'AP-1042',
-    dueDate: '31 Okt 2026',
+    dueDate: '2026-10-31',
     amount: 22_500_000,
     paid: 7_500_000,
     status: 'partial',
@@ -214,7 +211,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p2',
     supplier: 'Koperasi Tani Makmur',
     invoice: 'AP-1038',
-    dueDate: '28 Okt 2026',
+    dueDate: '2026-10-28',
     amount: 9_750_000,
     paid: 0,
     status: 'overdue',
@@ -224,7 +221,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p3',
     supplier: 'UD Padi Sejahtera',
     invoice: 'AP-1035',
-    dueDate: '05 Nov 2026',
+    dueDate: '2026-11-05',
     amount: 15_000_000,
     paid: 0,
     status: 'open',
@@ -234,7 +231,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p4',
     supplier: 'CV Agro Nusantara',
     invoice: 'AP-1029',
-    dueDate: '12 Nov 2026',
+    dueDate: '2026-11-12',
     amount: 18_200_000,
     paid: 0,
     status: 'open',
@@ -244,7 +241,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p5',
     supplier: 'Kelompok Tani Harapan',
     invoice: 'AP-1021',
-    dueDate: '20 Okt 2026',
+    dueDate: '2026-10-20',
     amount: 6_400_000,
     paid: 6_400_000,
     status: 'paid',
@@ -254,7 +251,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p6',
     supplier: 'CV Sumber Gabah',
     invoice: 'AP-1018',
-    dueDate: '03 Nov 2026',
+    dueDate: '2026-11-03',
     amount: 11_800_000,
     paid: 0,
     status: 'open',
@@ -264,7 +261,7 @@ export const PAYABLES: PayableRow[] = [
     id: 'p7',
     supplier: 'UD Berkah Panen',
     invoice: 'AP-1012',
-    dueDate: '25 Okt 2026',
+    dueDate: '2026-10-25',
     amount: 4_200_000,
     paid: 1_000_000,
     status: 'overdue',
@@ -277,7 +274,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r1',
     customer: 'Toko Berkah Jaya',
     invoice: 'AR-0912',
-    dueDate: '30 Okt 2026',
+    dueDate: '2026-10-30',
     amount: 18_500_000,
     paid: 18_500_000,
     status: 'paid',
@@ -287,7 +284,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r2',
     customer: 'Distributor Nusantara',
     invoice: 'AR-0908',
-    dueDate: '27 Okt 2026',
+    dueDate: '2026-10-27',
     amount: 14_300_000,
     paid: 0,
     status: 'overdue',
@@ -297,7 +294,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r3',
     customer: 'Warung Sembako Asri',
     invoice: 'AR-0904',
-    dueDate: '02 Nov 2026',
+    dueDate: '2026-11-02',
     amount: 6_750_000,
     paid: 2_000_000,
     status: 'partial',
@@ -307,7 +304,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r4',
     customer: 'CV Mitra Beras',
     invoice: 'AR-0899',
-    dueDate: '08 Nov 2026',
+    dueDate: '2026-11-08',
     amount: 22_000_000,
     paid: 0,
     status: 'open',
@@ -317,7 +314,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r5',
     customer: 'Koperasi Pasar Induk',
     invoice: 'AR-0891',
-    dueDate: '04 Nov 2026',
+    dueDate: '2026-11-04',
     amount: 9_800_000,
     paid: 0,
     status: 'open',
@@ -327,7 +324,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r6',
     customer: 'Toko Mulia Abadi',
     invoice: 'AR-0884',
-    dueDate: '24 Okt 2026',
+    dueDate: '2026-10-24',
     amount: 5_400_000,
     paid: 0,
     status: 'overdue',
@@ -337,7 +334,7 @@ export const RECEIVABLES: ReceivableRow[] = [
     id: 'r7',
     customer: 'PT Pangan Sejahtera',
     invoice: 'AR-0876',
-    dueDate: '15 Nov 2026',
+    dueDate: '2026-11-15',
     amount: 31_200_000,
     paid: 10_000_000,
     status: 'partial',
@@ -348,7 +345,7 @@ export const RECEIVABLES: ReceivableRow[] = [
 export const EXPENSES: ExpenseRow[] = [
   {
     id: 'e1',
-    date: '29 Okt 2026',
+    date: '2026-10-29',
     reference: 'BY-0421',
     category: 'Utilitas',
     description: 'Solar mesin giling batch BAT-0190',
@@ -358,7 +355,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e2',
-    date: '28 Okt 2026',
+    date: '2026-10-28',
     reference: 'BY-0418',
     category: 'Tenaga',
     description: 'Upah harian buruh gudang (8 orang)',
@@ -368,7 +365,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e3',
-    date: '28 Okt 2026',
+    date: '2026-10-28',
     reference: 'BY-0416',
     category: 'Transport',
     description: 'Ongkos angkut kirim DO-0881',
@@ -378,7 +375,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e4',
-    date: '27 Okt 2026',
+    date: '2026-10-27',
     reference: 'BY-0412',
     category: 'Pemeliharaan',
     description: 'Servis roller husker',
@@ -388,7 +385,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e5',
-    date: '26 Okt 2026',
+    date: '2026-10-26',
     reference: 'BY-0408',
     category: 'Tenaga',
     description: 'Lembur operator shift malam',
@@ -398,7 +395,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e6',
-    date: '25 Okt 2026',
+    date: '2026-10-25',
     reference: 'BY-0401',
     category: 'Lainnya',
     description: 'ATK & konsumsi rapat mingguan',
@@ -408,7 +405,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e7',
-    date: '24 Okt 2026',
+    date: '2026-10-24',
     reference: 'BY-0397',
     category: 'Utilitas',
     description: 'Tagihan listrik gudang A',
@@ -418,7 +415,7 @@ export const EXPENSES: ExpenseRow[] = [
   },
   {
     id: 'e8',
-    date: '22 Okt 2026',
+    date: '2026-10-22',
     reference: 'BY-0390',
     category: 'Transport',
     description: 'Sewa truk panen (dibatalkan)',
@@ -499,11 +496,39 @@ export function resolveReceivableStatus(
   return resolvePayableStatus(amount, paid, agingDays)
 }
 
+function cashDayKey(raw: string): string {
+  const s = raw.trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  const m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/)
+  if (!m) return s.slice(0, 10)
+  const months: Record<string, string> = {
+    Jan: '01',
+    Feb: '02',
+    Mar: '03',
+    Apr: '04',
+    Mei: '05',
+    Jun: '06',
+    Jul: '07',
+    Agu: '08',
+    Sep: '09',
+    Okt: '10',
+    Nov: '11',
+    Des: '12',
+  }
+  const month = months[m[2]]
+  if (!month) return s.slice(0, 10)
+  return `${m[3]}-${month}-${m[1].padStart(2, '0')}`
+}
+
 export function buildKasStats(entries: CashEntry[]): MetricCardData[] {
-  const today = formatDateId()
+  const today = todayIsoDate()
   const saldo = entries[0]?.balance ?? 0
-  const todayIn = entries.filter((e) => e.date === today && e.direction === 'in')
-  const todayOut = entries.filter((e) => e.date === today && e.direction === 'out')
+  const todayIn = entries.filter(
+    (e) => cashDayKey(e.date) === today && e.direction === 'in',
+  )
+  const todayOut = entries.filter(
+    (e) => cashDayKey(e.date) === today && e.direction === 'out',
+  )
   const sumIn = todayIn.reduce((s, e) => s + e.amount, 0)
   const sumOut = todayOut.reduce((s, e) => s + e.amount, 0)
   const net = entries.reduce(
@@ -511,34 +536,31 @@ export function buildKasStats(entries: CashEntry[]): MetricCardData[] {
     0,
   )
 
+  const empty = entries.length === 0
   return [
     {
       label: 'Saldo kas',
       value: formatIdrShort(saldo),
-      delta: '+5,2%',
-      positive: true,
-      spark: sparkFrom([88, 90, 92, 95, 98, 101, 104], saldo / 100),
+      delta: empty ? 'Belum ada mutasi' : `${entries.length} entri`,
+      positive: saldo >= 0,
     },
     {
       label: 'Masuk hari ini',
       value: formatIdrShort(sumIn),
-      delta: `+${todayIn.length}`,
+      delta: `${todayIn.length} transaksi`,
       positive: true,
-      spark: sparkFrom([40, 55, 48, 62, 70, 65, Math.max(30, sumIn / 1_000_000)]),
     },
     {
       label: 'Keluar hari ini',
       value: formatIdrShort(sumOut),
-      delta: sumOut > 0 ? '+8,1%' : '0%',
+      delta: `${todayOut.length} transaksi`,
       positive: sumOut === 0,
-      spark: sparkFrom([50, 45, 52, 48, 55, 42, Math.max(20, sumOut / 1_000_000)]),
     },
     {
       label: 'Net tercatat',
       value: formatIdrShort(net),
-      delta: net >= 0 ? '+12%' : '−4,5%',
+      delta: empty ? 'Kosong' : net >= 0 ? 'Positif' : 'Negatif',
       positive: net >= 0,
-      spark: sparkFrom([60, 62, 58, 70, 75, 72, 80]),
     },
   ]
 }
@@ -559,7 +581,6 @@ export function buildUtangStats(rows: PayableRow[]): MetricCardData[] {
       value: formatIdrShort(totalOpen),
       delta: totalOpen > 0 ? '+3,4%' : '0%',
       positive: totalOpen === 0,
-      spark: sparkFrom([70, 72, 68, 75, 80, 78, 82]),
     },
     {
       label: 'Belum jatuh tempo',
@@ -568,21 +589,18 @@ export function buildUtangStats(rows: PayableRow[]): MetricCardData[] {
       ),
       delta: `${dueSoon.length} dok`,
       positive: true,
-      spark: sparkFrom([50, 52, 55, 53, 58, 60, 62]),
     },
     {
       label: 'Terlambat',
       value: formatIdrShort(overdueSum),
       delta: overdue.length > 0 ? `+${overdue.length}` : '0',
       positive: overdue.length === 0,
-      spark: sparkFrom([40, 38, 42, 45, 43, 48, 50]),
     },
     {
       label: 'Sudah dibayar',
       value: formatIdrShort(paidMonth),
       delta: '+9,1%',
       positive: true,
-      spark: sparkFrom([30, 35, 40, 48, 55, 60, 68]),
     },
   ]
 }
@@ -601,7 +619,6 @@ export function buildPiutangStats(rows: ReceivableRow[]): MetricCardData[] {
       value: formatIdrShort(totalOpen),
       delta: '+2,8%',
       positive: true,
-      spark: sparkFrom([65, 68, 70, 72, 75, 78, 80]),
     },
     {
       label: 'Belum jatuh tempo',
@@ -610,21 +627,18 @@ export function buildPiutangStats(rows: ReceivableRow[]): MetricCardData[] {
       ),
       delta: `${dueSoon.length} inv`,
       positive: true,
-      spark: sparkFrom([45, 48, 50, 52, 55, 54, 58]),
     },
     {
       label: 'Terlambat',
       value: formatIdrShort(overdueSum),
       delta: overdue.length > 0 ? `−${overdue.length}` : '0',
       positive: overdue.length === 0,
-      spark: sparkFrom([55, 52, 50, 48, 45, 42, 40]),
     },
     {
       label: 'Sudah diterima',
       value: formatIdrShort(received),
       delta: '+11%',
       positive: true,
-      spark: sparkFrom([35, 40, 45, 50, 58, 62, 70]),
     },
   ]
 }
@@ -640,7 +654,7 @@ export function buildBiayaStats(rows: ExpenseRow[]): MetricCardData[] {
       (byCat.get(row.category) ?? 0) + expenseDisplayAmount(row),
     )
   }
-  let topCat = '—'
+  let topCat = 'Kosong'
   let topSum = 0
   for (const [cat, sum] of byCat) {
     if (sum > topSum) {
@@ -661,28 +675,24 @@ export function buildBiayaStats(rows: ExpenseRow[]): MetricCardData[] {
       value: formatIdrShort(total),
       delta: '−8,4%',
       positive: true,
-      spark: sparkFrom([80, 78, 75, 70, 68, 65, 62]),
     },
     {
       label: 'Sudah posting',
       value: String(posted),
       delta: `${postedPct}%`,
       positive: postedPct >= 50,
-      spark: sparkFrom([2, 3, 3, 4, 5, 5, posted || 1]),
     },
     {
       label: 'Kategori terbesar',
       value: topCat,
       delta: `${topSharePct}%`,
       positive: true,
-      spark: sparkFrom([40, 45, 50, 55, 60, 58, 65]),
     },
     {
       label: 'Draft',
       value: String(drafts.length),
       delta: drafts.length > 0 ? `${draftPct}%` : '0%',
       positive: drafts.length === 0,
-      spark: sparkFrom([5, 4, 4, 3, 3, 2, drafts.length || 1]),
     },
   ]
 }

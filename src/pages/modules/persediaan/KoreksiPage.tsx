@@ -191,7 +191,7 @@ export function KoreksiPage() {
       { label: 'Alasan', value: row.reason },
       { label: 'Status', value: row.status === 'posted' ? 'Posted' : 'Void' },
       { label: 'Oleh', value: row.actor },
-      { label: 'Bukti', value: row.receiptName ?? '—' },
+      { label: 'Bukti', value: row.receiptName ?? ',' },
     ])
     if (!ok) setToast('Izinkan popup untuk mencetak')
   }

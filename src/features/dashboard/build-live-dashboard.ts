@@ -21,10 +21,6 @@ function idrShort(n: number): string {
   return String(n)
 }
 
-function spark(base: number[]): number[] {
-  return base
-}
-
 type LiveInput = {
   role: UserRole
   stocks: StockRow[]
@@ -73,29 +69,25 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'Saldo kas',
         value: idrShort(cashBal),
         delta: `${input.cash.length} entri`,
-        positive: cashBal >= 0,
-        spark: spark([40, 42, 45, 48, 50, 52, 55]),
+        positive: cashBal >= 0
       },
       {
         label: 'Piutang terbuka',
         value: idrShort(arSum),
         delta: `${arOpen.length} dok`,
-        positive: arSum === 0,
-        spark: spark([30, 28, 32, 30, 27, 25, 24]),
+        positive: arSum === 0
       },
       {
         label: 'Utang terbuka',
         value: idrShort(apSum),
         delta: `${apOpen.length} dok`,
-        positive: apSum === 0,
-        spark: spark([20, 22, 21, 19, 18, 17, 16]),
+        positive: apSum === 0
       },
       {
         label: 'Stok rendah',
         value: String(low.length),
         delta: low.length ? 'Perlu isi' : 'OK',
-        positive: low.length === 0,
-        spark: spark([2, 1, 2, 1, 0, 1, 1]),
+        positive: low.length === 0
       },
     ],
     pembelian: [
@@ -103,22 +95,19 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'Dokumen terbuka',
         value: String(openPurchases.length),
         delta: 'belum diterima',
-        positive: openPurchases.length === 0,
-        spark: spark([3, 4, 3, 2, 3, 2, 2]),
+        positive: openPurchases.length === 0
       },
       {
         label: 'Nilai diterima',
         value: idrShort(buyValue),
         delta: 'bulan berjalan',
-        positive: true,
-        spark: spark([10, 12, 11, 14, 15, 16, 18]),
+        positive: true
       },
       {
         label: 'Utang pemasok',
         value: idrShort(apSum),
         delta: `${apOpen.length} open`,
-        positive: apSum === 0,
-        spark: spark([8, 7, 9, 8, 6, 5, 5]),
+        positive: apSum === 0
       },
       {
         label: 'Menunggu timbang',
@@ -126,8 +115,7 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
           input.purchases.filter((p) => p.stage === 'ditimbang').length,
         ),
         delta: 'konfirmasi',
-        positive: true,
-        spark: spark([1, 2, 1, 1, 0, 1, 1]),
+        positive: true
       },
     ],
     produksi: [
@@ -135,15 +123,13 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'Batch aktif',
         value: String(activeBatches.length),
         delta: `${input.batches.length} total`,
-        positive: true,
-        spark: spark([2, 3, 3, 4, 3, 4, 4]),
+        positive: true
       },
       {
         label: 'Avg rendemen',
         value: `${avgRend.toFixed(1)}%`,
         delta: 'batch selesai',
-        positive: avgRend >= 60,
-        spark: spark([62, 63, 64, 65, 64, 66, 65]),
+        positive: avgRend >= 60
       },
       {
         label: 'Menunggu approve',
@@ -151,15 +137,13 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
           input.batches.filter((b) => b.stage === 'submitted').length,
         ),
         delta: 'review',
-        positive: true,
-        spark: spark([1, 0, 1, 1, 0, 0, 1]),
+        positive: true
       },
       {
         label: 'Selesai',
         value: String(doneBatches.length),
         delta: 'posted',
-        positive: true,
-        spark: spark([1, 2, 2, 3, 3, 4, 4]),
+        positive: true
       },
     ],
     gudang: [
@@ -167,22 +151,19 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'SKU lokasi',
         value: String(input.stocks.length),
         delta: 'baris saldo',
-        positive: true,
-        spark: spark([8, 8, 9, 9, 10, 10, 10]),
+        positive: true
       },
       {
         label: 'Stok rendah',
         value: String(low.length),
         delta: low.length ? 'aksi' : 'aman',
-        positive: low.length === 0,
-        spark: spark([2, 2, 1, 1, 0, 1, 0]),
+        positive: low.length === 0
       },
       {
         label: 'Nilai kas (info)',
         value: idrShort(cashBal),
         delta: 'referensi',
-        positive: true,
-        spark: spark([40, 41, 42, 43, 44, 45, 46]),
+        positive: true
       },
       {
         label: 'Batch proses',
@@ -190,8 +171,7 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
           input.batches.filter((b) => b.stage === 'processing').length,
         ),
         delta: 'lantai',
-        positive: true,
-        spark: spark([1, 1, 2, 1, 1, 1, 2]),
+        positive: true
       },
     ],
     penjualan: [
@@ -199,29 +179,25 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'Order terbuka',
         value: String(openOrders.length),
         delta: 'belum kirim',
-        positive: openOrders.length === 0,
-        spark: spark([4, 3, 4, 2, 3, 2, 2]),
+        positive: openOrders.length === 0
       },
       {
         label: 'Nilai terkirim',
         value: idrShort(saleValue),
         delta: 'omzet',
-        positive: true,
-        spark: spark([20, 22, 24, 23, 26, 28, 30]),
+        positive: true
       },
       {
         label: 'Piutang',
         value: idrShort(arSum),
         delta: `${arOpen.length} dok`,
-        positive: arSum === 0,
-        spark: spark([15, 14, 16, 13, 12, 11, 10]),
+        positive: arSum === 0
       },
       {
         label: 'Stok rendah',
         value: String(low.length),
         delta: 'siap jual',
-        positive: low.length === 0,
-        spark: spark([1, 1, 0, 1, 0, 0, 1]),
+        positive: low.length === 0
       },
     ],
     keuangan: [
@@ -229,29 +205,25 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         label: 'Saldo kas',
         value: idrShort(cashBal),
         delta: 'posisi',
-        positive: cashBal >= 0,
-        spark: spark([40, 42, 44, 46, 48, 50, 52]),
+        positive: cashBal >= 0
       },
       {
         label: 'Piutang',
         value: idrShort(arSum),
         delta: `${arOpen.length} open`,
-        positive: arSum === 0,
-        spark: spark([18, 17, 16, 15, 14, 13, 12]),
+        positive: arSum === 0
       },
       {
         label: 'Utang',
         value: idrShort(apSum),
         delta: `${apOpen.length} open`,
-        positive: apSum === 0,
-        spark: spark([12, 11, 13, 10, 9, 8, 8]),
+        positive: apSum === 0
       },
       {
         label: 'Laba kotor kasar',
         value: idrShort(saleValue - buyValue),
         delta: 'jual − beli',
-        positive: saleValue >= buyValue,
-        spark: spark([5, 6, 7, 6, 8, 9, 10]),
+        positive: saleValue >= buyValue
       },
     ],
   }
@@ -294,7 +266,7 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
     },
     produksi: {
       title: 'Produksi',
-      description: 'Batch & rendemen live',
+      description: 'Batch & rendemen',
       chartTitle: 'Rendemen batch',
     },
     gudang: {
@@ -309,80 +281,98 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
     },
     keuangan: {
       title: 'Keuangan',
-      description: 'Kas, utang, piutang live',
+      description: 'Kas, utang, piutang',
       chartTitle: 'Posisi kas',
     },
   }
 
   const meta = titles[input.role]
-  const adminChartLabels = [
-    'Beli',
-    'Jual',
-    'Utang',
-    'Piutang',
-    'Kas',
-    'Margin',
-  ] as const
-  const adminChartValues = [
-    buyValue,
-    saleValue,
-    apSum,
-    arSum,
-    cashBal,
-    Math.max(0, saleValue - buyValue),
-  ].map((n) => Math.max(0, Math.round(n / 1_000_000)))
+  const toJt = (n: number) => Math.max(0, Math.round(n / 1_000_000))
 
-  const chartValues =
-    input.role === 'produksi'
-      ? doneBatches.slice(0, 7).map((b) => Math.round(actualRendemen(b)))
-      : input.role === 'admin'
-        ? [...adminChartValues]
-        : [buyValue, saleValue, apSum, arSum, cashBal, saleValue - buyValue, cashBal].map(
-            (n) => Math.max(0, Math.round(n / 1_000_000)),
-          )
+  const opsLabels = ['Beli', 'Jual', 'Utang', 'Piutang', 'Kas', 'Margin'] as const
+  const opsValues = [
+    toJt(buyValue),
+    toJt(saleValue),
+    toJt(apSum),
+    toJt(arSum),
+    toJt(cashBal),
+    toJt(Math.max(0, saleValue - buyValue)),
+  ]
 
-  while (chartValues.length < (input.role === 'admin' ? 6 : 7)) chartValues.push(0)
+  const produksiLabels = doneBatches.slice(0, 7).map((b) => b.id.slice(-4))
+  const produksiValues = doneBatches
+    .slice(0, 7)
+    .map((b) => Math.round(actualRendemen(b)))
+
+  const gudangTop = [...input.stocks]
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 6)
+  const gudangLabels = gudangTop.map((s) => s.sku.slice(0, 8))
+  const gudangValues = gudangTop.map((s) => Math.round(s.qty))
+
+  const chartByRole: Record<
+    UserRole,
+    { labels: string[]; values: number[]; unit: string; seriesName: string }
+  > = {
+    admin: {
+      labels: [...opsLabels],
+      values: opsValues,
+      unit: 'jt Rp',
+      seriesName: 'Posisi',
+    },
+    keuangan: {
+      labels: [...opsLabels],
+      values: opsValues,
+      unit: 'jt Rp',
+      seriesName: 'Posisi',
+    },
+    pembelian: {
+      labels: ['Open', 'Diterima', 'Utang'],
+      values: [
+        openPurchases.length,
+        toJt(buyValue),
+        toJt(apSum),
+      ],
+      unit: 'dok / jt',
+      seriesName: 'Pembelian',
+    },
+    penjualan: {
+      labels: ['Open', 'Omzet', 'Piutang'],
+      values: [openOrders.length, toJt(saleValue), toJt(arSum)],
+      unit: 'dok / jt',
+      seriesName: 'Penjualan',
+    },
+    produksi: {
+      labels: produksiLabels.length ? produksiLabels : ['Kosong'],
+      values: produksiValues.length ? produksiValues : [0],
+      unit: '%',
+      seriesName: 'Rendemen',
+    },
+    gudang: {
+      labels: gudangLabels.length ? gudangLabels : ['Kosong'],
+      values: gudangValues.length ? gudangValues : [0],
+      unit: 'qty',
+      seriesName: 'Saldo',
+    },
+  }
+
+  const chart = chartByRole[input.role]
 
   return {
     title: meta.title,
     description: meta.description,
     metrics: metricsByRole[input.role],
     chartTitle: meta.chartTitle,
-    chartUnit: input.role === 'produksi' ? '%' : 'jt Rp',
+    chartUnit: chart.unit,
     chartSeries: [
       {
-        name:
-          input.role === 'produksi'
-            ? 'Rendemen'
-            : input.role === 'admin'
-              ? 'jt Rp'
-              : 'Nilai',
+        name: chart.seriesName,
         color: '#1B6B4A',
-        values:
-          input.role === 'admin'
-            ? chartValues.slice(0, 6)
-            : chartValues.slice(0, 7),
+        values: chart.values,
       },
     ],
-    chartLabels:
-      input.role === 'admin'
-        ? [...adminChartLabels]
-        : input.role === 'produksi'
-          ? chartValues.slice(0, 7).map((_, i) => `B${i + 1}`)
-          : ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'],
-    activities:
-      activities.length > 0
-        ? activities
-        : [
-            {
-              date: '—',
-              type: 'sistem',
-              reference: '—',
-              amount: '—',
-              status: 'draft',
-              actor: '—',
-            },
-          ],
+    chartLabels: chart.labels,
+    activities: activities,
     stockTitle: 'Cuplikan stok',
     stockRows:
       stockRows.length > 0

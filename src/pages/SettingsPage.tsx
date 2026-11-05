@@ -14,7 +14,7 @@ import {
   type ThemeAccent,
   type ThemeMode,
 } from '@/features/settings/theme'
-import { ROLE_LABELS, type UserRole } from '@/types/auth'
+import { ROLE_LABELS } from '@/types/auth'
 
 type SettingsTab =
   | 'profil'
@@ -551,7 +551,7 @@ export function SettingsPage() {
                 {profile.name || user?.name}
               </h2>
               <StatusPill
-                label={ROLE_LABELS[(user?.role ?? 'admin') as UserRole]}
+                label={user ? ROLE_LABELS[user.role] : ','}
                 tone="good"
               />
             </div>

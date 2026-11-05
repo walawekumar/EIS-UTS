@@ -219,28 +219,24 @@ export function LaporanPage() {
         value: idr(sell),
         delta: `${orders.filter((o) => o.stage === 'dikirim').length} order`,
         positive: true,
-        spark: [2, 3, 4, 5, 5, 6, 7],
       },
       {
         label: 'Pembelian diterima',
         value: idr(buy),
         delta: 'netto × harga efektif',
         positive: true,
-        spark: [3, 3, 4, 4, 5, 5, 6],
       },
       {
         label: 'Laba kotor kasar',
         value: idr(sell - buy),
         delta: 'jual − beli',
         positive: sell >= buy,
-        spark: [1, 2, 2, 3, 3, 4, 4],
       },
       {
         label: 'Saldo kas',
         value: idr(cashBal),
         delta: `Biaya posted ${idr(expensePosted)}`,
         positive: cashBal >= 0,
-        spark: [5, 5, 6, 6, 7, 7, 8],
       },
     ],
     [sell, buy, cashBal, expensePosted, orders],
@@ -501,20 +497,20 @@ export function LaporanPage() {
                               <>
                                 <p className="font-medium text-ink">{purchase.id}</p>
                                 <p className="text-[11px] text-muted">
-                                  {getSupplier(purchase.supplierId)?.name ?? '—'}
+                                  {getSupplier(purchase.supplierId)?.name ?? ','}
                                 </p>
                               </>
                             ) : (
-                              '—'
+                              ','
                             )}
                           </FinanceTd>
                           <FinanceTd mono>
-                            {act != null ? `${act.toFixed(1)}%` : '—'}
+                            {act != null ? `${act.toFixed(1)}%` : ','}
                           </FinanceTd>
                           <FinanceTd mono>
                             {row.costPerKgBeras > 0
                               ? formatRupiah(row.costPerKgBeras)
-                              : '—'}
+                              : ','}
                           </FinanceTd>
                           <FinanceTd mono>{formatRupiah(row.grainValue)}</FinanceTd>
                           <FinanceTd mono>{formatRupiah(row.allocatedOps)}</FinanceTd>
@@ -552,8 +548,8 @@ export function LaporanPage() {
                       <FinanceTr key={acc.id}>
                         <FinanceTd mono>{acc.code}</FinanceTd>
                         <FinanceTd>{acc.name}</FinanceTd>
-                        <FinanceTd mono>{debit > 0 ? idr(debit) : '—'}</FinanceTd>
-                        <FinanceTd mono>{credit > 0 ? idr(credit) : '—'}</FinanceTd>
+                        <FinanceTd mono>{debit > 0 ? idr(debit) : ','}</FinanceTd>
+                        <FinanceTd mono>{credit > 0 ? idr(credit) : ','}</FinanceTd>
                       </FinanceTr>
                     ))}
                     <FinanceTr>
@@ -666,7 +662,7 @@ export function LaporanPage() {
                   </FinanceThead>
                   <tbody>
                     {balanceSheet.assets.length === 0 ? (
-                      <FinanceEmptyRow colSpan={2} message="—" />
+                      <FinanceEmptyRow colSpan={2} message=',' />
                     ) : (
                       balanceSheet.assets.map(({ acc, amount }) => (
                         <FinanceTr key={acc.id}>
@@ -699,7 +695,7 @@ export function LaporanPage() {
                     </FinanceThead>
                     <tbody>
                       {balanceSheet.liabilities.length === 0 ? (
-                        <FinanceEmptyRow colSpan={2} message="—" />
+                        <FinanceEmptyRow colSpan={2} message=',' />
                       ) : (
                         balanceSheet.liabilities.map(({ acc, amount }) => (
                           <FinanceTr key={acc.id}>

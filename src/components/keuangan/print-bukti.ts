@@ -244,6 +244,6 @@ function escapeHtml(value: string) {
 }
 
 export function moneyOrDash(value: number | undefined) {
-  if (value === undefined) return '—'
+  if (value === undefined) return ','
   return formatIdr(value)
 }

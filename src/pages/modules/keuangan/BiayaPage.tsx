@@ -243,7 +243,7 @@ export function BiayaPage() {
         { label: 'Keterangan', value: row.description },
         { label: 'Status', value: EXPENSE_STATUS_LABEL[row.status] },
         { label: 'Dicatat oleh', value: row.actor },
-        { label: 'Struk', value: row.receiptName ?? '—' },
+        { label: 'Struk', value: row.receiptName ?? ',' },
       ],
       { subtitle: row.description, module: 'Keuangan · Biaya' },
     )
@@ -355,7 +355,11 @@ export function BiayaPage() {
             {rows.length === 0 ? (
               <FinanceEmptyRow
                 colSpan={9}
-                message="Tidak ada biaya yang cocok."
+                message={
+                  expenses.length === 0
+                    ? 'Belum ada biaya. Catat pengeluaran operasional pertama.'
+                    : 'Tidak ada biaya yang cocok dengan filter.'
+                }
               />
             ) : (
               rows.map((row, index) => (

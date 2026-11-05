@@ -89,28 +89,24 @@ function buildStats(rows: Row[]): MetricCardData[] {
       value: String(rows.length),
       delta: `${rows.length} dok`,
       positive: true,
-      spark: [4, 5, 5, 6, 6, 7, 7],
     },
     {
       label: 'Belum lunas',
       value: String(open.length),
       delta: open.length > 0 ? 'Perlu bayar' : 'Kosong',
       positive: open.length === 0,
-      spark: [3, 3, 4, 3, 2, 3, 2],
     },
     {
       label: 'Terlambat',
       value: String(overdue.length),
       delta: overdue.length > 0 ? `+${overdue.length}` : '0',
       positive: overdue.length === 0,
-      spark: [1, 1, 2, 1, 2, 1, 1],
     },
     {
       label: 'Sisa utang',
       value: formatRupiahShort(outstanding),
       delta: paid > 0 ? `terbayar ${formatRupiahShort(paid)}` : '0',
       positive: outstanding === 0,
-      spark: [50, 48, 52, 55, 53, 50, 48],
     },
   ]
 }
@@ -355,7 +351,7 @@ export function PembayaranView({
                     {getSupplier(p.supplierId)?.name}
                   </FinanceTd>
                   <FinanceTd mono muted>
-                    {p.dueDate ? formatDate(p.dueDate) : '—'}
+                    {p.dueDate ? formatDate(p.dueDate) : ','}
                   </FinanceTd>
                   <FinanceTd>
                     {s.payment ? (
@@ -376,7 +372,7 @@ export function PembayaranView({
                       s.payment === 'terlambat' ? 'text-red-700' : '',
                     ].join(' ')}
                   >
-                    {s.outstanding === 0 ? '—' : formatRupiah(s.outstanding)}
+                    {s.outstanding === 0 ? ',' : formatRupiah(s.outstanding)}
                   </FinanceTd>
                   <FinanceTd align="center">
                     <div className="inline-flex items-center justify-center gap-0.5">
@@ -539,17 +535,17 @@ function printPayable(p: Purchase, today: string) {
         label: 'Sisa utang',
         value: s.outstanding === 0 ? 'Lunas' : formatRupiah(s.outstanding),
       },
-      { label: 'Pemasok', value: supplier?.name ?? '—' },
+      { label: 'Pemasok', value: supplier?.name ?? ',' },
       { label: 'No. dokumen', value: p.id },
       {
         label: 'Jatuh tempo',
-        value: p.dueDate ? formatDate(p.dueDate) : '—',
+        value: p.dueDate ? formatDate(p.dueDate) : ',',
       },
       { label: 'Total', value: formatRupiah(s.total) },
       { label: 'Terbayar', value: formatRupiah(s.paid) },
       s.payment
         ? { label: 'Status', value: PAYMENT_STATUS_LABEL[s.payment] }
-        : { label: 'Status', value: '—' },
+        : { label: 'Status', value: ',' },
     ],
     { subtitle: supplier?.name, module: 'Pembelian · Pembayaran' },
   )
@@ -578,10 +574,10 @@ function PayableDetailDrawer({
       open
       onClose={onClose}
       title={p.id}
-      subtitle={`${supplier?.name ?? '—'} · jatuh tempo ${
+      subtitle={`${supplier?.name ?? ','} · jatuh tempo ${
         p.dueDate
           ? formatDate(p.dueDate, { day: 'numeric', month: 'long', year: 'numeric' })
-          : '—'
+          : ','
       }`}
       badge={
         s.payment ? (
@@ -636,7 +632,7 @@ function PayableDetailDrawer({
                     month: 'long',
                     year: 'numeric',
                   })
-                : '—',
+                : ',',
             ],
             p.weighing?.receiptName
               ? ['Bukti timbang', p.weighing.receiptName]

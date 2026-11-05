@@ -18,4 +18,6 @@ export type InboxItem = {
   createdAt: string
   /** Roles that can act on this item */
   actorRoles: UserRole[]
+  /** Extra facts shown in inbox detail panel */
+  details: string[]
 }

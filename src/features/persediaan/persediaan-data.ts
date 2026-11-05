@@ -186,7 +186,7 @@ export const MOVEMENTS: MovementRow[] = [
     type: 'in',
     sku: 'GBH-IR64',
     productName: 'Gabah IR64',
-    fromLocation: '—',
+    fromLocation: '',
     toLocation: 'Silo 1',
     qty: 2_500,
     unit: 'kg',
@@ -201,7 +201,7 @@ export const MOVEMENTS: MovementRow[] = [
     sku: 'GBH-IR64',
     productName: 'Gabah IR64',
     fromLocation: 'Silo 1',
-    toLocation: '—',
+    toLocation: '',
     qty: 1_800,
     unit: 'kg',
     note: 'Ke batch BAT-0190',
@@ -229,7 +229,7 @@ export const MOVEMENTS: MovementRow[] = [
     sku: 'BRS-MED',
     productName: 'Beras Medium',
     fromLocation: 'Gudang B',
-    toLocation: '—',
+    toLocation: '',
     qty: 500,
     unit: 'kg',
     note: 'Pengiriman DO-0876',
@@ -242,7 +242,7 @@ export const MOVEMENTS: MovementRow[] = [
     type: 'in',
     sku: 'MNR-01',
     productName: 'Menir',
-    fromLocation: '—',
+    fromLocation: '',
     toLocation: 'Gudang B',
     qty: 180,
     unit: 'kg',
@@ -296,10 +296,6 @@ export const CORRECTIONS: CorrectionRow[] = [
   },
 ]
 
-function spark(seed: number[]): number[] {
-  return seed
-}
-
 export function buildSaldoStats(rows: StockRow[]): MetricCardData[] {
   const totalSku = new Set(rows.map((r) => r.sku)).size
   const low = rows.filter(isLowStock)
@@ -314,28 +310,24 @@ export function buildSaldoStats(rows: StockRow[]): MetricCardData[] {
       value: String(totalSku),
       delta: `+${rows.length} baris`,
       positive: true,
-      spark: spark([4, 5, 5, 6, 6, 7, totalSku]),
     },
     {
       label: 'Stok (kg)',
       value: formatQty(totalKg, 'kg').replace(' kg', ''),
       delta: '+2,4%',
       positive: true,
-      spark: spark([60, 62, 65, 68, 70, 72, 75]),
     },
     {
       label: 'Stok rendah',
       value: String(low.length),
       delta: low.length > 0 ? `+${low.length}` : '0',
       positive: low.length === 0,
-      spark: spark([3, 2, 3, 2, 1, 2, low.length || 1]),
     },
     {
       label: 'Lokasi',
       value: String(locations),
       delta: `${LOCATIONS.length} gudang`,
       positive: true,
-      spark: spark([2, 3, 3, 4, 4, 4, locations]),
     },
   ]
 }
@@ -350,28 +342,24 @@ export function buildMutasiStats(rows: MovementRow[]): MetricCardData[] {
       value: String(rows.length),
       delta: '+5',
       positive: true,
-      spark: spark([3, 4, 4, 5, 6, 5, rows.length]),
     },
     {
       label: 'Masuk',
       value: String(masuk.length),
       delta: `+${masuk.length}`,
       positive: true,
-      spark: spark([1, 2, 1, 2, 3, 2, masuk.length || 1]),
     },
     {
       label: 'Keluar',
       value: String(keluar.length),
       delta: `+${keluar.length}`,
       positive: keluar.length === 0,
-      spark: spark([2, 2, 3, 2, 2, 3, keluar.length || 1]),
     },
     {
       label: 'Transfer',
       value: String(transfer.length),
       delta: `+${transfer.length}`,
       positive: true,
-      spark: spark([0, 1, 1, 1, 2, 1, transfer.length || 1]),
     },
   ]
 }
@@ -389,28 +377,24 @@ export function buildKoreksiStats(rows: CorrectionRow[]): MetricCardData[] {
       value: String(rows.length),
       delta: `+${rows.length}`,
       positive: true,
-      spark: spark([1, 1, 2, 2, 3, 2, rows.length]),
     },
     {
       label: 'Posted',
       value: String(posted.length),
       delta: `+${posted.length}`,
       positive: true,
-      spark: spark([1, 1, 1, 2, 2, 2, posted.length || 1]),
     },
     {
       label: 'Void',
       value: String(voids.length),
       delta: voids.length > 0 ? `+${voids.length}` : '0',
       positive: voids.length === 0,
-      spark: spark([1, 0, 1, 0, 0, 1, voids.length || 1]),
     },
     {
       label: 'Δ qty posted',
       value: formatQty(deltaAbs).replace(/ kg$/, ''),
       delta: 'abs',
       positive: true,
-      spark: spark([40, 50, 45, 60, 55, 70, 65]),
     },
   ]
 }

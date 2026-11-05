@@ -85,30 +85,26 @@ function buildStats(rows: Row[]): MetricCardData[] {
     {
       label: 'Total tagihan',
       value: String(rows.length),
-      delta: `${rows.length} dok`,
+      delta: rows.length ? `${rows.length} dok` : 'Kosong',
       positive: true,
-      spark: [4, 5, 5, 6, 6, 7, 7],
     },
     {
       label: 'Belum lunas',
       value: String(open.length),
       delta: open.length > 0 ? 'Perlu bayar' : 'Kosong',
       positive: open.length === 0,
-      spark: [3, 3, 4, 3, 2, 3, 2],
     },
     {
       label: 'Terlambat',
       value: String(overdue.length),
-      delta: overdue.length > 0 ? `+${overdue.length}` : '0',
+      delta: overdue.length > 0 ? `+${overdue.length}` : 'Kosong',
       positive: overdue.length === 0,
-      spark: [1, 1, 2, 1, 2, 1, 1],
     },
     {
       label: 'Sisa piutang',
       value: formatRupiahShort(outstanding),
-      delta: paid > 0 ? `terbayar ${formatRupiahShort(paid)}` : '0',
+      delta: paid > 0 ? `terbayar ${formatRupiahShort(paid)}` : 'Kosong',
       positive: outstanding === 0,
-      spark: [50, 48, 52, 55, 53, 50, 48],
     },
   ]
 }
@@ -252,7 +248,7 @@ export function TagihanView({ orders, selectedId, onSelect, onPay }: TagihanView
           <div>
             <h2 className="text-[14px] font-semibold text-ink">Tagihan pelanggan</h2>
             <p className="mt-0.5 text-[12px] text-muted">
-              Piutang muncul setelah pengiriman — catat pembayaran di sini
+              Piutang muncul setelah pengiriman, catat pembayaran di sini
             </p>
           </div>
           <FinanceToast message={toast} />
@@ -342,7 +338,7 @@ export function TagihanView({ orders, selectedId, onSelect, onPay }: TagihanView
                     {getCustomer(o.customerId)?.name}
                   </FinanceTd>
                   <FinanceTd mono muted>
-                    {o.dueDate ? formatDate(o.dueDate) : '—'}
+                    {o.dueDate ? formatDate(o.dueDate) : ','}
                   </FinanceTd>
                   <FinanceTd>
                     {s.payment ? (
@@ -363,7 +359,7 @@ export function TagihanView({ orders, selectedId, onSelect, onPay }: TagihanView
                       s.payment === 'terlambat' ? 'text-red-700' : '',
                     ].join(' ')}
                   >
-                    {s.outstanding === 0 ? '—' : formatRupiah(s.outstanding)}
+                    {s.outstanding === 0 ? ',' : formatRupiah(s.outstanding)}
                   </FinanceTd>
                   <FinanceTd align="center">
                     <div className="inline-flex items-center justify-center gap-0.5">
@@ -525,17 +521,17 @@ function printInvoice(o: SaleOrder, today: string) {
         label: 'Sisa piutang',
         value: s.outstanding === 0 ? 'Lunas' : formatRupiah(s.outstanding),
       },
-      { label: 'Pelanggan', value: customer?.name ?? '—' },
+      { label: 'Pelanggan', value: customer?.name ?? ',' },
       { label: 'No. order', value: o.id },
       {
         label: 'Jatuh tempo',
-        value: o.dueDate ? formatDate(o.dueDate) : '—',
+        value: o.dueDate ? formatDate(o.dueDate) : ',',
       },
       { label: 'Total', value: formatRupiah(s.total) },
       { label: 'Terbayar', value: formatRupiah(s.paid) },
       s.payment
         ? { label: 'Status', value: PAYMENT_STATUS_LABEL[s.payment] }
-        : { label: 'Status', value: '—' },
+        : { label: 'Status', value: ',' },
     ],
     { subtitle: customer?.name, module: 'Penjualan · Tagihan' },
   )
@@ -564,10 +560,10 @@ function InvoiceDetailDrawer({
       open
       onClose={onClose}
       title={o.id}
-      subtitle={`${customer?.name ?? '—'} · jatuh tempo ${
+      subtitle={`${customer?.name ?? ','} · jatuh tempo ${
         o.dueDate
           ? formatDate(o.dueDate, { day: 'numeric', month: 'long', year: 'numeric' })
-          : '—'
+          : ','
       }`}
       badge={
         s.payment ? (
@@ -623,7 +619,7 @@ function InvoiceDetailDrawer({
                     month: 'long',
                     year: 'numeric',
                   })
-                : '—',
+                : ',',
             ],
             o.delivery?.settlement
               ? [

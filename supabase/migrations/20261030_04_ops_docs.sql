@@ -1,5 +1,5 @@
 -- Document-per-row for pembelian / penjualan / produksi.
--- Depends on auth_can_write_module() from 20261030_ops_snapshots.sql.
+-- Depends on auth_can_write_module() from 20261030_02_ops_snapshots.sql.
 
 create table if not exists public.ops_docs (
   module text not null,

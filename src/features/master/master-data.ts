@@ -146,7 +146,7 @@ export function normalizePartner(
     name: raw.name,
     legalName: raw.legalName,
     group: raw.group,
-    area: raw.area ?? '—',
+    area: raw.area ?? '',
     postalCode: raw.postalCode,
     phone: raw.phone ?? '',
     email: raw.email ?? '',
@@ -574,21 +574,18 @@ export function buildMitraStats(partners: MasterPartner[]) {
       value: String(suppliers.filter((p) => p.active).length),
       delta: `${suppliers.length} total`,
       positive: true,
-      spark: [4, 5, 5, 6, 5, 6, 6],
     },
     {
       label: 'Pelanggan aktif',
       value: String(customers.filter((p) => p.active).length),
       delta: `${customers.length} total`,
       positive: true,
-      spark: [3, 4, 4, 5, 5, 5, 6],
     },
     {
       label: 'Nonaktif',
       value: String(partners.filter((p) => !p.active).length),
       delta: 'ditandai arsip',
       positive: true,
-      spark: [1, 1, 0, 1, 2, 1, 1],
     },
   ]
 }
@@ -600,14 +597,12 @@ export function buildProdukStats(products: MasterProduct[]) {
       value: String(products.filter((p) => p.active).length),
       delta: `${products.length} SKU`,
       positive: true,
-      spark: [5, 6, 6, 7, 7, 7, 8],
     },
     {
       label: 'Gabah',
       value: String(products.filter((p) => p.category === 'gabah').length),
       delta: 'kategori',
       positive: true,
-      spark: [2, 2, 2, 2, 2, 2, 2],
     },
     {
       label: 'Beras & sampingan',
@@ -617,7 +612,6 @@ export function buildProdukStats(products: MasterProduct[]) {
       ),
       delta: 'siap jual',
       positive: true,
-      spark: [3, 4, 4, 5, 5, 5, 5],
     },
   ]
 }
@@ -629,21 +623,18 @@ export function buildPenggunaStats(users: MasterUser[]) {
       value: String(users.filter((u) => u.active).length),
       delta: `${users.length} akun`,
       positive: true,
-      spark: [4, 5, 5, 6, 6, 6, 6],
     },
     {
       label: 'Peran admin',
       value: String(users.filter((u) => u.role === 'admin').length),
       delta: 'akses penuh',
       positive: true,
-      spark: [1, 1, 1, 1, 1, 1, 1],
     },
     {
       label: 'Nonaktif',
       value: String(users.filter((u) => !u.active).length),
       delta: 'ditangguhkan',
       positive: true,
-      spark: [0, 0, 1, 0, 0, 1, 0],
     },
   ]
 }

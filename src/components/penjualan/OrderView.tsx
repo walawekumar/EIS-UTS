@@ -54,10 +54,6 @@ const STAGE_TONE: Record<OrderStage, 'neutral' | 'good'> = {
   dikirim: 'good',
 }
 
-function spark(values: number[]) {
-  return values
-}
-
 function buildStats(orders: SaleOrder[]): MetricCardData[] {
   const open = orders.filter((o) => o.stage === 'dibuat')
   const shipped = orders.filter((o) => o.stage === 'dikirim')
@@ -66,30 +62,26 @@ function buildStats(orders: SaleOrder[]): MetricCardData[] {
     {
       label: 'Total order',
       value: String(orders.length),
-      delta: `${orders.length} dok`,
+      delta: orders.length ? `${orders.length} dok` : 'Kosong',
       positive: true,
-      spark: spark([4, 5, 5, 6, 6, 7, 7]),
     },
     {
       label: 'Belum dikirim',
       value: String(open.length),
       delta: open.length > 0 ? 'Siap kirim' : 'Kosong',
       positive: open.length === 0,
-      spark: spark([3, 2, 3, 2, 2, 3, 2]),
     },
     {
       label: 'Sudah dikirim',
       value: String(shipped.length),
-      delta: '+ok',
+      delta: shipped.length ? `${shipped.length} dok` : 'Kosong',
       positive: true,
-      spark: spark([2, 3, 3, 4, 4, 5, 5]),
     },
     {
       label: 'Nilai terbuka',
       value: formatRupiahShort(openValue),
-      delta: open.length > 0 ? `${open.length} order` : '0',
+      delta: open.length > 0 ? `${open.length} order` : 'Kosong',
       positive: openValue === 0,
-      spark: spark([40, 42, 38, 45, 48, 50, 47]),
     },
   ]
 }
@@ -369,7 +361,7 @@ function printOrder(o: SaleOrder) {
     `Bukti order ${o.id}`,
     [
       { label: 'Nilai order', value: formatRupiah(s.total) },
-      { label: 'Pelanggan', value: customer?.name ?? '—' },
+      { label: 'Pelanggan', value: customer?.name ?? ',' },
       { label: 'No. order', value: o.id },
       { label: 'Tanggal', value: formatDate(o.date) },
       { label: 'Status', value: STAGE_LABEL[o.stage] },
@@ -377,7 +369,7 @@ function printOrder(o: SaleOrder) {
       { label: 'Jumlah', value: formatQty(o.qty, o.unit) },
       s.payment
         ? { label: 'Pembayaran', value: PAYMENT_STATUS_LABEL[s.payment] }
-        : { label: 'Pembayaran', value: '—' },
+        : { label: 'Pembayaran', value: ',' },
     ],
     { subtitle: customer?.name, module: 'Penjualan' },
   )
@@ -429,7 +421,7 @@ function OrderDetailDrawer({
       open
       onClose={onClose}
       title={o.id}
-      subtitle={`${customer?.name ?? '—'} · ${formatDate(o.date, {
+      subtitle={`${customer?.name ?? ','} · ${formatDate(o.date, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',

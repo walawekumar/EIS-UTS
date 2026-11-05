@@ -31,6 +31,7 @@ export type PayrollRun = {
   approvals: ApprovalStamp[]
   transferProof?: ProofAttachment | string
   mutationNote?: string
+  rejectReason?: string
 }
 
 export const PAYROLL_STATUS_LABEL: Record<PayrollStatus, string> = {

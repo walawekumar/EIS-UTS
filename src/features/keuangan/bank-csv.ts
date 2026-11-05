@@ -175,7 +175,7 @@ export function parseBankCsv(text: string): {
     const date = parseDateCell(cells[map.date] ?? '')
     const amount = signedAmountFromRow(cells, map)
     if (date == null || amount == null || amount === 0) continue
-    const memo = (cells[map.memo] ?? '').trim() || '—'
+    const memo = (cells[map.memo] ?? '').trim() || ''
     const bankRef =
       map.ref != null ? (cells[map.ref] ?? '').trim() || undefined : undefined
     lines.push({ date, memo, amount, bankRef })

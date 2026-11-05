@@ -1,9 +1,13 @@
 import type { InboxItem } from '@/features/inbox/inbox-data'
 import type { UnlockRequest } from '@/features/keuangan/period-data'
 import type { PeriodLock } from '@/features/keuangan/period-data'
-import type { PayrollRun } from '@/features/payroll/payroll-data'
-import type { Purchase, PurchaseReturn } from '@/features/pembelian/pembelian-data'
+import {
+  summarize,
+  type Purchase,
+  type PurchaseReturn,
+} from '@/features/pembelian/pembelian-data'
 import type { SaleReturn } from '@/features/penjualan/penjualan-data'
+import { runTotal, type PayrollRun } from '@/features/payroll/payroll-data'
 import type { ProductionBatch } from '@/features/produksi/produksi-data'
 import type { UserRole } from '@/types/auth'
 
@@ -22,6 +26,10 @@ function visibleTo(role: UserRole, actors: UserRole[]): boolean {
   return role === 'admin' || actors.includes(role)
 }
 
+function dokHref(path: string, id: string): string {
+  return `${path}?dok=${encodeURIComponent(id)}`
+}
+
 export function buildInbox(src: InboxSources): InboxItem[] {
   const items: InboxItem[] = []
 
@@ -29,15 +37,21 @@ export function buildInbox(src: InboxSources): InboxItem[] {
     if (r.stage !== 'diajukan') continue
     const actors: UserRole[] = ['keuangan', 'admin']
     if (!visibleTo(src.role, actors)) continue
+    const qty = r.lines.reduce((s, l) => s + l.qty, 0)
     items.push({
       id: `sr:${r.id}`,
       kind: 'sale_return',
       title: r.id,
       subtitle: `Retur jual · ${r.orderId}`,
       statusLabel: 'Diajukan',
-      href: '/app/penjualan/retur',
+      href: dokHref('/app/penjualan/retur', r.id),
       createdAt: r.createdAt,
       actorRoles: actors,
+      details: [
+        `Order: ${r.orderId}`,
+        `Alasan: ${r.reason || ','}`,
+        `Baris: ${r.lines.length} · qty ${qty}`,
+      ],
     })
   }
 
@@ -45,15 +59,22 @@ export function buildInbox(src: InboxSources): InboxItem[] {
     if (r.stage !== 'diajukan') continue
     const actors: UserRole[] = ['keuangan', 'admin']
     if (!visibleTo(src.role, actors)) continue
+    const qty = r.lines.reduce((s, l) => s + l.qty, 0)
     items.push({
       id: `pr:${r.id}`,
       kind: 'purchase_return',
       title: r.id,
       subtitle: `Retur beli · ${r.purchaseId}`,
       statusLabel: 'Diajukan',
-      href: '/app/pembelian/retur',
+      href: dokHref('/app/pembelian/retur', r.id),
       createdAt: r.createdAt,
       actorRoles: actors,
+      details: [
+        `Pembelian: ${r.purchaseId}`,
+        r.lotId ? `Lot: ${r.lotId}` : '',
+        `Alasan: ${r.reason || ','}`,
+        `Baris: ${r.lines.length} · qty ${qty}`,
+      ].filter(Boolean),
     })
   }
 
@@ -61,15 +82,23 @@ export function buildInbox(src: InboxSources): InboxItem[] {
     if (p.stage !== 'diajukan' || p.voidedAt) continue
     const actors: UserRole[] = ['keuangan', 'admin']
     if (!visibleTo(src.role, actors)) continue
+    const summary = summarize(p)
     items.push({
       id: `po:${p.id}`,
       kind: 'purchase_budget',
       title: p.id,
       subtitle: 'Approve anggaran pembelian',
       statusLabel: 'Menunggu approve',
-      href: '/app/pembelian',
+      href: dokHref('/app/pembelian', p.id),
       createdAt: p.date,
       actorRoles: actors,
+      details: [
+        `Pemasok: ${p.supplierId}`,
+        `Tanggal: ${p.date}`,
+        `Estimasi: ${summary.estimatedValue.toLocaleString('id-ID')}`,
+        p.vehicle ? `Kendaraan: ${p.vehicle}` : '',
+        p.note ? `Catatan: ${p.note}` : '',
+      ].filter(Boolean),
     })
   }
 
@@ -83,9 +112,15 @@ export function buildInbox(src: InboxSources): InboxItem[] {
       title: b.id,
       subtitle: `Batch giling · ${b.inputName}`,
       statusLabel: 'Menunggu approve',
-      href: '/app/produksi',
+      href: dokHref('/app/produksi', b.id),
       createdAt: b.submittedAt ?? b.date,
       actorRoles: actors,
+      details: [
+        `Input: ${b.inputName}`,
+        `Qty input: ${b.inputQty}`,
+        `Tanggal: ${b.date}`,
+        b.note ? `Catatan: ${b.note}` : '',
+      ].filter(Boolean),
     })
   }
 
@@ -99,9 +134,15 @@ export function buildInbox(src: InboxSources): InboxItem[] {
       title: run.id,
       subtitle: `Payroll · ${run.period}`,
       statusLabel: 'Menunggu approve',
-      href: '/app/keuangan/payroll',
+      href: dokHref('/app/keuangan/payroll', run.id),
       createdAt: run.createdAt,
       actorRoles: actors,
+      details: [
+        `Periode: ${run.period}`,
+        `Karyawan: ${run.lines.length}`,
+        `Total bersih: ${runTotal(run).toLocaleString('id-ID')}`,
+        run.note ? `Catatan: ${run.note}` : '',
+      ].filter(Boolean),
     })
   }
 
@@ -125,6 +166,12 @@ export function buildInbox(src: InboxSources): InboxItem[] {
       'admin',
       ...(req.requiredRoles as UserRole[]),
     ]
+    const approved = req.requiredRoles
+      .map((role) => {
+        const stamp = req.approvals.find((a) => a.role === role)
+        return stamp ? `${role}: ✓ ${stamp.by}` : `${role}: menunggu`
+      })
+      .join(' · ')
     items.push({
       id: `unlock:${req.id}`,
       kind: 'period_unlock',
@@ -135,9 +182,20 @@ export function buildInbox(src: InboxSources): InboxItem[] {
         : `Unlock ${req.id}`,
       subtitle: req.reason,
       statusLabel: 'Menunggu unlock',
-      href: '/app/keuangan/periode',
+      href: dokHref('/app/keuangan/periode', req.id),
       createdAt: req.createdAt,
       actorRoles: actors,
+      details: [
+        lock
+          ? `Periode: ${lock.startDate} – ${lock.endDate}`
+          : `Lock: ${req.periodLockId}`,
+        `Alasan: ${req.reason}`,
+        `Diminta oleh: ${req.createdBy}`,
+        `Persetujuan role: ${approved || ','}`,
+        req.adminApproval
+          ? `Admin: ✓ ${req.adminApproval.by}`
+          : 'Admin final: menunggu',
+      ],
     })
   }
 

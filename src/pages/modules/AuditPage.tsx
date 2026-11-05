@@ -121,7 +121,7 @@ export function AuditPage() {
                   </FinanceTd>
                   <FinanceTd>{row.entity}</FinanceTd>
                   <FinanceTd mono>{row.entityId}</FinanceTd>
-                  <FinanceTd>{row.note || '—'}</FinanceTd>
+                  <FinanceTd>{row.note || ','}</FinanceTd>
                 </FinanceTr>
               ))
             )}

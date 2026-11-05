@@ -103,28 +103,24 @@ function buildStats(purchases: Purchase[]): MetricCardData[] {
       value: String(purchases.length),
       delta: `${purchases.length} dok`,
       positive: true,
-      spark: [5, 6, 6, 7, 8, 8, 9],
     },
     {
       label: 'Belum ditimbang',
       value: String(waiting.length),
       delta: waiting.length > 0 ? 'Antre' : 'Kosong',
       positive: waiting.length === 0,
-      spark: [3, 3, 2, 3, 2, 2, 3],
     },
     {
       label: 'Menunggu konfirmasi',
       value: String(confirm.length),
       delta: confirm.length > 0 ? 'Perlu aksi' : '0',
       positive: confirm.length === 0,
-      spark: [1, 2, 1, 2, 2, 1, 2],
     },
     {
       label: 'Nilai terbuka',
       value: formatRupiahShort(openValue),
       delta: `${waiting.length + confirm.length} dok`,
       positive: openValue === 0,
-      spark: [40, 45, 42, 48, 50, 52, 49],
     },
   ]
 }
@@ -317,7 +313,18 @@ export function PencatatanView({
           </FinanceThead>
           <tbody>
             {rows.length === 0 ? (
-              <FinanceEmptyRow colSpan={8} message="Tidak ada catatan yang cocok." />
+              <FinanceEmptyRow
+                colSpan={8}
+                message={
+                  purchases.length === 0
+                    ? 'Belum ada dokumen pembelian. Mulai dengan mencatat pembelian gabah.'
+                    : 'Tidak ada catatan yang cocok dengan filter.'
+                }
+                actionLabel={
+                  purchases.length === 0 ? '+ Catat pembelian' : undefined
+                }
+                onAction={purchases.length === 0 ? onCreate : undefined}
+              />
             ) : (
               rows.map((p, index) => {
                 const s = summarize(p)
@@ -466,7 +473,7 @@ function printPurchase(p: Purchase) {
     `Bukti pembelian ${p.id}`,
     [
       { label: 'Nilai', value: formatRupiah(value) },
-      { label: 'Pemasok', value: supplier?.name ?? '—' },
+      { label: 'Pemasok', value: supplier?.name ?? ',' },
       { label: 'No. dokumen', value: p.id },
       { label: 'Tanggal', value: formatDate(p.date) },
       { label: 'Status', value: STAGE_LABEL[p.stage] },
@@ -485,7 +492,7 @@ function StoredProofPreview({
 }: {
   proof: NonNullable<Purchase['invoiceProof']>
 }) {
-  const name = proofLabel(proof) ?? '—'
+  const name = proofLabel(proof) ?? ','
   if (typeof proof !== 'string' && proof.previewUrl) {
     const isImage = proof.mime?.startsWith('image/')
     return (
@@ -605,7 +612,7 @@ function PurchaseDetailDrawer({
       open
       onClose={onClose}
       title={p.id}
-      subtitle={`${supplier?.name ?? '—'} · ${formatDate(p.date, {
+      subtitle={`${supplier?.name ?? ','} · ${formatDate(p.date, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',

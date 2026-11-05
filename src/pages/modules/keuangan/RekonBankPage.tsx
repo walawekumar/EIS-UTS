@@ -501,7 +501,7 @@ export function RekonBankPage() {
                     sessionLines.find((l) => l.id === manualLineId)?.amount ??
                       0,
                   )
-                : '—'}
+                : ','}
               ).
             </p>
           ) : null}

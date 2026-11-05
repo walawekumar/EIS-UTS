@@ -199,7 +199,7 @@ function postLegacyCompleteStock(
       productName: batch.inputName,
       unit: batch.inputUnit,
       qty: batch.inputQty,
-      fromLocation: '—',
+      fromLocation: '',
       toLocation: batch.fromLocation,
       note: `${signNote} ${batch.id} — kembalikan gabah`,
     })
@@ -233,7 +233,7 @@ function postStartWipStock(
       unit: batch.inputUnit,
       qty: batch.inputQty,
       fromLocation: WIP_LOCATION,
-      toLocation: '—',
+      toLocation: '',
       note: `${signNote} ${batch.id} — tarik dari WIP`,
     })
     addMovement({
@@ -242,7 +242,7 @@ function postStartWipStock(
       productName: batch.inputName,
       unit: batch.inputUnit,
       qty: batch.inputQty,
-      fromLocation: '—',
+      fromLocation: '',
       toLocation: batch.fromLocation,
       note: `${signNote} ${batch.id} — kembalikan gabah`,
     })
@@ -263,7 +263,7 @@ function postStartWipStock(
       productName: batch.inputName,
       unit: batch.inputUnit,
       qty: batch.inputQty,
-      fromLocation: '—',
+      fromLocation: '',
       toLocation: WIP_LOCATION,
       note: `Start ${batch.id} — gabah di WIP`,
     })
@@ -287,7 +287,7 @@ function postBatchOutputStock(
         unit: line.unit,
         qty: line.qty,
         fromLocation: batch.toLocation,
-        toLocation: '—',
+        toLocation: '',
         note: `${signNote} ${batch.id} — tarik ${line.productName}`,
       })
     } else {
@@ -319,7 +319,7 @@ function postCompleteWipStock(
       productName: batch.inputName,
       unit: batch.inputUnit,
       qty: batch.inputQty,
-      fromLocation: '—',
+      fromLocation: '',
       toLocation: WIP_LOCATION,
       note: `${signNote} ${batch.id} — kembalikan ke WIP`,
     })
@@ -331,7 +331,7 @@ function postCompleteWipStock(
       unit: batch.inputUnit,
       qty: batch.inputQty,
       fromLocation: WIP_LOCATION,
-      toLocation: '—',
+      toLocation: '',
       note: `Complete ${batch.id} — konsumsi WIP`,
     })
     postBatchOutputStock(batch, addMovement, false, WIP_LOCATION, signNote)
@@ -358,7 +358,7 @@ function postPackStock(
       productName: sourceName,
       unit: sourceUnit,
       qty: totalOut,
-      fromLocation: '—',
+      fromLocation: '',
       toLocation: fromLoc,
       note: `${sign} ${run.id} — kembalikan ${sourceName}`,
     })
@@ -371,7 +371,7 @@ function postPackStock(
         unit: line.unit,
         qty: line.qty,
         fromLocation: line.location,
-        toLocation: '—',
+        toLocation: '',
         note: `${sign} ${run.id} — tarik ${line.productName}`,
       })
     }

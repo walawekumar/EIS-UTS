@@ -238,14 +238,27 @@ export function ActorCell({ name }: { name: string }) {
 export function FinanceEmptyRow({
   colSpan,
   message,
+  actionLabel,
+  onAction,
 }: {
   colSpan: number
   message: string
+  actionLabel?: string
+  onAction?: () => void
 }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="py-10 text-center text-[13px] text-muted">
-        {message}
+      <td colSpan={colSpan} className="px-4 py-10 text-center">
+        <p className="text-[13px] text-muted">{message}</p>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-brand-800 px-4 text-[12px] font-semibold text-white transition hover:bg-brand-900"
+          >
+            {actionLabel}
+          </button>
+        ) : null}
       </td>
     </tr>
   )

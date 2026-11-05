@@ -58,7 +58,7 @@ type PersediaanStoreValue = {
   corrections: CorrectionRow[]
   cloudReady: boolean
   persistError: string | null
-  addMovement: (input: MovementInput) => void
+  addMovement: (input: MovementInput) => string | undefined
   addCorrection: (input: CorrectionInput) => string | undefined
   voidCorrection: (id: string) => string | undefined
 }
@@ -173,8 +173,10 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
         setCloudReady(true)
       } catch (e) {
         if (cancelled) return
-        setPersistError(mapSupabaseError(e))
-        setCloudReady(true)
+        setPersistError(
+          `${mapSupabaseError(e)} Persediaan belum dimuat — penyimpanan cloud dinonaktifkan.`,
+        )
+        setCloudReady(false)
       }
     })()
     return () => {
@@ -200,17 +202,23 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
   }, [stocks, movements, corrections, cloudReady, configured])
 
   const addMovement = useCallback(
-    (input: MovementInput) => {
+    (input: MovementInput): string | undefined => {
+      if (configured && !cloudReady) {
+        return 'Persediaan cloud belum siap. Muat ulang halaman setelah koneksi pulih.'
+      }
+      const locked = assertPeriodOpen(todayIsoDate())
+      if (locked) return locked
+
       setMovements((list) => {
         const entry: MovementRow = {
           id: `m-${Date.now()}`,
-          date: formatDateId(),
+          date: todayIsoDate(),
           reference: nextMovementRef(list),
           type: input.type,
           sku: input.sku,
           productName: input.productName,
-          fromLocation: input.fromLocation || '—',
-          toLocation: input.toLocation || '—',
+          fromLocation: input.fromLocation || '',
+          toLocation: input.toLocation || '',
           qty: input.qty,
           unit: input.unit,
           note: input.note,
@@ -265,18 +273,22 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
         }
         return next
       })
+      return undefined
     },
-    [actor],
+    [actor, configured, cloudReady],
   )
 
   const addCorrection = useCallback(
     (input: CorrectionInput): string | undefined => {
+      if (configured && !cloudReady) {
+        return 'Persediaan cloud belum siap. Muat ulang halaman setelah koneksi pulih.'
+      }
       const locked = assertPeriodOpen(todayIsoDate())
       if (locked) return locked
       setCorrections((list) => {
         const entry: CorrectionRow = {
           id: `k-${Date.now()}`,
-          date: formatDateId(),
+          date: todayIsoDate(),
           reference: nextCorrectionRef(list),
           sku: input.sku,
           productName: input.productName,
@@ -296,10 +308,13 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
       )
       return undefined
     },
-    [actor],
+    [actor, configured, cloudReady],
   )
 
   const voidCorrection = useCallback((id: string): string | undefined => {
+    if (configured && !cloudReady) {
+      return 'Persediaan cloud belum siap. Muat ulang halaman setelah koneksi pulih.'
+    }
     const locked = assertPeriodOpen(todayIsoDate())
     if (locked) return locked
     setCorrections((list) => {
@@ -315,7 +330,7 @@ export function PersediaanProvider({ children }: { children: ReactNode }) {
       )
     })
     return undefined
-  }, [])
+  }, [configured, cloudReady])
 
   const value = useMemo(
     () => ({

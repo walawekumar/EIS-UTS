@@ -188,7 +188,7 @@ export function UtangPage() {
         { label: 'Nilai utang', value: formatIdr(row.amount) },
         { label: 'Sudah dibayar', value: formatIdr(row.paid) },
         { label: 'Status', value: PAYABLE_STATUS_LABEL[row.status] },
-        { label: 'Struk', value: row.receiptName ?? '—' },
+        { label: 'Struk', value: row.receiptName ?? ',' },
       ],
       { subtitle: row.supplier, module: 'Keuangan · Utang' },
     )
@@ -288,7 +288,11 @@ export function UtangPage() {
             {rows.length === 0 ? (
               <FinanceEmptyRow
                 colSpan={8}
-                message="Tidak ada utang yang cocok."
+                message={
+                  payables.length === 0
+                    ? 'Belum ada utang. Muncul setelah pembelian diposting.'
+                    : 'Tidak ada utang yang cocok dengan filter.'
+                }
               />
             ) : (
               rows.map((row, index) => {

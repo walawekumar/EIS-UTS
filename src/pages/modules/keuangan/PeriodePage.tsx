@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useDokParam } from '@/hooks/useDokParam'
 import {
   FinanceModal,
   ModalActions,
@@ -131,6 +132,7 @@ export function PeriodePage() {
   const { cashEntries, expenses, journals } = useFinanceStore()
   const { runs: payrollRuns } = usePayrollStore()
 
+  const { dokId, clearDok } = useDokParam()
   const [toast, setToast] = useState<string | null>(null)
   const [lockKind, setLockKind] = useState<LockKindForm>('month')
   const [monthValue, setMonthValue] = useState('')
@@ -142,12 +144,27 @@ export function PeriodePage() {
   const [rejectTarget, setRejectTarget] = useState<UnlockRequest | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [detailLock, setDetailLock] = useState<PeriodLock | null>(null)
+  const focusUnlockId = dokId
 
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 2800)
     return () => window.clearTimeout(t)
   }, [toast])
+
+  useEffect(() => {
+    if (!dokId) return
+    const req = unlockRequests.find((r) => r.id === dokId)
+    if (req) {
+      const lock = locks.find((l) => l.id === req.periodLockId)
+      if (lock) setDetailLock(lock)
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`unlock-${dokId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
+  }, [dokId, unlockRequests, locks])
 
   const sortedLocks = useMemo(
     () =>
@@ -224,21 +241,21 @@ export function PeriodePage() {
     }
   }
 
-  function handleApproveRole(req: UnlockRequest) {
+  async function handleApproveRole(req: UnlockRequest) {
     if (!user) return
-    const err = approveUnlockRole(req.id, stampNow(user.role))
+    const err = await approveUnlockRole(req.id, stampNow(user.role))
     setToast(err ?? `Persetujuan ${ROLE_LABELS[user.role]} tercatat`)
   }
 
-  function handleApproveAdmin(req: UnlockRequest) {
+  async function handleApproveAdmin(req: UnlockRequest) {
     if (!user) return
-    const err = approveUnlockAdmin(req.id, stampNow('admin'))
+    const err = await approveUnlockAdmin(req.id, stampNow('admin'))
     setToast(err ?? 'Periode dibuka — kunci dinonaktifkan')
   }
 
-  function submitReject() {
+  async function submitReject() {
     if (!user || !rejectTarget) return
-    const err = rejectUnlock(rejectTarget.id, user.name, rejectReason)
+    const err = await rejectUnlock(rejectTarget.id, user.name, rejectReason)
     if (err) {
       setToast(err)
       return
@@ -481,7 +498,12 @@ export function PeriodePage() {
                 return (
                   <div
                     key={req.id}
-                    className="rounded-xl border border-line/80 bg-surface p-3"
+                    id={`unlock-${req.id}`}
+                    className={`rounded-xl border bg-surface p-3 ${
+                      focusUnlockId === req.id
+                        ? 'border-brand-600 ring-2 ring-brand-100'
+                        : 'border-line/80'
+                    }`}
                   >
                     <p className="text-[12px] font-medium text-ink">
                       {lock ? lockLabel(lock) : req.periodLockId}
@@ -617,7 +639,10 @@ export function PeriodePage() {
       {detailLock ? (
         <DetailDrawer
           open
-          onClose={() => setDetailLock(null)}
+          onClose={() => {
+            setDetailLock(null)
+            clearDok()
+          }}
           title="Detail kunci periode"
         >
           <DrawerSection label="Periode">

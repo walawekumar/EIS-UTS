@@ -287,11 +287,15 @@ export function canAccessPath(role: UserRole, path: string): boolean {
   if (path.startsWith('/app/settings')) return true
   if (path.startsWith('/app/dashboard')) return true
 
-  return NAV_GROUPS.some((group) =>
-    group.items.some(
-      (item) =>
-        item.roles.includes(role) &&
-        (path === item.path || path.startsWith(`${item.path}/`)),
-    ),
-  )
+  let best: { path: string; roles: readonly UserRole[] } | null = null
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (path === item.path || path.startsWith(`${item.path}/`)) {
+        if (!best || item.path.length > best.path.length) {
+          best = item
+        }
+      }
+    }
+  }
+  return best != null && best.roles.includes(role)
 }

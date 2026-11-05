@@ -42,14 +42,14 @@ export function DetailDrawer({
       <button
         type="button"
         aria-label="Tutup"
-        className="absolute inset-0 bg-ink/35 transition-opacity"
+        className="motion-backdrop absolute inset-0 bg-ink/35"
         onClick={onClose}
       />
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="detail-drawer-title"
-        className="detail-drawer-panel relative flex h-full w-full max-w-md flex-col bg-panel shadow-[-16px_0_48px_rgba(20,32,25,0.18)]"
+        className="motion-drawer relative flex h-full w-full max-w-md flex-col bg-panel shadow-[-16px_0_48px_rgba(20,32,25,0.18)]"
       >
         <header className="flex shrink-0 items-start gap-3 border-b border-line px-5 py-4">
           <div className="min-w-0 flex-1">
@@ -86,16 +86,6 @@ export function DetailDrawer({
           </footer>
         ) : null}
       </aside>
-
-      <style>{`
-        @keyframes detail-drawer-in {
-          from { transform: translateX(100%); opacity: 0.85; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        .detail-drawer-panel {
-          animation: detail-drawer-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
-        }
-      `}</style>
     </div>,
     document.body,
   )

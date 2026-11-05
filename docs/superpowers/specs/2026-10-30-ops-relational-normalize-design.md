@@ -143,11 +143,17 @@ Logout/unload: flush pending (sama AuthContext hari ini)
 
 ## Migrasi DB (urutan)
 
-1. `CREATE TABLE` + index + RLS untuk semua tabel target.
-2. `INSERT … SELECT` dari `ops_docs` dengan `jsonb` path per collection (termasuk unnest child arrays).
-3. Verifikasi: count per collection lama vs count tabel baru; spot-check id.
-4. `DROP TABLE ops_docs` (+ policies); drop `app_module_snapshots` jika masih ada.
-5. Deploy app yang memakai tabel baru **setelah** step 2–3 (atau feature-flag singkat: dual-read tidak diperlukan jika cutover satu deploy).
+File di `supabase/migrations/` (lexical):
+
+1. `20261030_01_master_rbac.sql` — profiles / helpers
+2. `20261030_02_ops_snapshots.sql` — `auth_can_write_module` (+ legacy snapshots table)
+3. `20261030_03_persediaan.sql`
+4. `20261030_04_ops_docs.sql` + `05_ops_docs_finance.sql` (staging JSONB jika masih dipakai copy)
+5. `20261030_06_ops_relational.sql` — `CREATE` + copy + RLS
+6. `20261105_07_period_unlock_role_rls.sql` — UPDATE unlock requests untuk role impact
+7. **`20261105_99_ops_relational_drop_legacy.sql` — MANUAL setelah verify**; drop `ops_docs` + `app_module_snapshots`
+
+Langkah verifikasi sebelum step 7: count per collection vs tabel baru; smoke CRUD; deploy frontend yang memakai tabel relational.
 
 Cutover: **big bang** sesuai pilihan user (semua modul sekaligus). Staging: jalankan migrasi di Supabase project, smoke login + CRUD satu dokumen per modul, baru merge.
 

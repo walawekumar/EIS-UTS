@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ALL_RELATIONAL_HYDRATE_SPECS } from '@/lib/ops-relational/types'
 import {
   flushPendingRelationalSaves,
@@ -11,24 +11,36 @@ import {
 } from '@/lib/cloud-persist-bus'
 
 /**
- * Hydrate all relational ops tables before feature providers mount.
- * Without Supabase env, renders children immediately (localStorage mode).
+ * Hydrate relational ops tables before feature providers mount.
+ * Mounted only under AuthenticatedProviders (after login).
  */
 export function OpsCloudGate({ children }: { children: ReactNode }) {
   const enabled = isRelationalEnabled()
   const [ready, setReady] = useState(!enabled)
+  const [loading, setLoading] = useState(enabled)
+  const [hydrateError, setHydrateError] = useState<string | null>(null)
   const [persistError, setPersistError] = useState<string | null>(null)
+
+  const runHydrate = useCallback(async () => {
+    setLoading(true)
+    setHydrateError(null)
+    const { failed } = await hydrateRelationalTables(ALL_RELATIONAL_HYDRATE_SPECS)
+    if (failed.length) {
+      setReady(false)
+      setHydrateError(
+        `Gagal memuat tabel cloud: ${failed.join(', ')}. Periksa koneksi / migrasi, lalu coba lagi.`,
+      )
+    } else {
+      setReady(true)
+      setHydrateError(null)
+    }
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     if (!enabled) return
-    let cancelled = false
-    void hydrateRelationalTables(ALL_RELATIONAL_HYDRATE_SPECS).finally(() => {
-      if (!cancelled) setReady(true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [enabled])
+    void runHydrate()
+  }, [enabled, runHydrate])
 
   useEffect(() => {
     if (!enabled) return
@@ -49,10 +61,31 @@ export function OpsCloudGate({ children }: { children: ReactNode }) {
     }
   }, [enabled])
 
-  if (!ready) {
+  if (enabled && (loading || !ready)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50 text-sm text-stone-600">
-        Memuat data cloud…
+      <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-stone-50 px-6 text-sm text-stone-600">
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 text-center">
+            <span
+              className="size-8 animate-spin rounded-full border-2 border-stone-300 border-t-stone-800"
+              aria-hidden
+            />
+            <p>Memuat data cloud…</p>
+          </div>
+        ) : (
+          <>
+            <p className="max-w-md text-center text-amber-950" role="alert">
+              {hydrateError ?? 'Data cloud belum siap.'}
+            </p>
+            <button
+              type="button"
+              className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white"
+              onClick={() => void runHydrate()}
+            >
+              Coba lagi
+            </button>
+          </>
+        )}
       </div>
     )
   }

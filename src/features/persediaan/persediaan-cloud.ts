@@ -54,10 +54,14 @@ async function syncCollection<T extends { id: string }>(
 
   const { data: existing, error: listErr } = await sb.from(table).select('id')
   if (listErr) throw listErr
+  const existingIds = (existing ?? []).map((r) => r.id as string)
+  if (rows.length === 0 && existingIds.length > 0) {
+    throw new Error(
+      `Menolak hapus semua baris ${table} — payload kosong sementara remote masih berisi data.`,
+    )
+  }
   const keep = new Set(rows.map((r) => r.id))
-  const drop = (existing ?? [])
-    .map((r) => r.id as string)
-    .filter((id) => !keep.has(id))
+  const drop = existingIds.filter((id) => !keep.has(id))
   if (drop.length) {
     const { error } = await sb.from(table).delete().in('id', drop)
     if (error) throw error

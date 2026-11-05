@@ -14,7 +14,7 @@ export function ModuleShell({ title, subtitle }: ModuleShellProps) {
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="mb-1 text-xs font-medium uppercase tracking-wider text-brand-700">
-              Modul E-Gabah
+              Portal aplikasi
             </p>
             <h1 className="text-2xl font-semibold text-ink">{title}</h1>
             <p className="mt-1 text-sm text-muted">{subtitle}</p>

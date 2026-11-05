@@ -287,7 +287,7 @@ export function MitraPage() {
         name,
         legalName: sanitizeText(form.legalName, 120).trim() || name,
         group: sanitizeText(form.group, 40).trim() || defaultGroup(kind),
-        area: sanitizeText(form.area, 80).trim() || '—',
+        area: sanitizeText(form.area, 80).trim() || '',
         postalCode: sanitizeDigits(form.postalCode, 5),
         phone: sanitizePhone(form.phone).trim(),
         email: sanitizeEmail(form.email).trim().toLowerCase(),
@@ -328,19 +328,19 @@ export function MitraPage() {
       [
         { label: 'Jenis', value: PARTNER_KIND_LABEL[row.kind] },
         { label: 'ID', value: row.id },
-        { label: 'Nama legal', value: row.legalName || '—' },
-        { label: 'Segmen', value: row.group || '—' },
+        { label: 'Nama legal', value: row.legalName || ',' },
+        { label: 'Segmen', value: row.group || ',' },
         { label: 'Area', value: row.area },
-        { label: 'Kode pos', value: row.postalCode || '—' },
-        { label: 'Telepon', value: row.phone || '—' },
-        { label: 'Email', value: row.email || '—' },
-        { label: 'PIC', value: row.contactName || '—' },
-        { label: 'Telp PIC', value: row.contactPhone || '—' },
-        { label: 'NPWP', value: row.npwp || '—' },
+        { label: 'Kode pos', value: row.postalCode || ',' },
+        { label: 'Telepon', value: row.phone || ',' },
+        { label: 'Email', value: row.email || ',' },
+        { label: 'PIC', value: row.contactName || ',' },
+        { label: 'Telp PIC', value: row.contactPhone || ',' },
+        { label: 'NPWP', value: row.npwp || ',' },
         { label: 'PKP', value: row.pkp ? 'Ya' : 'Tidak' },
-        { label: 'Bank', value: row.bankName || '—' },
-        { label: 'Rekening', value: row.bankAccount || '—' },
-        { label: 'Atas nama', value: row.bankHolder || '—' },
+        { label: 'Bank', value: row.bankName || ',' },
+        { label: 'Rekening', value: row.bankAccount || ',' },
+        { label: 'Atas nama', value: row.bankHolder || ',' },
         {
           label: 'Metode bayar',
           value: PAYMENT_METHOD_PREF_LABEL[row.paymentMethod],
@@ -354,9 +354,9 @@ export function MitraPage() {
               },
             ]
           : []),
-        { label: 'Alamat', value: row.address || '—' },
+        { label: 'Alamat', value: row.address || ',' },
         { label: 'Status', value: row.active ? 'Aktif' : 'Nonaktif' },
-        { label: 'Catatan', value: row.note || '—' },
+        { label: 'Catatan', value: row.note || ',' },
       ],
       { subtitle: 'Kartu mitra', module: 'Master Data · Mitra' },
     )
@@ -480,9 +480,9 @@ export function MitraPage() {
                       </p>
                     </div>
                   </FinanceTd>
-                  <FinanceTd>{row.group || '—'}</FinanceTd>
+                  <FinanceTd>{row.group || ','}</FinanceTd>
                   <FinanceTd>{row.area}</FinanceTd>
-                  <FinanceTd mono>{row.phone || '—'}</FinanceTd>
+                  <FinanceTd mono>{row.phone || ','}</FinanceTd>
                   <FinanceTd mono>{row.paymentTermDays}h</FinanceTd>
                   <FinanceTd>
                     <StatusPill
@@ -574,10 +574,10 @@ export function MitraPage() {
             <DrawerFacts
               items={[
                 ['Jenis', PARTNER_KIND_LABEL[detail.kind]],
-                ['Nama legal', detail.legalName || '—'],
-                ['Segmen', detail.group || '—'],
+                ['Nama legal', detail.legalName || ','],
+                ['Segmen', detail.group || ','],
                 ['Area', detail.area],
-                ['Kode pos', detail.postalCode || '—'],
+                ['Kode pos', detail.postalCode || ','],
                 ['Status', detail.active ? 'Aktif' : 'Nonaktif'],
               ]}
             />
@@ -585,17 +585,17 @@ export function MitraPage() {
           <DrawerSection label="Kontak">
             <DrawerFacts
               items={[
-                ['Telepon', detail.phone || '—'],
-                ['Email', detail.email || '—'],
-                ['PIC', detail.contactName || '—'],
-                ['Telp PIC', detail.contactPhone || '—'],
+                ['Telepon', detail.phone || ','],
+                ['Email', detail.email || ','],
+                ['PIC', detail.contactName || ','],
+                ['Telp PIC', detail.contactPhone || ','],
               ]}
             />
           </DrawerSection>
           <DrawerSection label="Pajak & pembayaran">
             <DrawerFacts
               items={[
-                ['NPWP', detail.npwp || '—'],
+                ['NPWP', detail.npwp || ','],
                 ['PKP', detail.pkp ? 'Ya' : 'Tidak'],
                 [
                   'Metode bayar',
@@ -618,15 +618,15 @@ export function MitraPage() {
           <DrawerSection label="Rekening bank">
             <DrawerFacts
               items={[
-                ['Bank', detail.bankName || '—'],
-                ['No. rekening', detail.bankAccount || '—'],
-                ['Atas nama', detail.bankHolder || '—'],
+                ['Bank', detail.bankName || ','],
+                ['No. rekening', detail.bankAccount || ','],
+                ['Atas nama', detail.bankHolder || ','],
               ]}
             />
           </DrawerSection>
           <DrawerSection label="Alamat">
             <p className="rounded-xl border border-line/80 bg-surface/70 px-3 py-2.5 text-[13px] text-ink">
-              {detail.address || '—'}
+              {detail.address || ','}
             </p>
           </DrawerSection>
           {detail.note ? (

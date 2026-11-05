@@ -66,21 +66,18 @@ function buildStats(batches: ProductionBatch[]): MetricCardData[] {
       value: `${avgActual.toFixed(1)}%`,
       delta: `${done.length} batch selesai`,
       positive: avgActual >= avgTarget,
-      spark: [62, 63, 64, 63, 65, 66, 65],
     },
     {
       label: 'Avg target',
       value: `${avgTarget.toFixed(1)}%`,
       delta: 'patokan',
       positive: true,
-      spark: [65, 65, 65, 65, 65, 65, 65],
     },
     {
       label: 'Di bawah target',
       value: String(below.length),
       delta: below.length ? 'perlu cek' : 'OK',
       positive: below.length === 0,
-      spark: [2, 1, 2, 1, 0, 1, 1],
     },
   ]
 }
@@ -261,7 +258,7 @@ export function RendemenView({
                     <FinanceTd mono align="right">
                       {cost && cost.costPerKgBeras > 0
                         ? formatRupiah(cost.costPerKgBeras)
-                        : '—'}
+                        : ','}
                     </FinanceTd>
                     <FinanceTd>
                       <StageLabel stage={row.stage} />

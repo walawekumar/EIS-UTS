@@ -225,7 +225,7 @@ export function ProdukPage() {
       row.name,
       [
         { label: 'SKU', value: row.sku },
-        { label: 'Barcode', value: row.barcode || '—' },
+        { label: 'Barcode', value: row.barcode || ',' },
         { label: 'Kategori', value: PRODUCT_CATEGORY_LABEL[row.category] },
         { label: 'Satuan', value: row.unit },
         { label: 'Harga jual', value: formatIdr(row.defaultPrice) },
@@ -233,7 +233,7 @@ export function ProdukPage() {
         { label: 'Stok min', value: String(row.minQty) },
         { label: 'Kena pajak', value: row.taxable ? 'Ya' : 'Tidak' },
         { label: 'Status', value: row.active ? 'Aktif' : 'Nonaktif' },
-        { label: 'Catatan', value: row.note || '—' },
+        { label: 'Catatan', value: row.note || ',' },
       ],
       { subtitle: 'Kartu produk', module: 'Master Data · Produk' },
     )
@@ -443,7 +443,7 @@ export function ProdukPage() {
             <DrawerFacts
               items={[
                 ['SKU', detail.sku],
-                ['Barcode', detail.barcode || '—'],
+                ['Barcode', detail.barcode || ','],
                 ['Kategori', PRODUCT_CATEGORY_LABEL[detail.category]],
                 ['Satuan', detail.unit],
                 ['Harga beli', formatIdr(detail.costPrice)],

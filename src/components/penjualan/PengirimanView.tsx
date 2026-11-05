@@ -163,30 +163,26 @@ export function PengirimanView({
       value: String(waiting.length),
       delta: waiting.length > 0 ? 'Siap diproses' : 'Kosong',
       positive: waiting.length === 0,
-      spark: [2, 3, 2, 3, 2, 2, 3],
     },
     {
       label: 'Sudah dikirim',
       value: String(shipped.length),
-      delta: 'Dengan surat jalan',
+      delta: shipped.length ? 'Dengan surat jalan' : 'Kosong',
       positive: true,
-      spark: [1, 2, 2, 3, 3, 4, 4],
     },
     {
       label: 'Nilai antre',
       value: formatRupiahShort(
         waiting.reduce((sum, o) => sum + summarize(o).total, 0),
       ),
-      delta: `${waiting.length} order`,
+      delta: waiting.length ? `${waiting.length} order` : 'Kosong',
       positive: waiting.length === 0,
-      spark: [30, 32, 28, 35, 40, 38, 36],
     },
     {
       label: 'Total order',
       value: String(orders.length),
-      delta: 'Semua tahap',
+      delta: orders.length ? 'Semua tahap' : 'Kosong',
       positive: true,
-      spark: [5, 6, 6, 7, 7, 8, 8],
     },
   ]
 
@@ -527,7 +523,7 @@ export function PengirimanView({
               fields={[
                 {
                   label: 'Pelanggan',
-                  value: getCustomer(work.customerId)?.name ?? '—',
+                  value: getCustomer(work.customerId)?.name ?? ',',
                 },
                 { label: 'Produk', value: `${work.productName} · ${work.sku}` },
                 { label: 'Jumlah', value: formatQty(work.qty, work.unit) },
@@ -664,7 +660,7 @@ function printShipment(o: SaleOrder) {
     `Bukti pengiriman ${o.id}`,
     [
       { label: 'Nilai order', value: formatRupiah(s.total) },
-      { label: 'Pelanggan', value: customer?.name ?? '—' },
+      { label: 'Pelanggan', value: customer?.name ?? ',' },
       { label: 'No. order', value: o.id },
       { label: 'Tanggal order', value: formatDate(o.date) },
       { label: 'Status', value: STAGE_LABEL[o.stage] },
@@ -695,7 +691,7 @@ function ShipDetailDrawer({
       open
       onClose={onClose}
       title={o.id}
-      subtitle={`${customer?.name ?? '—'} · ${formatDate(o.date, {
+      subtitle={`${customer?.name ?? ','} · ${formatDate(o.date, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',

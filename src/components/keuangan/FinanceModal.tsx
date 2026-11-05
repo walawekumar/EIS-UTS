@@ -35,7 +35,7 @@ export function FinanceModal({
     <div className="fixed inset-0 z-[80] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40"
+        className="motion-backdrop absolute inset-0 bg-ink/40"
         aria-label="Tutup"
         onClick={onClose}
       />
@@ -44,7 +44,7 @@ export function FinanceModal({
         aria-modal="true"
         aria-labelledby="finance-modal-title"
         className={[
-          'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-panel shadow-xl sm:rounded-2xl',
+          'motion-panel relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-panel shadow-xl sm:rounded-2xl',
           wide ? 'sm:max-w-lg' : 'sm:max-w-md',
         ].join(' ')}
       >

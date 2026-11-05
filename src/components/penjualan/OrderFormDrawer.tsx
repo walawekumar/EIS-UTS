@@ -203,13 +203,13 @@ export function OrderFormDrawer({ open, nextId, onClose, onSave }: OrderFormDraw
               <div className="flex justify-between gap-2">
                 <span className="text-muted">Qty</span>
                 <span className="num text-ink">
-                  {qty > 0 ? formatQty(qty, product.unit) : '—'}
+                  {qty > 0 ? formatQty(qty, product.unit) : ','}
                 </span>
               </div>
               <div className="mt-1 flex justify-between gap-2">
                 <span className="text-muted">Nilai order</span>
                 <span className="num font-semibold text-ink">
-                  {qty > 0 && price > 0 ? formatRupiah(total) : '—'}
+                  {qty > 0 && price > 0 ? formatRupiah(total) : ','}
                 </span>
               </div>
             </div>

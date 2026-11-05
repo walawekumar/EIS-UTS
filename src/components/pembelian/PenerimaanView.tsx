@@ -171,28 +171,24 @@ export function PenerimaanView({
       value: String(waiting.length),
       delta: waiting.length > 0 ? 'Belum ditimbang' : 'Kosong',
       positive: waiting.length === 0,
-      spark: [2, 3, 2, 3, 2, 2, 3],
     },
     {
       label: 'Menunggu konfirmasi',
       value: String(weighed.length),
       delta: weighed.length > 0 ? 'Perlu setuju' : '0',
       positive: weighed.length === 0,
-      spark: [1, 2, 1, 2, 2, 1, 2],
     },
     {
       label: 'Sudah dikonfirmasi',
       value: String(confirmed.length),
       delta: 'Siap bayar',
       positive: true,
-      spark: [1, 1, 2, 2, 3, 3, 4],
     },
     {
       label: 'Total dokumen',
       value: String(purchases.length),
       delta: 'Semua tahap',
       positive: true,
-      spark: [6, 7, 7, 8, 8, 9, 9],
     },
   ]
 
@@ -526,7 +522,7 @@ function printReceive(p: Purchase) {
           isPurchaseReceivedForAp(p.stage) ? s.total : s.estimatedValue,
         ),
       },
-      { label: 'Pemasok', value: supplier?.name ?? '—' },
+      { label: 'Pemasok', value: supplier?.name ?? ',' },
       { label: 'No. dokumen', value: p.id },
       { label: 'Tanggal', value: formatDate(p.date) },
       { label: 'Status', value: STAGE_LABEL[p.stage] },
@@ -565,7 +561,7 @@ function ReceiveDetailDrawer({
       open
       onClose={onClose}
       title={p.id}
-      subtitle={`${supplier?.name ?? '—'} · ${formatDate(p.date, {
+      subtitle={`${supplier?.name ?? ','} · ${formatDate(p.date, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -876,7 +872,7 @@ function WeighingModal({
       <div className="space-y-4">
         <DetailFields
           fields={[
-            { label: 'Pemasok', value: supplier?.name ?? '—' },
+            { label: 'Pemasok', value: supplier?.name ?? ',' },
             {
               label: 'Gabah',
               value: `${p.grain} · ${std.label} · ${p.sacks} karung`,
@@ -994,7 +990,7 @@ function WeighingModal({
           error={receiptError}
           hint={
             p.weighing?.receiptName && !receipt
-              ? `Sudah ada: ${p.weighing.receiptName} — unggah ulang untuk mengganti`
+              ? `Sudah ada: ${p.weighing.receiptName}, unggah ulang untuk mengganti`
               : undefined
           }
         />

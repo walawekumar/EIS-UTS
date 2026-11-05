@@ -7,21 +7,26 @@ import { TextField } from '@/components/ui/TextField'
 import { LeafMarkIcon, MailIcon } from '@/components/ui/icons'
 import { useAuth } from '@/features/auth/AuthContext'
 import { readAppSettings } from '@/features/settings/app-settings'
+import { isSupabaseConfigured } from '@/lib/supabase-client'
 import { LoginPreview } from '@/pages/login/LoginPreview'
+
+const showDemoHints =
+  !import.meta.env.PROD && !isSupabaseConfigured()
 
 function resolvePostLoginPath(): string {
   const path = readAppSettings().prefs.defaultModule.trim()
+  if (path === '/portal' || path === '/absensi') return path
   if (path.startsWith('/app/') && path.length > '/app/'.length) {
     return path
   }
-  return '/app/dashboard'
+  return '/portal'
 }
 
 export function LoginPage() {
   const { isAuthenticated, login } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@egabah.local')
-  const [password, setPassword] = useState('demo123')
+  const [email, setEmail] = useState(showDemoHints ? 'admin@egabah.local' : '')
+  const [password, setPassword] = useState(showDemoHints ? 'demo123' : '')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -73,11 +78,13 @@ export function LoginPage() {
               Masuk untuk membuka portal modul penggilingan padi. Peran diambil
               otomatis dari akun.
             </p>
-            <p className="mt-3 max-w-sm text-[12px] leading-relaxed text-muted/90">
-              Akun demo:{' '}
-              <span className="font-medium text-ink">admin@egabah.local</span> /{' '}
-              <span className="font-medium text-ink">demo123</span>
-            </p>
+            {showDemoHints ? (
+              <p className="mt-3 max-w-sm text-[12px] leading-relaxed text-muted/90">
+                Akun demo:{' '}
+                <span className="font-medium text-ink">admin@egabah.local</span>{' '}
+                / <span className="font-medium text-ink">demo123</span>
+              </p>
+            ) : null}
 
             <form onSubmit={onSubmit} className="mt-8 space-y-4">
               <TextField

@@ -2,7 +2,7 @@
 
 ## 1. Migrasi schema
 
-SQL Editor → jalankan `supabase/migrations/20261030_master_rbac.sql`.
+SQL Editor → jalankan `supabase/migrations/20261030_01_master_rbac.sql`.
 
 ## 2. Auth users + profiles (otomatis)
 

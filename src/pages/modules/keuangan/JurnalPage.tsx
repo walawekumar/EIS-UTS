@@ -597,7 +597,7 @@ export function JurnalPage() {
                       {row.memo}
                     </FinanceTd>
                     <FinanceTd mono muted className="max-w-[140px] truncate">
-                      {row.sourceKey ?? '—'}
+                      {row.sourceKey ?? ','}
                     </FinanceTd>
                     <FinanceTd>
                       <StatusPill
@@ -713,7 +713,7 @@ export function JurnalPage() {
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">Source key</dt>
                 <dd className="font-mono text-right text-[12px]">
-                  {detail.sourceKey ?? '—'}
+                  {detail.sourceKey ?? ','}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
@@ -750,10 +750,10 @@ export function JurnalPage() {
                     <tr key={`${line.accountId}-${i}`} className="border-b border-line/60">
                       <td className="px-2 py-2">{accountLabel(accounts, line.accountId)}</td>
                       <td className="px-2 py-2 text-right font-mono">
-                        {line.debit > 0 ? formatIdr(line.debit) : '—'}
+                        {line.debit > 0 ? formatIdr(line.debit) : ','}
                       </td>
                       <td className="px-2 py-2 text-right font-mono">
-                        {line.credit > 0 ? formatIdr(line.credit) : '—'}
+                        {line.credit > 0 ? formatIdr(line.credit) : ','}
                       </td>
                     </tr>
                   ))}

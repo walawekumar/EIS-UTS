@@ -394,7 +394,7 @@ export function PenjualanProvider({ children }: { children: ReactNode }) {
         productName: current.productName,
         unit: current.unit,
         qty: current.qty,
-        fromLocation: '—',
+        fromLocation: '',
         toLocation: location,
         note: `Void pengiriman ${id}`,
       })

@@ -122,7 +122,7 @@ export function todayIso(d = new Date()): string {
 }
 
 export function formatDate(iso: string): string {
-  if (!iso) return '—'
+  if (!iso) return ','
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   return new Intl.DateTimeFormat('id-ID', {
@@ -275,28 +275,24 @@ export function buildBatchStats(batches: ProductionBatch[]): MetricCardData[] {
       value: String(active.length),
       delta: `${batches.length} total`,
       positive: true,
-      spark: [3, 4, 4, 5, 5, 5, 6],
     },
     {
       label: 'Menunggu approve',
       value: String(waiting.length),
       delta: waiting.length ? 'Perlu review' : 'Kosong',
       positive: waiting.length === 0,
-      spark: [1, 2, 1, 2, 1, 0, 1],
     },
     {
       label: 'Selesai',
       value: String(done.length),
       delta: 'Posted stok',
       positive: true,
-      spark: [2, 2, 3, 3, 4, 4, 5],
     },
     {
       label: 'Avg rendemen',
       value: `${avgRend.toFixed(1)}%`,
       delta: 'dari batch selesai',
       positive: avgRend >= 60,
-      spark: [62, 63, 61, 64, 65, 64, 66],
     },
   ]
 }

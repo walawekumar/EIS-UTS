@@ -1,5 +1,5 @@
 -- Ops relational tables (CREATE + indexes + RLS) plus COPY from ops_docs.
--- Depends on auth_can_write_module() from 20261030_ops_snapshots.sql.
+-- Depends on auth_can_write_module() from 20261030_02_ops_snapshots.sql.
 -- DROP of ops_docs and app_module_snapshots is deferred — not in this file.
 -- Pattern: typed scalars + jsonb for small objects; child tables for arrays.
 -- Soft FK are text + index (no REFERENCES).

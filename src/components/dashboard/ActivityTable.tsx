@@ -1,20 +1,19 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ChevronDownIcon, EyeIcon } from '@/components/ui/icons'
 import type { ActivityRow } from '@/features/dashboard/dashboard-data'
 import { usePageSize } from '@/features/settings/usePageSize'
 
 const STATUS_LABEL = {
   ok: 'Selesai',
-  warn: 'Tinjau',
+  warn: 'Proses',
   draft: 'Draft',
 } as const
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Semua status' },
   { value: 'ok', label: 'Selesai' },
-  { value: 'warn', label: 'Tinjau' },
+  { value: 'warn', label: 'Proses' },
   { value: 'draft', label: 'Draft' },
 ] as const
 
@@ -28,11 +27,9 @@ function getPageItems(current: number, total: number): Array<number | '…'> {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1)
   }
-
   const items: Array<number | '…'> = [1]
   const start = Math.max(2, current - 1)
   const end = Math.min(total - 1, current + 1)
-
   if (start > 2) items.push('…')
   for (let p = start; p <= end; p += 1) items.push(p)
   if (end < total - 1) items.push('…')
@@ -54,14 +51,12 @@ function StatusFilterSelect({
 
   useEffect(() => {
     if (!open) return
-
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
     function onEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpen(false)
     }
-
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onEscape)
     return () => {
@@ -95,7 +90,6 @@ function StatusFilterSelect({
           )}
         />
       </button>
-
       {open ? (
         <div
           role="listbox"
@@ -151,7 +145,7 @@ function ActivityDetailModal({
   }, [onClose])
 
   const fields = [
-    { label: 'Referensi', value: row.reference },
+    { label: 'Dokumen', value: row.reference },
     { label: 'Jenis', value: row.type },
     { label: 'Tanggal', value: row.date },
     { label: 'Nilai', value: row.amount },
@@ -163,7 +157,7 @@ function ActivityDetailModal({
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40"
+        className="motion-backdrop absolute inset-0 bg-ink/40"
         aria-label="Tutup detail"
         onClick={onClose}
       />
@@ -171,12 +165,12 @@ function ActivityDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="activity-detail-title"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-line bg-panel p-5 shadow-xl"
+        className="motion-panel relative z-10 w-full max-w-md rounded-2xl border border-line bg-panel p-5 shadow-xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
-              Detail aktivitas
+              Detail dokumen
             </p>
             <h2
               id="activity-detail-title"
@@ -194,7 +188,6 @@ function ActivityDetailModal({
             ×
           </button>
         </div>
-
         <dl className="divide-y divide-line rounded-xl border border-line">
           {fields.map((field) => (
             <div
@@ -206,7 +199,6 @@ function ActivityDetailModal({
             </div>
           ))}
         </dl>
-
         <button
           type="button"
           onClick={onClose}
@@ -220,138 +212,16 @@ function ActivityDetailModal({
   )
 }
 
-function RowActions({
-  row,
-  onView,
-  onDelete,
-  onDuplicate,
-  onPrint,
-}: {
-  row: ActivityRow
-  onView: () => void
-  onDelete: () => void
-  onDuplicate: () => void
-  onPrint: () => void
-}) {
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-
-    function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    function onEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onEscape)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onEscape)
-    }
-  }, [open])
-
-  return (
-    <div ref={rootRef} className="relative flex items-center justify-center gap-0.5">
-      <button
-        type="button"
-        onClick={onView}
-        className="rounded-lg p-1.5 text-muted transition hover:bg-brand-50 hover:text-brand-800"
-        aria-label={`Lihat ${row.reference}`}
-        title="Lihat detail"
-      >
-        <EyeIcon className="size-4" />
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="rounded-lg p-1.5 text-muted transition hover:bg-red-50 hover:text-red-700"
-        aria-label={`Hapus ${row.reference}`}
-        title="Hapus"
-      >
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75">
-          <path d="M4 7h16" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-          <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
-          <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-lg p-1.5 text-muted transition hover:bg-brand-50 hover:text-brand-800"
-        aria-label={`Lainnya ${row.reference}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        title="Lainnya"
-      >
-        <svg viewBox="0 0 24 24" className="size-4" fill="currentColor">
-          <circle cx="5" cy="12" r="1.5" />
-          <circle cx="12" cy="12" r="1.5" />
-          <circle cx="19" cy="12" r="1.5" />
-        </svg>
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          className="absolute top-full right-0 z-20 mt-1 w-36 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false)
-              onDuplicate()
-            }}
-            className="block w-full px-3 py-2 text-left text-[12px] text-ink hover:bg-brand-50"
-          >
-            Duplikat
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false)
-              onPrint()
-            }}
-            className="block w-full px-3 py-2 text-left text-[12px] text-ink hover:bg-brand-50"
-          >
-            Cetak
-          </button>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
   const PAGE_SIZE = usePageSize()
-  const [items, setItems] = useState(rows)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<ActivityRow | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<ActivityRow | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    setItems(rows)
-  }, [rows])
-
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), 2200)
-    return () => window.clearTimeout(timer)
-  }, [toast])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((row) => {
+    return rows.filter((row) => {
       if (status !== 'all' && row.status !== status) return false
       if (!q) return true
       return (
@@ -362,7 +232,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
         row.date.toLowerCase().includes(q)
       )
     })
-  }, [items, query, status])
+  }, [rows, query, status])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -370,61 +240,6 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
   const from = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
   const to = Math.min(safePage * PAGE_SIZE, filtered.length)
   const pageItems = getPageItems(safePage, totalPages)
-
-  function updateQuery(value: string) {
-    setQuery(value)
-    setPage(1)
-  }
-
-  function updateStatus(value: StatusFilter) {
-    setStatus(value)
-    setPage(1)
-  }
-
-  function handleDelete(row: ActivityRow) {
-    setConfirmDelete(row)
-  }
-
-  function confirmDeleteActivity() {
-    if (!confirmDelete) return
-    const row = confirmDelete
-    setItems((prev) => prev.filter((item) => rowKey(item) !== rowKey(row)))
-    setConfirmDelete(null)
-    setToast(`Aktivitas ${row.reference} dihapus`)
-  }
-
-  function handleDuplicate(row: ActivityRow) {
-    const copy: ActivityRow = {
-      ...row,
-      reference: `${row.reference}-COPY`,
-      status: 'draft',
-    }
-    setItems((prev) => [copy, ...prev])
-    setPage(1)
-    setToast(`Duplikat ${row.reference} dibuat`)
-  }
-
-  function handlePrint(row: ActivityRow) {
-    const text = [
-      `Referensi: ${row.reference}`,
-      `Jenis: ${row.type}`,
-      `Tanggal: ${row.date}`,
-      `Nilai: ${row.amount}`,
-      `Status: ${STATUS_LABEL[row.status]}`,
-      `Oleh: ${row.actor}`,
-    ].join('\n')
-    const win = window.open('', '_blank', 'width=480,height=560')
-    if (!win) {
-      setToast('Izinkan popup untuk mencetak')
-      return
-    }
-    win.document.write(
-      `<pre style="font:14px/1.5 'IBM Plex Mono',monospace;padding:24px">${text}</pre>`,
-    )
-    win.document.close()
-    win.focus()
-    win.print()
-  }
 
   return (
     <div>
@@ -446,32 +261,41 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
           <input
             type="search"
             value={query}
-            onChange={(e) => updateQuery(e.target.value)}
-            placeholder="Cari referensi, jenis…"
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Cari dokumen, jenis…"
             className="h-9 w-full rounded-xl border border-line bg-panel py-2 pr-3 pl-9 text-[13px] text-ink outline-none placeholder:text-muted/70 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
           />
         </div>
-        <StatusFilterSelect value={status} onChange={updateStatus} />
+        <StatusFilterSelect
+          value={status}
+          onChange={(value) => {
+            setStatus(value)
+            setPage(1)
+          }}
+        />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
           <thead>
             <tr className="border-b border-line bg-surface/80 text-[11px] tracking-wide text-muted uppercase">
-              <th className="px-3 py-2.5 font-medium">Referensi</th>
+              <th className="px-3 py-2.5 font-medium">Dokumen</th>
               <th className="px-2 py-2.5 font-medium">Jenis</th>
               <th className="px-2 py-2.5 font-medium">Tanggal</th>
               <th className="px-2 py-2.5 font-medium">Status</th>
               <th className="px-2 py-2.5 font-medium">Nilai</th>
               <th className="px-2 py-2.5 font-medium">Oleh</th>
-              <th className="w-28 px-3 py-2.5 text-center font-medium">Aksi</th>
+              <th className="w-16 px-3 py-2.5 text-center font-medium">Detail</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-10 text-center text-[13px] text-muted">
-                  Tidak ada aktivitas yang cocok.
+                  Belum ada dokumen di feed ini.
                 </td>
               </tr>
             ) : (
@@ -486,7 +310,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
                   <td className="px-2 py-2.5">
                     <span
                       className={[
-                        'inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium',
+                        'inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-medium',
                         row.status === 'ok'
                           ? 'bg-brand-100 text-brand-800'
                           : row.status === 'warn'
@@ -498,22 +322,17 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
                     </span>
                   </td>
                   <td className="num px-2 py-2.5 font-medium text-ink">{row.amount}</td>
-                  <td className="px-2 py-2.5">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="flex size-7 items-center justify-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-800">
-                        {row.actor.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="text-ink">{row.actor}</span>
-                    </span>
-                  </td>
+                  <td className="px-2 py-2.5 text-ink">{row.actor}</td>
                   <td className="px-3 py-2.5 text-center">
-                    <RowActions
-                      row={row}
-                      onView={() => setDetail(row)}
-                      onDelete={() => handleDelete(row)}
-                      onDuplicate={() => handleDuplicate(row)}
-                      onPrint={() => handlePrint(row)}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setDetail(row)}
+                      className="rounded-lg p-1.5 text-muted transition hover:bg-brand-50 hover:text-brand-800"
+                      aria-label={`Lihat ${row.reference}`}
+                      title="Lihat detail"
+                    >
+                      <EyeIcon className="size-4" />
+                    </button>
                   </td>
                 </tr>
               ))
@@ -525,10 +344,9 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-muted">
           {filtered.length === 0
-            ? 'Menampilkan 0 dari 0 entri'
-            : `Menampilkan ${from}–${to} dari ${filtered.length} entri`}
+            ? 'Menampilkan 0 dari 0 dokumen'
+            : `Menampilkan ${from}–${to} dari ${filtered.length} dokumen`}
         </p>
-
         <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
@@ -538,7 +356,6 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
           >
             Sebelumnya
           </button>
-
           {pageItems.map((item, index) =>
             item === '…' ? (
               <span
@@ -564,7 +381,6 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
               </button>
             ),
           )}
-
           <button
             type="button"
             disabled={safePage >= totalPages}
@@ -578,26 +394,6 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
 
       {detail ? (
         <ActivityDetailModal row={detail} onClose={() => setDetail(null)} />
-      ) : null}
-
-      <ConfirmDialog
-        open={Boolean(confirmDelete)}
-        title={
-          confirmDelete
-            ? `Hapus aktivitas ${confirmDelete.reference}?`
-            : 'Hapus aktivitas?'
-        }
-        description="Entri ini akan dihapus dari daftar aktivitas terbaru (MVP lokal)."
-        confirmLabel="Ya, hapus"
-        danger
-        onConfirm={confirmDeleteActivity}
-        onClose={() => setConfirmDelete(null)}
-      />
-
-      {toast ? (
-        <div className="fixed right-4 bottom-4 z-[90] rounded-xl border border-line bg-panel px-3.5 py-2.5 text-[13px] text-ink shadow-lg">
-          {toast}
-        </div>
       ) : null}
     </div>
   )

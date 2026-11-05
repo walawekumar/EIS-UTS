@@ -101,8 +101,10 @@ export function MasterProvider({ children }: { children: ReactNode }) {
         setCloudReady(true)
       } catch (e) {
         if (cancelled) return
-        setPersistError(mapSupabaseError(e))
-        setCloudReady(true)
+        setPersistError(
+          `${mapSupabaseError(e)} Data master belum dimuat — penyimpanan cloud dinonaktifkan.`,
+        )
+        setCloudReady(false)
       }
     })()
     return () => {
@@ -127,8 +129,19 @@ export function MasterProvider({ children }: { children: ReactNode }) {
     masterRepository.save(snapshotOf(suppliers, customers, products, users))
   }, [suppliers, customers, products, users, cloudReady, configured])
 
+  const assertMasterWritable = useCallback((): boolean => {
+    if (configured && !cloudReady) {
+      setPersistError(
+        'Data master cloud belum siap. Muat ulang halaman setelah koneksi pulih.',
+      )
+      return false
+    }
+    return true
+  }, [configured, cloudReady])
+
   const upsertPartner = useCallback(
     (kind: PartnerKind, data: PartnerInput, id?: string) => {
+      if (!assertMasterWritable()) return id ?? ''
       const list = kind === 'supplier' ? suppliers : customers
       const setList = kind === 'supplier' ? setSuppliers : setCustomers
       const nextId = id ?? nextPartnerId(kind, list)
@@ -144,24 +157,30 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       })
       return nextId
     },
-    [customers, suppliers],
+    [customers, suppliers, assertMasterWritable],
   )
 
   const setPartnerActive = useCallback(
     (kind: PartnerKind, id: string, active: boolean) => {
+      if (!assertMasterWritable()) return
       const setList = kind === 'supplier' ? setSuppliers : setCustomers
       setList((prev) => prev.map((p) => (p.id === id ? { ...p, active } : p)))
     },
-    [],
+    [assertMasterWritable],
   )
 
-  const removePartner = useCallback((kind: PartnerKind, id: string) => {
-    const setList = kind === 'supplier' ? setSuppliers : setCustomers
-    setList((prev) => prev.filter((p) => p.id !== id))
-  }, [])
+  const removePartner = useCallback(
+    (kind: PartnerKind, id: string) => {
+      if (!assertMasterWritable()) return
+      const setList = kind === 'supplier' ? setSuppliers : setCustomers
+      setList((prev) => prev.filter((p) => p.id !== id))
+    },
+    [assertMasterWritable],
+  )
 
   const upsertProduct = useCallback(
     (data: ProductInput, id?: string) => {
+      if (!assertMasterWritable()) return id ?? ''
       const nextId = id ?? nextProductId(products)
       const row: MasterProduct = { ...data, id: nextId }
       setProducts((prev) => {
@@ -175,19 +194,30 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       })
       return nextId
     },
-    [products],
+    [products, assertMasterWritable],
   )
 
-  const setProductActive = useCallback((id: string, active: boolean) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, active } : p)))
-  }, [])
+  const setProductActive = useCallback(
+    (id: string, active: boolean) => {
+      if (!assertMasterWritable()) return
+      setProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, active } : p)),
+      )
+    },
+    [assertMasterWritable],
+  )
 
-  const removeProduct = useCallback((id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id))
-  }, [])
+  const removeProduct = useCallback(
+    (id: string) => {
+      if (!assertMasterWritable()) return
+      setProducts((prev) => prev.filter((p) => p.id !== id))
+    },
+    [assertMasterWritable],
+  )
 
   const upsertUser = useCallback(
     (data: UserInput, id?: string) => {
+      if (!assertMasterWritable()) return id ?? ''
       const nextId = id ?? nextUserId(data.role, users)
       const row: MasterUser = { ...data, id: nextId }
       if (configured) {
@@ -218,11 +248,12 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       })
       return nextId
     },
-    [users, configured],
+    [users, configured, assertMasterWritable],
   )
 
   const setUserActive = useCallback(
     (id: string, active: boolean) => {
+      if (!assertMasterWritable()) return
       if (configured) {
         const existing = users.find((u) => u.id === id)
         if (!existing) return
@@ -239,11 +270,12 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       }
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, active } : u)))
     },
-    [configured, users],
+    [configured, users, assertMasterWritable],
   )
 
   const removeUser = useCallback(
     (id: string) => {
+      if (!assertMasterWritable()) return
       if (configured) {
         const existing = users.find((u) => u.id === id)
         if (!existing) return
@@ -260,7 +292,7 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       }
       setUsers((prev) => prev.filter((u) => u.id !== id))
     },
-    [configured, users],
+    [configured, users, assertMasterWritable],
   )
 
   const value = useMemo(

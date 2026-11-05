@@ -26,6 +26,19 @@ export type RelationalTableBind<TSnapshot extends object> = {
   writeRows?: (snap: TSnapshot, rows: Record<string, unknown>[]) => TSnapshot
 }
 
+const bootstrappedGroups = new Set<string>()
+
+function projectedRowCount<TSnapshot extends object>(
+  project: (snap: TSnapshot) => Partial<Record<OpsTableName, Record<string, unknown>[]>>,
+  tables: OpsTableName[],
+  snap: TSnapshot,
+): number {
+  const parts = project(snap)
+  let n = 0
+  for (const t of tables) n += (parts[t] ?? []).length
+  return n
+}
+
 /**
  * Prefer a single assemble function that reads all related caches.
  */
@@ -41,6 +54,7 @@ export function createRelationalBackedRepository<TSnapshot extends object>(optio
 }): LocalRepo<TSnapshot> {
   const { local, normalize, tables, assemble, project } = options
   const norm = (data: TSnapshot) => (normalize ? normalize(data) : data)
+  const groupKey = tables.slice().sort().join(',')
 
   return {
     load() {
@@ -48,9 +62,35 @@ export function createRelationalBackedRepository<TSnapshot extends object>(optio
         for (const t of tables) {
           if (!wasRelationalHydrated(t)) return norm(local.load())
         }
-        const assembled = assemble(local.load())
-        if (assembled) return norm(assembled)
-        return norm(local.load())
+        let base = norm(local.load())
+        const assembled = assemble(base)
+        if (!assembled) return base
+
+        const cloudRows = projectedRowCount(project, tables, assembled)
+        let localRows = projectedRowCount(project, tables, base)
+
+        // Prior wipe may have saved empty snapshot locally. In DEV, re-seed once.
+        if (cloudRows === 0 && localRows === 0 && import.meta.env.DEV) {
+          local.clear()
+          base = norm(local.load())
+          localRows = projectedRowCount(project, tables, base)
+        }
+
+        // Empty cloud must not wipe non-empty local — bootstrap to cloud once.
+        if (cloudRows === 0 && localRows > 0) {
+          if (!bootstrappedGroups.has(groupKey)) {
+            bootstrappedGroups.add(groupKey)
+            const parts = project(base)
+            for (const t of tables) {
+              const rows = parts[t] ?? []
+              setRelationalCache(t, rows)
+              if (rows.length) scheduleRelationalSave(t, rows)
+            }
+          }
+          return base
+        }
+
+        return norm(assembled)
       }
       return norm(local.load())
     },

@@ -46,8 +46,18 @@ function timeoutMs(value: string): number | null {
   return Number.isFinite(n) ? n * 60_000 : 60 * 60_000
 }
 
+function bootUser(): AuthUser | null {
+  // Cloud builds wait for getSession + profiles — never trust storage alone.
+  if (isSupabaseConfigured()) return null
+  if (import.meta.env.PROD) {
+    clearStoredUser()
+    return null
+  }
+  return loadStoredUser()
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser())
+  const [user, setUser] = useState<AuthUser | null>(() => bootUser())
 
   const logout = useCallback(() => {
     void flushPendingRelationalSaves().finally(() => {
@@ -91,6 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      if (import.meta.env.PROD) {
+        clearStoredUser()
+        setUser(null)
+        throw new Error(
+          'Supabase belum dikonfigurasi. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment hosting.',
+        )
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 280))
 
       const account = findDemoAccount(email, password)
@@ -108,7 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return
+    if (!isSupabaseConfigured()) {
+      if (import.meta.env.PROD) {
+        clearStoredUser()
+        setUser(null)
+      }
+      return
+    }
     const sb = getSupabase()
     if (!sb) return
     let cancelled = false

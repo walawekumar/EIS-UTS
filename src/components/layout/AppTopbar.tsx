@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { UserMenu } from '@/components/layout/UserMenu'
 import { MenuIcon } from '@/components/ui/icons'
@@ -39,6 +40,12 @@ export function AppTopbar({ title, onMenuToggle, mobileNavOpen }: AppTopbarProps
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+        <Link
+          to="/portal"
+          className="hidden rounded-xl border border-line px-2.5 py-1.5 text-[12px] font-medium text-brand-800 transition hover:bg-brand-50 sm:inline-flex"
+        >
+          Portal
+        </Link>
         <NotificationBell />
         <UserMenu />
       </div>

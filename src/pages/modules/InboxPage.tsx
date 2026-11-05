@@ -11,7 +11,7 @@ import { usePayrollStore } from '@/features/payroll/payroll-store'
 import { usePembelian } from '@/features/pembelian/PembelianContext'
 import { usePenjualan } from '@/features/penjualan/PenjualanContext'
 import { useProduksi } from '@/features/produksi/ProduksiContext'
-import { ROLE_LABELS, type UserRole } from '@/types/auth'
+import { ROLE_LABELS } from '@/types/auth'
 
 const KIND_LABEL: Record<InboxItem['kind'], string> = {
   sale_return: 'Retur jual',
@@ -40,7 +40,6 @@ function sourceId(item: InboxItem): string {
 
 export function InboxPage() {
   const { user } = useAuth()
-  const role = (user?.role ?? 'admin') as UserRole
   const { returns: saleReturns, approveSaleReturn, rejectSaleReturn } =
     usePenjualan()
   const {
@@ -52,7 +51,8 @@ export function InboxPage() {
     rejectPurchase,
   } = usePembelian()
   const { batches, approveBatch, rejectBatch } = useProduksi()
-  const { runs, approveAsAdmin, approveAsKeuangan } = usePayrollStore()
+  const { runs, approveAsAdmin, approveAsKeuangan, rejectRun } =
+    usePayrollStore()
   const {
     locks,
     unlockRequests,
@@ -64,30 +64,34 @@ export function InboxPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [openId, setOpenId] = useState<string | null>(null)
 
-  const items = useMemo(
-    () =>
-      buildInbox({
-        role,
-        saleReturns,
-        purchaseReturns,
-        purchases,
-        batches,
-        payrollRuns: runs,
-        unlockRequests,
-        periodLocks: locks,
-      }),
-    [
-      role,
+  const items = useMemo(() => {
+    if (!user) return []
+    return buildInbox({
+      role: user.role,
       saleReturns,
       purchaseReturns,
       purchases,
       batches,
-      runs,
+      payrollRuns: runs,
       unlockRequests,
-      locks,
-    ],
-  )
+      periodLocks: locks,
+    })
+  }, [
+    user,
+    saleReturns,
+    purchaseReturns,
+    purchases,
+    batches,
+    runs,
+    unlockRequests,
+    locks,
+  ])
+
+  if (!user) return null
+  const role = user.role
+  const actor = user
 
   function notify(msg: string) {
     setToast(msg)
@@ -112,7 +116,7 @@ export function InboxPage() {
     )
   }
 
-  function onApprove(item: InboxItem) {
+  async function onApprove(item: InboxItem) {
     const id = sourceId(item)
     let err: string | undefined
     if (item.kind === 'sale_return') err = approveSaleReturn(id)
@@ -125,11 +129,11 @@ export function InboxPage() {
         role === 'admin' ? approveAsAdmin(id) : approveAsKeuangan(id)
     } else if (item.kind === 'period_unlock') {
       const at = new Date().toISOString()
-      const by = user?.name ?? role
+      const by = actor.name
       if (role === 'admin') {
-        err = approveUnlockAdmin(id, { role: 'admin', by, at })
+        err = await approveUnlockAdmin(id, { role: 'admin', by, at })
       } else {
-        err = approveUnlockRole(id, {
+        err = await approveUnlockRole(id, {
           role: role as UnlockImpactRole,
           by,
           at,
@@ -140,7 +144,7 @@ export function InboxPage() {
     else notify('Disetujui')
   }
 
-  function onRejectConfirm() {
+  async function onRejectConfirm() {
     if (!rejectId) return
     const item = items.find((i) => i.id === rejectId)
     if (!item) return
@@ -153,12 +157,12 @@ export function InboxPage() {
     else if (item.kind === 'purchase_budget') err = rejectPurchase(id, reason)
     else if (item.kind === 'batch') rejectBatch(id, reason)
     else if (item.kind === 'period_unlock')
-      err = rejectUnlock(id, user?.name ?? role, reason)
-    else notify('Tolak payroll lewat halaman Payroll')
+      err = await rejectUnlock(id, actor.name, reason)
+    else if (item.kind === 'payroll') err = rejectRun(id, reason)
     setRejectId(null)
     setRejectReason('')
     if (err) notify(err)
-    else if (item.kind !== 'payroll') notify('Ditolak')
+    else notify('Ditolak')
   }
 
   return (
@@ -175,74 +179,119 @@ export function InboxPage() {
         </div>
 
         {items.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[13px] text-muted">
-            Tidak ada pengajuan menunggu.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line px-4 py-10 text-center">
+            <p className="text-[13px] font-medium text-ink">
+              Tidak ada pengajuan menunggu
+            </p>
+            <p className="mt-1 max-w-sm text-[12px] text-muted">
+              Retur, approve anggaran, batch, payroll, dan unlock periode akan
+              muncul di sini saat menunggu tindakan Anda.
+            </p>
+          </div>
         ) : (
           <ul className="divide-y divide-line/70 rounded-xl border border-line">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-3 px-3.5 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[14px] font-semibold text-ink">
-                      {item.title}
-                    </p>
-                    <StatusPill label={item.statusLabel} tone="warn" />
-                    <span className="text-[11px] text-muted">
-                      {KIND_LABEL[item.kind]}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-[12px] text-muted">
-                    {item.subtitle}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    {formatWhen(item.createdAt)}
-                  </p>
-                </div>
+            {items.map((item) => {
+              const expanded = openId === item.id
+              return (
+                <li key={item.id} className="px-3.5 py-3.5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() =>
+                        setOpenId((cur) => (cur === item.id ? null : item.id))
+                      }
+                      aria-expanded={expanded}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[14px] font-semibold text-ink">
+                          {item.title}
+                        </p>
+                        <StatusPill label={item.statusLabel} tone="warn" />
+                        <span className="text-[11px] text-muted">
+                          {KIND_LABEL[item.kind]}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-[12px] text-muted">
+                        {item.subtitle}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted">
+                        {formatWhen(item.createdAt)}
+                        <span className="ml-2 text-brand-800">
+                          {expanded ? 'Sembunyikan detail' : 'Lihat detail'}
+                        </span>
+                      </p>
+                    </button>
 
-                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                  <Link
-                    to={item.href}
-                    className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-medium text-ink transition hover:bg-brand-50"
-                  >
-                    Buka
-                  </Link>
-                  {canAct(item) ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onApprove(item)}
-                        className="inline-flex h-9 items-center rounded-xl bg-brand-800 px-3 text-[12px] font-semibold text-white transition hover:bg-brand-900"
+                    <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                      <Link
+                        to={item.href}
+                        className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-medium text-ink transition hover:bg-brand-50"
                       >
-                        Setujui
-                      </button>
-                      {item.kind !== 'payroll' ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRejectId(item.id)
-                            setRejectReason('')
-                          }}
-                          className="inline-flex h-9 items-center rounded-xl border border-red-200 px-3 text-[12px] font-medium text-red-700 transition hover:bg-red-50"
-                        >
-                          Tolak
-                        </button>
+                        Buka modul
+                      </Link>
+                      {canAct(item) ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onApprove(item)}
+                            className="inline-flex h-9 items-center rounded-xl bg-brand-800 px-3 text-[12px] font-semibold text-white transition hover:bg-brand-900"
+                          >
+                            Setujui
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectId(item.id)
+                              setRejectReason('')
+                            }}
+                            className="inline-flex h-9 items-center rounded-xl border border-red-200 px-3 text-[12px] font-medium text-red-700 transition hover:bg-red-50"
+                          >
+                            Tolak
+                          </button>
+                        </>
                       ) : null}
-                    </>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+                    </div>
+                  </div>
+
+                  <div
+                    className="motion-collapse"
+                    data-open={expanded ? 'true' : 'false'}
+                  >
+                    <div>
+                      <div className="mt-3 rounded-xl border border-line bg-surface px-3.5 py-3">
+                        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+                          Detail pengajuan
+                        </p>
+                        <ul className="mt-2 space-y-1.5">
+                          {item.details.map((line) => (
+                            <li
+                              key={line}
+                              className="text-[13px] leading-snug text-ink"
+                            >
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
 
       {rejectId ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 p-3 sm:items-center">
-          <div className="w-full max-w-md rounded-2xl border border-line bg-panel p-4 shadow-lg">
+          <button
+            type="button"
+            aria-label="Tutup"
+            className="motion-backdrop absolute inset-0"
+            onClick={() => setRejectId(null)}
+          />
+          <div className="motion-panel relative w-full max-w-md rounded-2xl border border-line bg-panel p-4 shadow-lg">
             <h3 className="text-[14px] font-semibold text-ink">Tolak pengajuan</h3>
             <p className="mt-1 text-[12px] text-muted">Alasan penolakan</p>
             <textarea

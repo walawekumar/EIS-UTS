@@ -93,10 +93,14 @@ export async function saveMasterCloud(snap: MasterSnapshot): Promise<void> {
     .from('partners')
     .select('id')
   if (ep) throw ep
+  const existingPartnerIds = (existingPartners ?? []).map((r) => r.id as string)
+  if (partnerRows.length === 0 && existingPartnerIds.length > 0) {
+    throw new Error(
+      'Menolak hapus semua partners — payload kosong sementara remote masih berisi data.',
+    )
+  }
   const keepP = new Set(partnerRows.map((r) => r.id))
-  const dropP = (existingPartners ?? [])
-    .map((r) => r.id as string)
-    .filter((id) => !keepP.has(id))
+  const dropP = existingPartnerIds.filter((id) => !keepP.has(id))
   if (dropP.length) {
     const { error } = await sb.from('partners').delete().in('id', dropP)
     if (error) throw error
@@ -106,10 +110,14 @@ export async function saveMasterCloud(snap: MasterSnapshot): Promise<void> {
     .from('products')
     .select('id')
   if (epr) throw epr
+  const existingProductIds = (existingProducts ?? []).map((r) => r.id as string)
+  if (productRows.length === 0 && existingProductIds.length > 0) {
+    throw new Error(
+      'Menolak hapus semua products — payload kosong sementara remote masih berisi data.',
+    )
+  }
   const keepPr = new Set(productRows.map((r) => r.id))
-  const dropPr = (existingProducts ?? [])
-    .map((r) => r.id as string)
-    .filter((id) => !keepPr.has(id))
+  const dropPr = existingProductIds.filter((id) => !keepPr.has(id))
   if (dropPr.length) {
     const { error } = await sb.from('products').delete().in('id', dropPr)
     if (error) throw error

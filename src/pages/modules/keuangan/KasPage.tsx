@@ -175,7 +175,7 @@ export function KasPage() {
       direction: form.direction,
       category: form.category,
       description: form.note.trim()
-        ? `${form.description.trim()} — ${form.note.trim()}`
+        ? `${form.description.trim()}, ${form.note.trim()}`
         : form.description.trim(),
       amount,
       receiptName: receiptPersistRef(receipt),
@@ -223,7 +223,7 @@ export function KasPage() {
         { label: 'Keterangan', value: entry.description },
         { label: 'Saldo setelah', value: formatIdr(entry.balance) },
         { label: 'Dicatat oleh', value: entry.actor },
-        { label: 'Struk', value: entry.receiptName ?? '—' },
+        { label: 'Struk', value: entry.receiptName ?? ',' },
       ],
       { subtitle: entry.description, module: 'Keuangan · Kas' },
     )
@@ -239,7 +239,7 @@ export function KasPage() {
           <div>
             <h2 className="text-[14px] font-semibold text-ink">Buku kas</h2>
             <p className="mt-0.5 text-[12px] text-muted">
-              Mutasi kas masuk dan keluar — pencarian, detail, dan pencatatan
+              Mutasi kas masuk dan keluar, pencarian, detail, dan pencatatan
             </p>
           </div>
           <FinanceToast message={toast} />
@@ -325,7 +325,15 @@ export function KasPage() {
             {rows.length === 0 ? (
               <FinanceEmptyRow
                 colSpan={9}
-                message="Tidak ada mutasi yang cocok."
+                message={
+                  cashEntries.length === 0
+                    ? 'Belum ada mutasi kas. Catat pemasukan atau pengeluaran pertama.'
+                    : 'Tidak ada mutasi yang cocok dengan filter.'
+                }
+                actionLabel={
+                  cashEntries.length === 0 ? '+ Catat mutasi' : undefined
+                }
+                onAction={cashEntries.length === 0 ? openForm : undefined}
               />
             ) : (
               rows.map((row, index) => (

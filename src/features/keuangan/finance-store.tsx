@@ -206,7 +206,7 @@ function prependCash(
       : Math.max(0, prev - partial.amount)
   const entry: CashEntry = {
     id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    date: formatDateId(),
+    date: todayIsoDate(),
     reference: nextCashRef(list, partial.direction),
     description: partial.description,
     category: partial.category,
@@ -774,7 +774,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       setExpenses((list) => {
         const entry: ExpenseRow = {
           id,
-          date: formatDateId(),
+          date: todayIsoDate(),
           reference: nextExpenseRef(list),
           category: input.category,
           description: input.description,

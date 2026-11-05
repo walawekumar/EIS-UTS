@@ -72,10 +72,17 @@ export async function saveRelationalTable(
   }
   const { data: existing, error: listErr } = await sb.from(table).select('id')
   if (listErr) throw listErr
+  const existingIds = (existing ?? []).map((r) =>
+    String((r as { id: string }).id),
+  )
+  // Refuse accidental full wipe (empty local projection vs non-empty remote).
+  if (stamped.length === 0 && existingIds.length > 0) {
+    throw new Error(
+      `Menolak hapus semua baris ${table} — payload kosong sementara remote masih berisi data.`,
+    )
+  }
   const keep = new Set(stamped.map(getId))
-  const drop = (existing ?? [])
-    .map((r) => String((r as { id: string }).id))
-    .filter((id) => !keep.has(id))
+  const drop = existingIds.filter((id) => !keep.has(id))
   if (drop.length) {
     const { error } = await sb.from(table).delete().in('id', drop)
     if (error) throw error
@@ -141,8 +148,10 @@ export async function hydrateRelationalTables(
   )
   if (failed.length) {
     setCloudPersistError(
-      `Gagal memuat tabel: ${failed.join(', ')}. Mode lokal sementara.`,
+      `Gagal memuat tabel: ${failed.join(', ')}. Aplikasi menunggu cloud siap.`,
     )
+  } else {
+    clearCloudPersistError()
   }
   return { failed }
 }

@@ -38,6 +38,7 @@ type PayrollStoreValue = {
   submitForApproval: (id: string) => string | undefined
   approveAsAdmin: (id: string) => string | undefined
   approveAsKeuangan: (id: string) => string | undefined
+  rejectRun: (id: string, reason: string) => string | undefined
   postRun: (id: string, proof: ProofAttachment | string) => DualTrackResult
   voidRun: (id: string) => string | undefined
   deleteRun: (id: string) => void
@@ -205,7 +206,12 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       setRuns((list) =>
         list.map((r) =>
           r.id === id
-            ? { ...r, status: 'menunggu_approve', approvals: clearApprovals() }
+            ? {
+                ...r,
+                status: 'menunggu_approve',
+                approvals: clearApprovals(),
+                rejectReason: undefined,
+              }
             : r,
         ),
       )
@@ -274,6 +280,44 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         entity: 'expense',
         entityId: id,
         note: 'Approve payroll (keuangan)',
+      })
+      return undefined
+    },
+    [runs, user, appendAudit],
+  )
+
+  const rejectRun = useCallback(
+    (id: string, reason: string): string | undefined => {
+      const role = user?.role
+      if (role !== 'admin' && role !== 'keuangan') {
+        return 'Hanya admin atau keuangan yang dapat menolak payroll'
+      }
+      const trimmed = reason.trim()
+      if (!trimmed) return 'Alasan penolakan wajib diisi.'
+      const current = runs.find((r) => r.id === id)
+      if (
+        !current ||
+        (current.status !== 'menunggu_approve' && current.status !== 'siap_cair')
+      ) {
+        return 'Payroll tidak menunggu persetujuan'
+      }
+      setRuns((list) =>
+        list.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                status: 'draft',
+                approvals: clearApprovals(),
+                rejectReason: trimmed,
+              }
+            : r,
+        ),
+      )
+      appendAudit({
+        action: 'reject',
+        entity: 'expense',
+        entityId: id,
+        note: `Tolak payroll: ${trimmed}`,
       })
       return undefined
     },
@@ -399,6 +443,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       submitForApproval,
       approveAsAdmin,
       approveAsKeuangan,
+      rejectRun,
       postRun,
       voidRun,
       deleteRun,
@@ -410,6 +455,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       submitForApproval,
       approveAsAdmin,
       approveAsKeuangan,
+      rejectRun,
       postRun,
       voidRun,
       deleteRun,

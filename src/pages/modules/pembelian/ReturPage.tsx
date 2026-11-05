@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDokParam } from '@/hooks/useDokParam'
 import { FinanceFilterBar } from '@/components/keuangan/FinanceFilterBar'
 import { FinancePager } from '@/components/keuangan/FinancePager'
 import { FinanceStatGrid } from '@/components/keuangan/FinanceStatGrid'
@@ -121,8 +122,8 @@ export function ReturPage() {
     dir: 'desc',
   })
   const [page, setPage] = useState(1)
+  const { dokId: drawerId, openDok, clearDok } = useDokParam()
   const [toast, setToast] = useState<string | null>(null)
-  const [drawerId, setDrawerId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [postOpen, setPostOpen] = useState(false)
   const [ppnRate, setPpnRate] = useState<PpnRate>(
@@ -144,30 +145,26 @@ export function ReturPage() {
     {
       label: 'Draft',
       value: String(counts.draft),
-      delta: 'Belum diajukan',
+      delta: counts.draft ? 'Belum diajukan' : 'Kosong',
       positive: true,
-      spark: [1, 1, 2, 1, 2, 2, 1],
     },
     {
       label: 'Diajukan',
       value: String(counts.diajukan),
-      delta: 'Menunggu keuangan',
+      delta: counts.diajukan ? 'Menunggu keuangan' : 'Tidak ada antrian',
       positive: counts.diajukan === 0,
-      spark: [1, 2, 1, 2, 2, 1, 2],
     },
     {
       label: 'Disetujui',
       value: String(counts.disetujui),
-      delta: 'Siap posting',
+      delta: counts.disetujui ? 'Siap posting' : ',',
       positive: true,
-      spark: [1, 1, 2, 2, 2, 3, 3],
     },
     {
       label: 'Posted',
       value: String(counts.posted),
-      delta: 'Stok & utang',
+      delta: counts.posted ? 'Stok & utang' : ',',
       positive: true,
-      spark: [1, 2, 2, 3, 3, 4, 4],
     },
   ]
 
@@ -206,6 +203,10 @@ export function ReturPage() {
     const t = window.setTimeout(() => setToast(null), 2400)
     return () => window.clearTimeout(t)
   }, [toast])
+
+  useEffect(() => {
+    if (drawerId) setCreating(false)
+  }, [drawerId])
 
   useEffect(() => {
     const id = pendingSubmitId.current
@@ -254,7 +255,7 @@ export function ReturPage() {
 
   function closeDrawer() {
     setCreating(false)
-    setDrawerId(null)
+    clearDok()
     setPostOpen(false)
     setRejectOpen(false)
   }
@@ -301,7 +302,7 @@ export function ReturPage() {
           onAction={
             canRecord
               ? () => {
-                  setDrawerId(null)
+                  clearDok()
                   setCreating(true)
                 }
               : undefined
@@ -348,7 +349,7 @@ export function ReturPage() {
                     <FinanceTd>
                       <span className="font-medium">{row.purchaseId}</span>
                       <span className="mt-0.5 block text-[11px] text-muted">
-                        {supplier?.name ?? '—'}
+                        {supplier?.name ?? ','}
                       </span>
                     </FinanceTd>
                     <FinanceTd mono align="right">
@@ -365,7 +366,7 @@ export function ReturPage() {
                         type="button"
                         onClick={() => {
                           setCreating(false)
-                          setDrawerId(row.id)
+                          openDok(row.id)
                         }}
                         className="rounded-xl px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:bg-brand-50"
                       >
@@ -403,7 +404,7 @@ export function ReturPage() {
             const err = createPurchaseReturn(input)
             if (err) return err
             setCreating(false)
-            setDrawerId(predicted)
+            openDok(predicted)
             if (andSubmit) pendingSubmitId.current = predicted
             else setToast(`${predicted} disimpan sebagai draft`)
             return undefined
@@ -648,7 +649,7 @@ function ReturnDrawer({
             options={eligible.map((p) => ({
               value: p.id,
               label: p.id,
-              description: `${getSupplier(p.supplierId)?.name ?? '—'} · sisa ${formatKg(
+              description: `${getSupplier(p.supplierId)?.name ?? ','} · sisa ${formatKg(
                 Math.max(
                   0,
                   receivedKg(p) -

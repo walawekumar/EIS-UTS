@@ -1,4 +1,4 @@
-import type { AuthUser } from '@/types/auth'
+import { isUserRole, ROLE_LABELS, type AuthUser } from '@/types/auth'
 
 const LOCAL_KEY = 'egabah.auth.user'
 const SESSION_KEY = 'egabah.auth.session'
@@ -9,7 +9,23 @@ export function loadStoredUser(): AuthUser | null {
     const raw =
       localStorage.getItem(LOCAL_KEY) ?? sessionStorage.getItem(SESSION_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as AuthUser
+    const parsed = JSON.parse(raw) as Partial<AuthUser>
+    if (
+      typeof parsed.id !== 'string' ||
+      typeof parsed.name !== 'string' ||
+      typeof parsed.email !== 'string' ||
+      !isUserRole(parsed.role)
+    ) {
+      clearStoredUser()
+      return null
+    }
+    return {
+      id: parsed.id,
+      name: parsed.name,
+      email: parsed.email,
+      role: parsed.role,
+      roleLabel: ROLE_LABELS[parsed.role],
+    }
   } catch {
     return null
   }

@@ -343,7 +343,7 @@ export function EFakturPage() {
                     {formatInvoiceDate(row.date)}
                   </FinanceTd>
                   <FinanceTd className="max-w-[180px] truncate">
-                    {row.partyName ?? '—'}
+                    {row.partyName ?? ','}
                   </FinanceTd>
                   <FinanceTd align="right" mono>
                     {formatIdr(row.dpp)}
@@ -415,7 +415,7 @@ export function EFakturPage() {
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">Pelanggan</dt>
                 <dd className="text-right text-ink">
-                  {detail.partyName ?? '—'}
+                  {detail.partyName ?? ','}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">

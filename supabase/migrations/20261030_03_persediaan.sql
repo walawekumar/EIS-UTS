@@ -1,4 +1,4 @@
--- Persediaan cloud. Depends on 20261030_master_rbac (profiles, auth_is_admin, product_category).
+-- Persediaan cloud. Depends on 20261030_01_master_rbac (profiles, auth_is_admin, product_category).
 
 do $$ begin
   create type public.movement_type as enum ('in', 'out', 'transfer');

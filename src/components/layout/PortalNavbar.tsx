@@ -83,7 +83,31 @@ export function PortalNavbar() {
                     <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />
                   </svg>
                 </NavIcon>
-                Dashboard
+                E-Gabah
+              </>
+            )}
+          </NavLink>
+
+          <NavLink
+            to="/absensi"
+            className={({ isActive }) =>
+              [
+                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition',
+                isActive
+                  ? 'bg-white/15 font-medium text-white'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white',
+              ].join(' ')
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <NavIcon active={isActive}>
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                </NavIcon>
+                E-Absensi
               </>
             )}
           </NavLink>

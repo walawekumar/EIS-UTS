@@ -22,7 +22,7 @@ export const splitAsideClass = [
   'flex w-full shrink-0 flex-col overflow-hidden lg:w-[min(100%,380px)]',
 ].join(' ')
 
-/** Panel kanan — konten mengisi, aksi di bawah. */
+/** Panel kanan, konten mengisi, aksi di bawah. */
 export const splitAsideBodyClass =
   'scrollbar-brand flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:p-5'
 
@@ -35,7 +35,7 @@ export const secondaryBtn =
 export const sectionLabel =
   'text-[11px] font-medium tracking-[0.08em] text-muted uppercase'
 
-/** Highlight baris terpilih — aksen kiri, tanpa wash penuh yang melelahkan. */
+/** Highlight baris terpilih, aksen kiri, tanpa wash penuh yang melelahkan. */
 export const activeRowClass =
   'relative bg-brand-50/70 hover:bg-brand-50/70 after:absolute after:inset-y-1 after:left-0 after:w-[3px] after:rounded-full after:bg-brand-600'
 
@@ -212,7 +212,7 @@ export function QueueGroup({
       </div>
       {count === 0 && hint ? (
         <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[12px] text-muted">
-          Kosong — {hint.toLowerCase()}.
+          Kosong, {hint.toLowerCase()}.
         </p>
       ) : (
         <ul className="space-y-2">{children}</ul>

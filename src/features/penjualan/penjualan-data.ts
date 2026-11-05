@@ -268,7 +268,7 @@ type Seed = Omit<SaleOrder, 'payments'> & { payments?: SeedPayment[] }
 const SEED: Seed[] = [
   {
     id: 'SO-2610-0010',
-    date: '2026-10-29',
+    date: '2026-11-05',
     customerId: 'cus-01',
     sku: 'BRS-PREM',
     productName: 'Beras Premium 25kg',
@@ -280,7 +280,7 @@ const SEED: Seed[] = [
   },
   {
     id: 'SO-2610-0009',
-    date: '2026-10-28',
+    date: '2026-11-04',
     customerId: 'cus-03',
     sku: 'BRS-MED',
     productName: 'Beras Medium',
@@ -291,7 +291,7 @@ const SEED: Seed[] = [
   },
   {
     id: 'SO-2610-0008',
-    date: '2026-10-27',
+    date: '2026-11-03',
     customerId: 'cus-02',
     sku: 'BRS-PREM',
     productName: 'Beras Premium 25kg',
@@ -300,7 +300,7 @@ const SEED: Seed[] = [
     price: 318_000,
     stage: 'dikirim',
     delivery: {
-      shippedAt: '2026-10-27',
+      shippedAt: '2026-11-03',
       vehicle: 'AB 1122 CD',
       driver: 'Pak Sulis',
       settlement: 'kredit',

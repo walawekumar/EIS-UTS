@@ -32,7 +32,7 @@ import {
   DrawerHero,
   DrawerSection,
 } from '@/components/ops/DetailDrawer'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { ConfirmDialog, PromptDialog } from '@/components/ui/ConfirmDialog'
 import { TextField } from '@/components/ui/TextField'
 import { useAuth } from '@/features/auth/AuthContext'
 import { parseIdrInput } from '@/features/keuangan/keuangan-data'
@@ -86,6 +86,7 @@ export function PayrollPage() {
     submitForApproval,
     approveAsAdmin,
     approveAsKeuangan,
+    rejectRun,
     postRun,
     voidRun,
     deleteRun,
@@ -146,21 +147,18 @@ export function PayrollPage() {
         value: String(runs.length),
         delta: `${draft.length} draft · ${pending.length} approve`,
         positive: true,
-        spark: [1, 1, 2, 2, 2, 3, 3],
       },
       {
         label: 'Posted',
         value: String(posted.length),
         delta: 'ke kas keluar',
         positive: true,
-        spark: [1, 1, 1, 2, 2, 2, 2],
       },
       {
         label: 'Total posted',
         value: formatIdr(totalPosted),
         delta: 'periode aktif',
         positive: true,
-        spark: [4, 4, 5, 5, 6, 6, 7],
       },
     ]
   }, [runs])
@@ -368,6 +366,14 @@ export function PayrollPage() {
             if (err) setToast(err)
             else setToast('Approve keuangan tercatat')
           }}
+          onReject={(reason) => {
+            const err = rejectRun(detail.id, reason)
+            if (err) setToast(err)
+            else {
+              setToast('Payroll ditolak — kembali ke draft')
+              closeDetail()
+            }
+          }}
           onPost={(proof) => {
             const result = postRun(detail.id, proof)
             if (!result.ok) {
@@ -413,6 +419,7 @@ function PayrollDetailDrawer({
   onSubmit,
   onApproveAdmin,
   onApproveKeuangan,
+  onReject,
   onPost,
   onDelete,
   onVoid,
@@ -426,6 +433,7 @@ function PayrollDetailDrawer({
   onSubmit: () => void
   onApproveAdmin: () => void
   onApproveKeuangan: () => void
+  onReject: (reason: string) => void
   onPost: (proof: NonNullable<ReturnType<typeof receiptToProof>>) => void
   onDelete: () => void
   onVoid: () => void
@@ -448,6 +456,7 @@ function PayrollDetailDrawer({
     proofToReceipt(run.transferProof),
   )
   const [receiptError, setReceiptError] = useState<string | undefined>()
+  const [rejectOpen, setRejectOpen] = useState(false)
 
   useEffect(() => {
     if (!editUserId || !run.lines.some((l) => l.userId === editUserId)) {
@@ -574,10 +583,10 @@ function PayrollDetailDrawer({
             (userRole === 'admin' || userRole === 'keuangan') ? (
               <button
                 type="button"
-                onClick={onVoid}
+                onClick={() => setRejectOpen(true)}
                 className="h-11 w-full rounded-xl border border-red-200 text-[14px] font-medium text-red-700 hover:bg-red-50"
               >
-                Void run
+                Tolak
               </button>
             ) : null}
           </>
@@ -588,6 +597,12 @@ function PayrollDetailDrawer({
           amount={formatIdr(runTotal(run))}
           hint={`${run.lines.length} karyawan`}
         />
+
+        {run.rejectReason && run.status === 'draft' ? (
+          <DrawerSection label="Penolakan terakhir">
+            <p className="text-[13px] text-red-700">{run.rejectReason}</p>
+          </DrawerSection>
+        ) : null}
 
         {run.approvals.length > 0 ? (
           <DrawerSection label="Persetujuan">
@@ -695,7 +710,7 @@ function PayrollDetailDrawer({
                   ['Tunjangan', formatIdr(activeLine.allowance)],
                   ['Potongan', formatIdr(activeLine.deduction)],
                   ['Bersih', formatIdr(lineNet(activeLine))],
-                  ['Catatan', activeLine.note || '—'],
+                  ['Catatan', activeLine.note || ','],
                 ]}
               />
             )}
@@ -743,20 +758,35 @@ function PayrollDetailDrawer({
           ) : (
             <DrawerFacts
               items={[
-                ['Catatan', run.note || '—'],
+                ['Catatan', run.note || ','],
                 ['Dibuat', new Date(run.createdAt).toLocaleString('id-ID')],
                 [
                   'Posted',
                   run.postedAt
                     ? new Date(run.postedAt).toLocaleString('id-ID')
-                    : '—',
+                    : ',',
                 ],
-                ['Catatan mutasi', run.mutationNote || '—'],
+                ['Catatan mutasi', run.mutationNote || ','],
               ]}
             />
           )}
         </DrawerSection>
       </DetailDrawer>
+
+      <PromptDialog
+        open={rejectOpen}
+        title="Tolak payroll"
+        description="Payroll dikembalikan ke draft. Alasan wajib diisi."
+        label="Alasan penolakan"
+        placeholder="Contoh: nominal belum sesuai"
+        confirmLabel="Tolak"
+        danger
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => {
+          setRejectOpen(false)
+          onReject(reason)
+        }}
+      />
 
       <ConfirmDialog
         open={confirmEdit !== null}

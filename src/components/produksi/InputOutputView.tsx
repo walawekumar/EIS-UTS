@@ -56,14 +56,12 @@ function buildStats(batches: ProductionBatch[]): MetricCardData[] {
       value: String(editable.length),
       delta: 'bisa diedit I/O',
       positive: true,
-      spark: [2, 3, 3, 4, 3, 4, 4],
     },
     {
       label: 'Selisih massa besar',
       value: String(imbalances.length),
       delta: '>8% input',
       positive: imbalances.length === 0,
-      spark: [1, 0, 1, 1, 0, 0, 1],
     },
     {
       label: 'Total input',
@@ -73,7 +71,6 @@ function buildStats(batches: ProductionBatch[]): MetricCardData[] {
       ),
       delta: 'semua batch',
       positive: true,
-      spark: [40, 42, 45, 48, 50, 52, 55],
     },
   ]
 }
