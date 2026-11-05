@@ -16,7 +16,8 @@ begin
       ('produksi@egabah.local', 'Operator Produksi', 'produksi', '', '0812-0000-0003', 'Mill Klaten', 'Produksi'),
       ('gudang@egabah.local', 'Petugas Gudang', 'gudang', '', '0812-0000-0004', 'Mill Klaten', 'Gudang'),
       ('jual@egabah.local', 'Petugas Penjualan', 'penjualan', '', '0812-0000-0005', 'Mill Klaten', 'Penjualan'),
-      ('kas@egabah.local', 'Petugas Keuangan', 'keuangan', '', '0812-0000-0006', 'Mill Klaten', 'Keuangan')
+      ('kas@egabah.local', 'Petugas Keuangan', 'keuangan', '', '0812-0000-0006', 'Mill Klaten', 'Keuangan'),
+      ('hr@egabah.local', 'Human Resources', 'hr', 'HR', '0812-0000-0007', 'Kantor Pusat', 'SDM')
     ) as t(email, name, role, title, phone, branch, department)
   loop
     -- hapus user lama dengan email sama (cascade identities + profiles)

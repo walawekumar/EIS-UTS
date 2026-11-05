@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { AbsensiProvider } from '@/features/absensi/absensi-store'
+import { LeaveProvider } from '@/features/hr/leave-store'
 import { AuditProvider } from '@/features/audit/audit-store'
 import { OpsCloudGate } from '@/features/cloud/OpsCloudGate'
 import { FinanceProvider } from '@/features/keuangan/finance-store'
@@ -26,15 +27,17 @@ export function AuthenticatedProviders() {
                   <ExpenseTaxBridge />
                   <PayrollProvider>
                     <AbsensiProvider>
-                      <PersediaanProvider>
-                        <ProduksiProvider>
-                          <PembelianProvider>
-                            <PenjualanProvider>
-                              <Outlet />
-                            </PenjualanProvider>
-                          </PembelianProvider>
-                        </ProduksiProvider>
-                      </PersediaanProvider>
+                      <LeaveProvider>
+                        <PersediaanProvider>
+                          <ProduksiProvider>
+                            <PembelianProvider>
+                              <PenjualanProvider>
+                                <Outlet />
+                              </PenjualanProvider>
+                            </PembelianProvider>
+                          </ProduksiProvider>
+                        </PersediaanProvider>
+                      </LeaveProvider>
                     </AbsensiProvider>
                   </PayrollProvider>
                 </TaxProvider>

@@ -25,7 +25,7 @@ export function mapSupabaseError(err: unknown): string {
       ? String((err as { code: unknown }).code)
       : ''
   if (code === '42501' || /permission|row-level security/i.test(msg)) {
-    return 'Tidak punya izin (RLS).'
+    return 'Akun ini tidak berhak mengubah data tersebut.'
   }
   return msg || 'Gagal menyimpan ke cloud.'
 }

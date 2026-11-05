@@ -125,16 +125,36 @@ export function buildInbox(src: InboxSources): InboxItem[] {
   }
 
   for (const run of src.payrollRuns) {
-    if (run.status !== 'menunggu_approve') continue
-    const actors: UserRole[] = ['admin', 'keuangan']
+    let actors: UserRole[] = []
+    let statusLabel = 'Menunggu approve'
+    let href = dokHref('/app/keuangan/payroll', run.id)
+    if (run.status === 'menunggu_hr') {
+      actors = ['hr']
+      statusLabel = 'Menunggu HR'
+      href = dokHref('/hr/payroll/persetujuan', run.id)
+    } else if (run.status === 'menunggu_admin') {
+      actors = ['admin']
+      statusLabel = 'Menunggu admin'
+      href = dokHref('/hr/payroll/persetujuan', run.id)
+    } else if (run.status === 'menunggu_keuangan') {
+      actors = ['keuangan']
+      statusLabel = 'Menunggu keuangan'
+    } else if (run.status === 'siap_cair') {
+      actors = ['keuangan']
+      statusLabel = 'Siap cair'
+    } else if (run.status === 'menunggu_approve') {
+      actors = ['admin', 'keuangan', 'hr']
+    } else {
+      continue
+    }
     if (!visibleTo(src.role, actors)) continue
     items.push({
       id: `pay:${run.id}`,
       kind: 'payroll',
       title: run.id,
       subtitle: `Payroll · ${run.period}`,
-      statusLabel: 'Menunggu approve',
-      href: dokHref('/app/keuangan/payroll', run.id),
+      statusLabel,
+      href,
       createdAt: run.createdAt,
       actorRoles: actors,
       details: [

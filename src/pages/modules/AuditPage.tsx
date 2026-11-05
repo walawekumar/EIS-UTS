@@ -86,6 +86,8 @@ export function AuditPage() {
             { value: 'purchase', label: 'Pembelian' },
             { value: 'sale', label: 'Penjualan' },
             { value: 'expense', label: 'Biaya/Payroll' },
+            { value: 'attendance', label: 'Absensi' },
+            { value: 'leave', label: 'Cuti / izin' },
           ]}
           onFilterChange={(v) => {
             setFilter(v)

@@ -34,6 +34,8 @@ type LoginInput = {
 type AuthContextValue = {
   user: AuthUser | null
   isAuthenticated: boolean
+  /** False until first session/profile resolve (Supabase) or local boot. */
+  authReady: boolean
   login: (input: LoginInput) => Promise<void>
   logout: () => void
 }
@@ -46,10 +48,13 @@ function timeoutMs(value: string): number | null {
   return Number.isFinite(n) ? n * 60_000 : 60 * 60_000
 }
 
+/**
+ * Optimistic boot from localStorage so a new tab does not flash
+ * unauthenticated → /login → /portal while getSession is in flight.
+ * Session is confirmed (or cleared) in the Supabase sync effect.
+ */
 function bootUser(): AuthUser | null {
-  // Cloud builds wait for getSession + profiles — never trust storage alone.
-  if (isSupabaseConfigured()) return null
-  if (import.meta.env.PROD) {
+  if (import.meta.env.PROD && !isSupabaseConfigured()) {
     clearStoredUser()
     return null
   }
@@ -58,6 +63,7 @@ function bootUser(): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => bootUser())
+  const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured())
 
   const logout = useCallback(() => {
     void flushPendingRelationalSaves().finally(() => {
@@ -98,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextUser = authUserFromProfile(profile)
         saveStoredUser(nextUser, remember)
         setUser(nextUser)
+        setAuthReady(true)
         return
       }
 
@@ -121,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextUser = toAuthUser(account)
       saveStoredUser(nextUser, remember)
       setUser(nextUser)
+      setAuthReady(true)
     },
     [],
   )
@@ -131,10 +139,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearStoredUser()
         setUser(null)
       }
+      setAuthReady(true)
       return
     }
     const sb = getSupabase()
-    if (!sb) return
+    if (!sb) {
+      setAuthReady(true)
+      return
+    }
     let cancelled = false
 
     async function syncFromSession(uid: string | undefined) {
@@ -156,20 +168,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         saveStoredUser(next, true)
         setUser(next)
       } catch {
-        clearStoredUser()
-        if (!cancelled) setUser(null)
+        // Keep optimistic user if profile fetch fails transiently;
+        // only clear when there is truly no session (handled above).
+        if (!cancelled && !loadStoredUser()) setUser(null)
       }
     }
 
     void (async () => {
-      const { data } = await sb.auth.getSession()
-      await syncFromSession(data.session?.user?.id)
+      try {
+        const { data } = await sb.auth.getSession()
+        await syncFromSession(data.session?.user?.id)
+      } finally {
+        if (!cancelled) setAuthReady(true)
+      }
     })()
 
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
-        // Return before any Supabase call. Awaiting inside this callback
-        // deadlocks the auth lock; flush, then clear, on a later turn.
         window.setTimeout(() => {
           void flushPendingRelationalSaves().finally(() => {
             clearStoredUser()
@@ -181,7 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (
         event === 'SIGNED_IN' ||
         event === 'TOKEN_REFRESHED' ||
-        event === 'USER_UPDATED'
+        event === 'USER_UPDATED' ||
+        event === 'INITIAL_SESSION'
       ) {
         void syncFromSession(session?.user?.id)
       }
@@ -224,10 +240,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       isAuthenticated: Boolean(user),
+      authReady,
       login,
       logout,
     }),
-    [user, login, logout],
+    [user, authReady, login, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

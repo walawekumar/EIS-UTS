@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { SideOverlay } from '@/components/ops/SideOverlay'
 import { primaryBtn, secondaryBtn, sectionLabel } from '@/components/pembelian/Toolbar'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
@@ -49,7 +50,7 @@ function emptyForm(): FormState {
 
 const GRAIN_OPTIONS = (Object.keys(GRAIN_STANDARD) as GrainType[]).map((g) => ({
   value: g,
-  label: `${g} — ${GRAIN_STANDARD[g].label}`,
+  label: `${g}, ${GRAIN_STANDARD[g].label}`,
   description: `Maks kadar air ${GRAIN_STANDARD[g].moisture}% · hampa ${GRAIN_STANDARD[g].impurity}%`,
 }))
 
@@ -64,25 +65,12 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
     }))
   const [form, setForm] = useState<FormState>(emptyForm)
   const [errors, setErrors] = useState<FormErrors>({})
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
     setForm(emptyForm())
     setErrors({})
-
-    function onEscape(event: KeyboardEvent) {
-      // Select menutup dirinya sendiri lebih dulu
-      if (event.key === 'Escape' && !document.querySelector('[role="listbox"]')) {
-        onCloseRef.current()
-      }
-    }
-    document.addEventListener('keydown', onEscape)
-    return () => document.removeEventListener('keydown', onEscape)
   }, [open])
-
-  if (!open) return null
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -126,18 +114,11 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="pb-form-title">
-      <button
-        type="button"
-        aria-label="Tutup"
-        onClick={onClose}
-        className="absolute inset-0 bg-ink/35 backdrop-blur-[1px]"
-      />
-
+    <SideOverlay open={open} onClose={onClose} panelClassName="max-w-[440px]" labelledBy="pb-form-title">
       <form
         onSubmit={onSubmit}
         noValidate
-        className="relative m-0 flex h-full w-full max-w-[440px] flex-col bg-panel shadow-[0_0_48px_rgba(20,32,25,0.18)] sm:m-2 sm:h-[calc(100%-1rem)] sm:rounded-2xl"
+        className="flex h-full min-h-0 w-full flex-col"
       >
         <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>
@@ -263,6 +244,6 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
           </div>
         </footer>
       </form>
-    </div>
+    </SideOverlay>
   )
 }

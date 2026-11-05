@@ -54,7 +54,9 @@ import { hasApproval } from '@/features/workflow/approvals'
 const STATUS_FILTERS = [
   { value: 'all', label: 'Semua status' },
   { value: 'draft', label: 'Draft' },
-  { value: 'menunggu_approve', label: 'Menunggu approve' },
+  { value: 'menunggu_hr', label: 'Menunggu HR' },
+  { value: 'menunggu_admin', label: 'Menunggu admin' },
+  { value: 'menunggu_keuangan', label: 'Menunggu keuangan' },
   { value: 'siap_cair', label: 'Siap cair' },
   { value: 'posted', label: 'Posted' },
   { value: 'void', label: 'Void' },
@@ -69,6 +71,9 @@ const STATUS_TONE: Record<
   'neutral' | 'good' | 'warn' | 'muted'
 > = {
   draft: 'warn',
+  menunggu_hr: 'warn',
+  menunggu_admin: 'warn',
+  menunggu_keuangan: 'warn',
   menunggu_approve: 'warn',
   siap_cair: 'neutral',
   posted: 'good',
@@ -84,6 +89,7 @@ export function PayrollPage() {
     createRun,
     updateDraft,
     submitForApproval,
+    approveAsHr,
     approveAsAdmin,
     approveAsKeuangan,
     rejectRun,
@@ -139,7 +145,13 @@ export function PayrollPage() {
   const stats = useMemo(() => {
     const posted = runs.filter((r) => r.status === 'posted')
     const draft = runs.filter((r) => r.status === 'draft')
-    const pending = runs.filter((r) => r.status === 'menunggu_approve')
+    const pending = runs.filter(
+      (r) =>
+        r.status === 'menunggu_hr' ||
+        r.status === 'menunggu_admin' ||
+        r.status === 'menunggu_keuangan' ||
+        r.status === 'menunggu_approve',
+    )
     const totalPosted = posted.reduce((s, r) => s + runTotal(r), 0)
     return [
       {
@@ -354,7 +366,12 @@ export function PayrollPage() {
           onSubmit={() => {
             const err = submitForApproval(detail.id)
             if (err) setToast(err)
-            else setToast('Payroll diajukan — menunggu approve admin & keuangan')
+            else setToast('Payroll diajukan — menunggu approve HR')
+          }}
+          onApproveHr={() => {
+            const err = approveAsHr(detail.id)
+            if (err) setToast(err)
+            else setToast('Approve HR tercatat')
           }}
           onApproveAdmin={() => {
             const err = approveAsAdmin(detail.id)
@@ -364,7 +381,7 @@ export function PayrollPage() {
           onApproveKeuangan={() => {
             const err = approveAsKeuangan(detail.id)
             if (err) setToast(err)
-            else setToast('Approve keuangan tercatat')
+            else setToast('Approve keuangan tercatat — siap cair')
           }}
           onReject={(reason) => {
             const err = rejectRun(detail.id, reason)
@@ -417,6 +434,7 @@ function PayrollDetailDrawer({
   onUpdateNote,
   onUpdateMutationNote,
   onSubmit,
+  onApproveHr,
   onApproveAdmin,
   onApproveKeuangan,
   onReject,
@@ -431,6 +449,7 @@ function PayrollDetailDrawer({
   onUpdateNote: (note: string) => void
   onUpdateMutationNote: (note: string) => void
   onSubmit: () => void
+  onApproveHr: () => void
   onApproveAdmin: () => void
   onApproveKeuangan: () => void
   onReject: (reason: string) => void
@@ -441,10 +460,17 @@ function PayrollDetailDrawer({
   const locked = run.status === 'posted' || run.status === 'void'
   const lineEditable =
     run.status === 'draft' ||
+    run.status === 'menunggu_hr' ||
+    run.status === 'menunggu_admin' ||
+    run.status === 'menunggu_keuangan' ||
     run.status === 'menunggu_approve' ||
     run.status === 'siap_cair'
   const needsEditConfirm =
-    run.status === 'menunggu_approve' || run.status === 'siap_cair'
+    run.status === 'menunggu_hr' ||
+    run.status === 'menunggu_admin' ||
+    run.status === 'menunggu_keuangan' ||
+    run.status === 'menunggu_approve' ||
+    run.status === 'siap_cair'
 
   const [editUserId, setEditUserId] = useState<string | null>(
     () => run.lines[0]?.userId ?? null,
@@ -466,13 +492,17 @@ function PayrollDetailDrawer({
 
   const activeLine = run.lines.find((l) => l.userId === editUserId) ?? null
 
+  const canApproveHr =
+    userRole === 'hr' &&
+    run.status === 'menunggu_hr' &&
+    !hasApproval(run.approvals, 'hr')
   const canApproveAdmin =
     userRole === 'admin' &&
-    run.status === 'menunggu_approve' &&
+    run.status === 'menunggu_admin' &&
     !hasApproval(run.approvals, 'admin')
   const canApproveKeuangan =
     userRole === 'keuangan' &&
-    run.status === 'menunggu_approve' &&
+    run.status === 'menunggu_keuangan' &&
     !hasApproval(run.approvals, 'keuangan')
   const canCairFinance =
     run.status === 'siap_cair' &&
@@ -542,6 +572,15 @@ function PayrollDetailDrawer({
                 </button>
               </>
             ) : null}
+            {canApproveHr ? (
+              <button
+                type="button"
+                onClick={onApproveHr}
+                className="h-11 w-full rounded-xl bg-brand-800 text-[14px] font-semibold text-white hover:bg-brand-900"
+              >
+                Approve sebagai HR
+              </button>
+            ) : null}
             {canApproveAdmin ? (
               <button
                 type="button"
@@ -578,9 +617,14 @@ function PayrollDetailDrawer({
                 Void
               </button>
             ) : null}
-            {(run.status === 'menunggu_approve' ||
+            {(run.status === 'menunggu_hr' ||
+              run.status === 'menunggu_admin' ||
+              run.status === 'menunggu_keuangan' ||
+              run.status === 'menunggu_approve' ||
               run.status === 'siap_cair') &&
-            (userRole === 'admin' || userRole === 'keuangan') ? (
+            (userRole === 'admin' ||
+              userRole === 'keuangan' ||
+              userRole === 'hr') ? (
               <button
                 type="button"
                 onClick={() => setRejectOpen(true)}

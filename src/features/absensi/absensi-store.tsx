@@ -11,35 +11,49 @@ import {
 import {
   loadAbsensiCloud,
   mapSupabaseError,
-  saveAbsensiCloud,
+  saveAbsensiCloudForUser,
+  upsertAbsensiCloudRows,
 } from '@/features/absensi/absensi-cloud'
 import {
+  hasGeo,
+  readBrowserGeo,
   todayIsoDate,
   type AttendanceRecord,
+  type AttendanceStatus,
 } from '@/features/absensi/absensi-data'
 import { absensiRepository } from '@/features/absensi/absensi-storage'
+import { useAuditStore } from '@/features/audit/audit-store'
 import { useAuth } from '@/features/auth/AuthContext'
 import { isSupabaseConfigured } from '@/lib/supabase-client'
 
 type AbsensiStoreValue = {
   records: AttendanceRecord[]
   todayMine: AttendanceRecord | null
-  cloudReady: boolean
+  ready: boolean
   persistError: string | null
-  checkIn: () => string | undefined
-  checkOut: () => string | undefined
+  checkIn: () => Promise<string | undefined>
+  checkOut: () => Promise<string | undefined>
+  upsertAttendanceDays: (rows: AttendanceRecord[]) => Promise<string | undefined>
 }
 
 const AbsensiContext = createContext<AbsensiStoreValue | null>(null)
 
 export function AbsensiProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const { appendAudit } = useAuditStore()
   const configured = isSupabaseConfigured()
-  const boot = configured ? [] : absensiRepository.load().records
-  const [records, setRecords] = useState<AttendanceRecord[]>(() => [...boot])
-  const [cloudReady, setCloudReady] = useState(!configured)
+  const [records, setRecords] = useState<AttendanceRecord[]>(() =>
+    configured ? [] : absensiRepository.load().records,
+  )
+  const [ready, setReady] = useState(!configured)
+  const [cloudOk, setCloudOk] = useState(!configured)
   const [persistError, setPersistError] = useState<string | null>(null)
   const skipPersist = useRef(configured)
+  const userIdRef = useRef(user?.id)
+
+  useEffect(() => {
+    userIdRef.current = user?.id
+  }, [user?.id])
 
   useEffect(() => {
     if (!configured) return
@@ -50,14 +64,18 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         skipPersist.current = true
         setRecords([...rows])
+        setCloudOk(true)
         setPersistError(null)
-        setCloudReady(true)
+        setReady(true)
       } catch (e) {
         if (cancelled) return
+        skipPersist.current = true
+        setRecords(absensiRepository.load().records)
+        setCloudOk(false)
         setPersistError(
-          `${mapSupabaseError(e)} Absensi belum dimuat, penyimpanan cloud dinonaktifkan.`,
+          `${mapSupabaseError(e)} Absensi memakai penyimpanan lokal sementara.`,
         )
-        setCloudReady(false)
+        setReady(true)
       }
     })()
     return () => {
@@ -66,21 +84,27 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
   }, [configured])
 
   useEffect(() => {
-    if (configured) {
-      if (!cloudReady) return
-      if (skipPersist.current) {
-        skipPersist.current = false
-        return
-      }
+    if (!ready) return
+    if (skipPersist.current) {
+      skipPersist.current = false
+      return
+    }
+    const uid = userIdRef.current
+    if (configured && cloudOk && uid) {
       const handle = window.setTimeout(() => {
-        void saveAbsensiCloud(records)
+        void saveAbsensiCloudForUser(uid, records)
           .then(() => setPersistError(null))
-          .catch((e) => setPersistError(mapSupabaseError(e)))
+          .catch((e) => {
+            absensiRepository.save({ version: 1, records })
+            setPersistError(
+              `${mapSupabaseError(e)} Disimpan lokal (cloud gagal).`,
+            )
+          })
       }, 300)
       return () => window.clearTimeout(handle)
     }
     absensiRepository.save({ version: 1, records })
-  }, [configured, cloudReady, records])
+  }, [configured, cloudOk, ready, records])
 
   const today = todayIsoDate()
   const todayMine = useMemo(() => {
@@ -90,12 +114,14 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
     )
   }, [records, user, today])
 
-  const checkIn = useCallback((): string | undefined => {
+  const checkIn = useCallback(async (): Promise<string | undefined> => {
     if (!user) return 'Anda belum masuk.'
-    if (configured && !cloudReady) {
-      return persistError ?? 'Absensi cloud belum siap.'
-    }
+    if (!ready) return 'Absensi masih memuat…'
     if (todayMine?.checkIn) return 'Sudah check-in hari ini.'
+    const geo = await readBrowserGeo()
+    if (!hasGeo(geo)) {
+      return 'Izinkan lokasi perangkat untuk check-in (geolocation wajib).'
+    }
     const now = new Date()
     const late =
       now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 0)
@@ -105,38 +131,95 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
       userName: user.name,
       date: today,
       checkIn: now.toISOString(),
+      checkInGeo: geo,
       status: late ? 'terlambat' : 'hadir',
     }
     setRecords((list) => [row, ...list.filter((r) => r.id !== row.id)])
+    appendAudit({
+      action: 'create',
+      entity: 'attendance',
+      entityId: row.id,
+      after: row,
+      note: late ? 'Check-in terlambat + geo' : 'Check-in + geo',
+    })
     return undefined
-  }, [user, todayMine, today, configured, cloudReady, persistError])
+  }, [user, todayMine, today, ready, appendAudit])
 
-  const checkOut = useCallback((): string | undefined => {
+  const checkOut = useCallback(async (): Promise<string | undefined> => {
     if (!user) return 'Anda belum masuk.'
-    if (configured && !cloudReady) {
-      return persistError ?? 'Absensi cloud belum siap.'
-    }
+    if (!ready) return 'Absensi masih memuat…'
     if (!todayMine?.checkIn) return 'Check-in dulu sebelum check-out.'
     if (todayMine.checkOut) return 'Sudah check-out hari ini.'
+    const geo = await readBrowserGeo()
+    if (!hasGeo(geo)) {
+      return 'Izinkan lokasi perangkat untuk check-out (geolocation wajib).'
+    }
     const now = new Date().toISOString()
+    const before = todayMine
+    const after = { ...before, checkOut: now, checkOutGeo: geo }
     setRecords((list) =>
-      list.map((r) =>
-        r.id === todayMine.id ? { ...r, checkOut: now } : r,
-      ),
+      list.map((r) => (r.id === todayMine.id ? after : r)),
     )
+    appendAudit({
+      action: 'update',
+      entity: 'attendance',
+      entityId: todayMine.id,
+      before,
+      after,
+      note: 'Check-out + geo',
+    })
     return undefined
-  }, [user, todayMine, configured, cloudReady, persistError])
+  }, [user, todayMine, ready, appendAudit])
+
+  const upsertAttendanceDays = useCallback(
+    async (rows: AttendanceRecord[]): Promise<string | undefined> => {
+      if (!rows.length) return undefined
+      setRecords((list) => {
+        const map = new Map(list.map((r) => [r.id, r]))
+        for (const row of rows) map.set(row.id, row)
+        return [...map.values()].sort((a, b) => b.date.localeCompare(a.date))
+      })
+      if (configured && cloudOk) {
+        try {
+          await upsertAbsensiCloudRows(rows)
+          setPersistError(null)
+        } catch (e) {
+          absensiRepository.save({
+            version: 1,
+            records: (() => {
+              const cur = absensiRepository.load().records
+              const map = new Map(cur.map((r) => [r.id, r]))
+              for (const row of rows) map.set(row.id, row)
+              return [...map.values()]
+            })(),
+          })
+          return mapSupabaseError(e)
+        }
+      }
+      return undefined
+    },
+    [configured, cloudOk],
+  )
 
   const value = useMemo(
     (): AbsensiStoreValue => ({
       records,
       todayMine,
-      cloudReady,
+      ready,
       persistError,
       checkIn,
       checkOut,
+      upsertAttendanceDays,
     }),
-    [records, todayMine, cloudReady, persistError, checkIn, checkOut],
+    [
+      records,
+      todayMine,
+      ready,
+      persistError,
+      checkIn,
+      checkOut,
+      upsertAttendanceDays,
+    ],
   )
 
   return (
@@ -151,3 +234,5 @@ export function useAbsensiStore(): AbsensiStoreValue {
   }
   return ctx
 }
+
+export type { AttendanceStatus }

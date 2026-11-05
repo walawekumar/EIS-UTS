@@ -540,4 +540,46 @@ export const DASHBOARD_BY_ROLE: Record<UserRole, DashboardView> = {
       { label: 'Piutang pelanggan', value: 'Rp 2,8 jt', percent: 55 },
     ],
   },
+  hr: {
+    title: 'Ringkasan SDM',
+    description: 'Kehadiran, cuti, dan antrian approve gaji.',
+    metrics: [
+      {
+        label: 'Hadir hari ini',
+        value: '—',
+        delta: 'Lihat E-Absensi',
+        positive: true,
+      },
+      {
+        label: 'Cuti pending',
+        value: '—',
+        delta: 'E-HR persetujuan',
+        positive: true,
+      },
+      {
+        label: 'Payroll menunggu HR',
+        value: '—',
+        delta: 'E-HR gaji',
+        positive: true,
+      },
+      {
+        label: 'Kuota cuti',
+        value: '12 hari',
+        delta: 'Default tahunan',
+        positive: true,
+      },
+    ],
+    chartTitle: 'Aktivitas SDM',
+    chartUnit: 'indeks',
+    chartLabels: LABELS_7D,
+    chartSeries: [
+      { name: 'Kehadiran', color: '#1a4d5c', values: [40, 42, 45, 44, 48, 20, 18] },
+    ],
+    activities: [],
+    stockTitle: 'Fokus',
+    stockRows: [
+      { label: 'Portal E-HR', value: 'Buka', percent: 100 },
+      { label: 'E-Absensi', value: 'Buka', percent: 80 },
+    ],
+  },
 }

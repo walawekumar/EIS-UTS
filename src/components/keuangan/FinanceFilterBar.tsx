@@ -262,9 +262,9 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
   const hasDates = Boolean(onDateFromChange && onDateToChange)
 
   return (
-    <div className="mb-3.5 flex flex-col gap-2 lg:flex-row lg:items-center">
+    <div className="mb-3 flex flex-col gap-2 lg:mb-3.5 lg:flex-row lg:items-center">
       <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <label className="relative block min-w-0 w-full flex-1 basis-[14rem]">
+        <label className="relative block min-w-0 w-full flex-1 basis-[12rem]">
           <span className="sr-only">Cari</span>
           <svg
             viewBox="0 0 24 24"
@@ -286,8 +286,15 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           />
         </label>
 
-        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:w-auto sm:min-w-0 sm:flex-none md:flex md:flex-wrap md:items-center">
-          <div className="w-full md:w-[11rem]">
+        <div
+          className={[
+            'grid w-full gap-2',
+            hasDates || hasSecondary
+              ? 'grid-cols-2 sm:grid-cols-2 md:flex md:w-auto md:flex-wrap md:items-center'
+              : 'grid-cols-1 sm:w-auto md:flex',
+          ].join(' ')}
+        >
+          <div className="min-w-0 md:w-[11rem]">
             <FilterDropdown
               value={filter}
               options={filterOptions}
@@ -297,7 +304,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           </div>
 
           {hasSecondary ? (
-            <div className="w-full md:w-[11rem]">
+            <div className="min-w-0 md:w-[11rem]">
               <FilterDropdown
                 value={secondaryFilter}
                 options={secondaryFilterOptions}
@@ -308,7 +315,7 @@ export function FinanceFilterBar<T extends string, S extends string = never>({
           ) : null}
 
           {hasDates ? (
-            <div className="w-full md:w-[11rem]">
+            <div className="col-span-2 min-w-0 md:col-span-1 md:w-[11rem]">
               <DateRangeDropdown
                 dateFrom={dateFrom ?? ''}
                 dateTo={dateTo ?? ''}

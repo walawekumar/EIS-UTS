@@ -1,38 +1,54 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { PasswordField } from '@/components/ui/PasswordField'
 import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
 import { LeafMarkIcon, MailIcon } from '@/components/ui/icons'
 import { useAuth } from '@/features/auth/AuthContext'
-import { readAppSettings } from '@/features/settings/app-settings'
+import { consumeLaunchPath } from '@/lib/open-app-tab'
 import { isSupabaseConfigured } from '@/lib/supabase-client'
 import { LoginPreview } from '@/pages/login/LoginPreview'
 
 const showDemoHints =
   !import.meta.env.PROD && !isSupabaseConfigured()
 
-function resolvePostLoginPath(): string {
-  const path = readAppSettings().prefs.defaultModule.trim()
-  if (path === '/portal' || path === '/absensi') return path
-  if (path.startsWith('/app/') && path.length > '/app/'.length) {
-    return path
+function resolvePostLoginPath(from?: string): string {
+  if (from && from.startsWith('/') && from !== '/login' && from !== '/portal') {
+    return from
   }
+  const launch = consumeLaunchPath()
+  if (launch && launch !== '/login' && launch !== '/portal') return launch
   return '/portal'
 }
 
 export function LoginPage() {
-  const { isAuthenticated, login } = useAuth()
+  const { isAuthenticated, authReady, login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from =
+    typeof (location.state as { from?: unknown } | null)?.from === 'string'
+      ? (location.state as { from: string }).from
+      : undefined
   const [email, setEmail] = useState(showDemoHints ? 'admin@egabah.local' : '')
   const [password, setPassword] = useState(showDemoHints ? 'demo123' : '')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface">
+        <span
+          className="size-9 animate-spin rounded-full border-2 border-brand-200 border-t-brand-800"
+          aria-hidden
+        />
+      </div>
+    )
+  }
+
   if (isAuthenticated) {
-    return <Navigate to={resolvePostLoginPath()} replace />
+    return <Navigate to={resolvePostLoginPath(from)} replace />
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -41,7 +57,7 @@ export function LoginPage() {
     setLoading(true)
     try {
       await login({ email, password, remember })
-      navigate(resolvePostLoginPath(), { replace: true })
+      navigate(resolvePostLoginPath(from), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk.')
     } finally {
@@ -50,18 +66,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#e8eee9]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          backgroundImage:
-            'radial-gradient(ellipse 60% 40% at 15% 10%, rgba(198,232,214,0.9), transparent 55%), radial-gradient(ellipse 50% 35% at 90% 80%, rgba(213,230,220,0.8), transparent 50%)',
-        }}
-      />
-
-      <div className="relative mx-auto flex min-h-screen max-w-[1120px] items-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full rounded-[18px] border border-white/70 bg-white shadow-[0_24px_60px_rgba(20,32,25,0.12)] lg:grid-cols-[0.92fr_1.08fr]">
-          <section className="flex flex-col justify-center rounded-[18px] px-6 py-9 sm:px-10 lg:rounded-l-[18px] lg:rounded-r-none lg:px-12 lg:py-12">
+    <div className="min-h-screen bg-surface">
+      <div className="mx-auto flex min-h-screen max-w-[1120px] items-center px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid w-full overflow-hidden rounded-2xl border border-line bg-panel lg:grid-cols-[0.92fr_1.08fr]">
+          <section className="flex flex-col justify-center px-6 py-9 sm:px-10 lg:px-12 lg:py-12">
             <div className="mb-8 inline-flex items-center gap-2.5">
               <span className="inline-flex size-9 items-center justify-center rounded-[10px] bg-brand-800 text-white">
                 <LeafMarkIcon className="size-5" />

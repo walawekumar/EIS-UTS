@@ -4,6 +4,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 
 /** Halaman operasi: scroll alami, tanpa kunci tinggi viewport. */
 export function OpsPage({ children }: { children: ReactNode }) {
@@ -399,12 +400,12 @@ export function OpsSheet({
 
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end">
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex justify-end">
       <button
         type="button"
         aria-label="Tutup"
-        className="absolute inset-0 bg-brand-950/25 backdrop-blur-[1px] transition"
+        className="motion-backdrop absolute inset-0 bg-ink/35"
         onClick={onClose}
       />
       <div
@@ -412,7 +413,7 @@ export function OpsSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ops-sheet-title"
-        className="relative flex h-full w-full max-w-md flex-col bg-panel shadow-[-12px_0_40px_rgba(20,32,25,0.18)]"
+        className="motion-drawer relative flex h-full w-full max-w-md flex-col bg-panel shadow-[-16px_0_48px_rgba(20,32,25,0.18)]"
       >
         <header className="flex shrink-0 items-start gap-3 border-b border-line/80 px-5 py-4">
           <div className="min-w-0 flex-1">
@@ -451,7 +452,8 @@ export function OpsSheet({
           </footer>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -31,6 +31,12 @@ type LiveInput = {
   payables: PayableRow[]
   receivables: ReceivableRow[]
   audit: AuditLog[]
+  hrFocus?: {
+    pendingLeave: number
+    presentToday: number
+    lateToday: number
+    payrollQueue: number
+  }
 }
 
 export function buildLiveDashboard(input: LiveInput): DashboardView {
@@ -160,10 +166,10 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         positive: low.length === 0
       },
       {
-        label: 'Nilai kas (info)',
-        value: idrShort(cashBal),
-        delta: 'referensi',
-        positive: true
+        label: 'SKU aman',
+        value: String(Math.max(0, input.stocks.length - low.length)),
+        delta: low.length ? `${low.length} rendah` : 'Aman',
+        positive: low.length === 0
       },
       {
         label: 'Batch proses',
@@ -226,6 +232,34 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
         positive: saleValue >= buyValue
       },
     ],
+    hr: [
+      {
+        label: 'Cuti menunggu',
+        value: String(input.hrFocus?.pendingLeave ?? 0),
+        delta: (input.hrFocus?.pendingLeave ?? 0) ? 'Perlu review' : 'Kosong',
+        positive: (input.hrFocus?.pendingLeave ?? 0) === 0,
+      },
+      {
+        label: 'Hadir hari ini',
+        value: String(input.hrFocus?.presentToday ?? 0),
+        delta: (input.hrFocus?.lateToday ?? 0)
+          ? `${input.hrFocus?.lateToday} terlambat`
+          : 'Hari ini',
+        positive: (input.hrFocus?.lateToday ?? 0) === 0,
+      },
+      {
+        label: 'Terlambat hari ini',
+        value: String(input.hrFocus?.lateToday ?? 0),
+        delta: (input.hrFocus?.lateToday ?? 0) ? 'Perlu perhatian' : 'Kosong',
+        positive: (input.hrFocus?.lateToday ?? 0) === 0,
+      },
+      {
+        label: 'Antrian gaji',
+        value: String(input.hrFocus?.payrollQueue ?? 0),
+        delta: (input.hrFocus?.payrollQueue ?? 0) ? 'Perlu stamp' : 'Kosong',
+        positive: (input.hrFocus?.payrollQueue ?? 0) === 0,
+      },
+    ],
   }
 
   const activities = input.audit.slice(0, 8).map((a) => ({
@@ -283,6 +317,11 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
       title: 'Keuangan',
       description: 'Kas, utang, piutang',
       chartTitle: 'Posisi kas',
+    },
+    hr: {
+      title: 'SDM / HR',
+      description: 'Cuti, absensi, payroll approve',
+      chartTitle: 'Fokus SDM',
     },
   }
 
@@ -353,6 +392,17 @@ export function buildLiveDashboard(input: LiveInput): DashboardView {
       values: gudangValues.length ? gudangValues : [0],
       unit: 'qty',
       seriesName: 'Saldo',
+    },
+    hr: {
+      labels: ['Cuti', 'Hadir', 'Telat', 'Gaji'],
+      values: [
+        input.hrFocus?.pendingLeave ?? 0,
+        input.hrFocus?.presentToday ?? 0,
+        input.hrFocus?.lateToday ?? 0,
+        input.hrFocus?.payrollQueue ?? 0,
+      ],
+      unit: 'orang / dok',
+      seriesName: 'SDM',
     },
   }
 

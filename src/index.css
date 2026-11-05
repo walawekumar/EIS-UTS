@@ -225,14 +225,13 @@
   }
 }
 
+/* Opacity-only: transform creates a containing block that clips fixed drawers. */
 @keyframes motion-page-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -285,6 +284,22 @@
   to {
     opacity: 1;
   }
+}
+
+.leaflet-container {
+  z-index: 0;
+  font-family: inherit;
+}
+
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1;
+}
+
+.leaflet-div-icon.absensi-map-pin {
+  background: transparent;
+  border: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,7 +3,10 @@ import type { ProofAttachment } from '@/features/workflow/proof'
 
 export type PayrollStatus =
   | 'draft'
-  | 'menunggu_approve'
+  | 'menunggu_hr'
+  | 'menunggu_admin'
+  | 'menunggu_keuangan'
+  | 'menunggu_approve' // legacy dual-approve
   | 'siap_cair'
   | 'posted'
   | 'void'
@@ -36,24 +39,50 @@ export type PayrollRun = {
 
 export const PAYROLL_STATUS_LABEL: Record<PayrollStatus, string> = {
   draft: 'Draft',
+  menunggu_hr: 'Menunggu HR',
+  menunggu_admin: 'Menunggu admin',
+  menunggu_keuangan: 'Menunggu keuangan',
   menunggu_approve: 'Menunggu approve',
   siap_cair: 'Siap cair',
   posted: 'Posted',
   void: 'Void',
 }
 
-export function migratePayrollStatus(raw: string): PayrollStatus {
-  if (raw === 'posted' || raw === 'void' || raw === 'draft') return raw as PayrollStatus
-  if (raw === 'menunggu_approve' || raw === 'siap_cair') return raw
+export function migratePayrollStatus(
+  raw: string,
+  approvals: ApprovalStamp[] = [],
+): PayrollStatus {
+  if (
+    raw === 'posted' ||
+    raw === 'void' ||
+    raw === 'draft' ||
+    raw === 'siap_cair' ||
+    raw === 'menunggu_hr' ||
+    raw === 'menunggu_admin' ||
+    raw === 'menunggu_keuangan'
+  ) {
+    return raw
+  }
+  if (raw === 'menunggu_approve') {
+    const hasHr = approvals.some((a) => a.role === 'hr')
+    const hasAdmin = approvals.some((a) => a.role === 'admin')
+    const hasKeuangan = approvals.some((a) => a.role === 'keuangan')
+    if (!hasHr) return 'menunggu_hr'
+    if (!hasAdmin) return 'menunggu_admin'
+    if (!hasKeuangan) return 'menunggu_keuangan'
+    return 'siap_cair'
+  }
   return 'draft'
 }
 
 export function normalizePayrollRun(raw: PayrollRun): PayrollRun {
-  const status = migratePayrollStatus(String(raw.status))
-  let approvals = raw.approvals ?? []
-  if ((status === 'posted' || status === 'void') && approvals.length === 0) {
+  const approvals = raw.approvals ?? []
+  const status = migratePayrollStatus(String(raw.status), approvals)
+  let nextApprovals = approvals
+  if ((status === 'posted' || status === 'void') && nextApprovals.length === 0) {
     const at = raw.postedAt ?? raw.voidedAt ?? raw.createdAt
-    approvals = [
+    nextApprovals = [
+      { role: 'hr', by: raw.actor, at },
       { role: 'admin', by: raw.actor, at },
       { role: 'keuangan', by: 'Petugas Keuangan', at },
     ]
@@ -61,7 +90,7 @@ export function normalizePayrollRun(raw: PayrollRun): PayrollRun {
   return {
     ...raw,
     status,
-    approvals,
+    approvals: nextApprovals,
   }
 }
 
@@ -99,6 +128,16 @@ export const ROLE_BASE_SALARY: Record<string, number> = {
   gudang: 4_000_000,
   penjualan: 4_500_000,
   keuangan: 5_000_000,
+  hr: 5_500_000,
+}
+
+export function isPayrollPending(status: PayrollStatus): boolean {
+  return (
+    status === 'menunggu_hr' ||
+    status === 'menunggu_admin' ||
+    status === 'menunggu_keuangan' ||
+    status === 'menunggu_approve'
+  )
 }
 
 export const SEED_PAYROLL: PayrollRun[] = [

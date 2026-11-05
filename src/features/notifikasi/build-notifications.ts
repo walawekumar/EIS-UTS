@@ -114,13 +114,22 @@ export function buildNotifications(input: Input): AppNotification[] {
   }
 
   for (const run of input.payrollRuns) {
-    if (run.status === 'menunggu_approve') {
+    if (
+      run.status === 'menunggu_hr' ||
+      run.status === 'menunggu_admin' ||
+      run.status === 'menunggu_keuangan' ||
+      run.status === 'menunggu_approve'
+    ) {
       const id = `pr-appr-${run.id}`
+      const href =
+        run.status === 'menunggu_keuangan' || run.status === 'menunggu_approve'
+          ? `/app/keuangan/payroll?dok=${encodeURIComponent(run.id)}`
+          : `/hr/payroll/persetujuan`
       items.push({
         id,
-        title: 'Payroll menunggu approve',
+        title: `Payroll ${run.status.replace('menunggu_', 'menunggu ')}`,
         meta: `${run.id} · ${run.period}`,
-        href: `/app/keuangan/payroll?dok=${encodeURIComponent(run.id)}`,
+        href,
         unread: !input.dismissed.has(id),
       })
       continue

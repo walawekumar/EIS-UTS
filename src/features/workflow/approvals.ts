@@ -1,7 +1,14 @@
 // src/features/workflow/approvals.ts
 
 export type ApprovalStamp = {
-  role: 'admin' | 'keuangan' | 'pembelian' | 'penjualan' | 'produksi' | 'gudang'
+  role:
+    | 'admin'
+    | 'keuangan'
+    | 'pembelian'
+    | 'penjualan'
+    | 'produksi'
+    | 'gudang'
+    | 'hr'
   by: string
   at: string
   note?: string

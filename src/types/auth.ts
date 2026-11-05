@@ -5,6 +5,7 @@ export type UserRole =
   | 'gudang'
   | 'penjualan'
   | 'keuangan'
+  | 'hr'
 
 export type AuthUser = {
   id: string
@@ -21,6 +22,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   gudang: 'Petugas Gudang',
   penjualan: 'Petugas Penjualan',
   keuangan: 'Petugas Keuangan',
+  hr: 'Human Resources',
 }
 
 const USER_ROLES = Object.keys(ROLE_LABELS) as UserRole[]

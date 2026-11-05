@@ -45,6 +45,12 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     name: 'Petugas Keuangan',
     role: 'keuangan',
   },
+  {
+    email: 'hr@egabah.local',
+    password: 'demo123',
+    name: 'Human Resources',
+    role: 'hr',
+  },
 ]
 
 export function findDemoAccount(

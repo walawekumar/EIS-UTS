@@ -1,4 +1,5 @@
 import {
+  getRelationalCache,
   isRelationalEnabled,
   scheduleRelationalSave,
   setRelationalCache,
@@ -27,6 +28,32 @@ export type RelationalTableBind<TSnapshot extends object> = {
 }
 
 const bootstrappedGroups = new Set<string>()
+
+function normCell(value: unknown): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return String(value)
+}
+
+/** True when `next` is already what cloud returned (ignore extra DB columns). */
+function sameProjection(
+  prev: Record<string, unknown>[] | undefined,
+  next: Record<string, unknown>[],
+): boolean {
+  if (!prev || prev.length !== next.length) return false
+  const byId = new Map(prev.map((row) => [String(row.id ?? ''), row]))
+  if (byId.size !== prev.length) return false
+  for (const row of next) {
+    const old = byId.get(String(row.id ?? ''))
+    if (!old) return false
+    for (const [key, value] of Object.entries(row)) {
+      if (key === 'updated_at') continue
+      if (normCell(old[key]) !== normCell(value)) return false
+    }
+  }
+  return true
+}
 
 function projectedRowCount<TSnapshot extends object>(
   project: (snap: TSnapshot) => Partial<Record<OpsTableName, Record<string, unknown>[]>>,
@@ -84,7 +111,9 @@ export function createRelationalBackedRepository<TSnapshot extends object>(optio
             for (const t of tables) {
               const rows = parts[t] ?? []
               setRelationalCache(t, rows)
-              if (rows.length) scheduleRelationalSave(t, rows)
+              if (rows.length) {
+                scheduleRelationalSave(t, rows, { quietForbidden: true })
+              }
             }
           }
           return base
@@ -109,6 +138,8 @@ export function createRelationalBackedRepository<TSnapshot extends object>(optio
       const parts = project(next)
       for (const t of tables) {
         const rows = parts[t] ?? []
+        const prev = getRelationalCache(t)
+        if (sameProjection(prev, rows)) continue
         setRelationalCache(t, rows)
         scheduleRelationalSave(t, rows)
       }

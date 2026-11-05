@@ -91,9 +91,22 @@ export async function saveRelationalTable(
   hydrateOk.set(table, true)
 }
 
+function isForbiddenWrite(err: unknown): boolean {
+  const code =
+    err && typeof err === 'object' && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : ''
+  const msg =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message: unknown }).message)
+      : String(err)
+  return code === '42501' || /permission|row-level security/i.test(msg)
+}
+
 export function scheduleRelationalSave(
   table: OpsTableName,
   rows: Record<string, unknown>[],
+  opts?: { quietForbidden?: boolean },
 ): void {
   if (!isRelationalEnabled()) return
   cache.set(table, rows)
@@ -102,9 +115,10 @@ export function scheduleRelationalSave(
   if (prev) window.clearTimeout(prev)
   const handle = window.setTimeout(() => {
     pending.delete(table)
-    void saveRelationalTable(table, rows).catch((e) =>
-      setCloudPersistError(mapSupabaseError(e)),
-    )
+    void saveRelationalTable(table, rows).catch((e) => {
+      if (opts?.quietForbidden && isForbiddenWrite(e)) return
+      setCloudPersistError(mapSupabaseError(e))
+    })
   }, 300)
   saveTimers.set(table, handle)
 }

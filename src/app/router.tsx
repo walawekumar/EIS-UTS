@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthenticatedProviders } from '@/app/AuthenticatedProviders'
+import { RequireAnyRole } from '@/app/RequireAnyRole'
 import { RequireAuth } from '@/app/RequireAuth'
 import { RequireRole } from '@/app/RequireRole'
 import { AppShell } from '@/components/layout/AppShell'
@@ -23,6 +24,12 @@ import { PiutangPage } from '@/pages/modules/keuangan/PiutangPage'
 import { UtangPage } from '@/pages/modules/keuangan/UtangPage'
 import { LaporanPage } from '@/pages/modules/LaporanPage'
 import { AbsensiPage } from '@/pages/modules/sdm/AbsensiPage'
+import { AbsensiCutiPage } from '@/pages/modules/sdm/AbsensiCutiPage'
+import { AbsensiRekapPage } from '@/pages/modules/sdm/AbsensiRekapPage'
+import { HrHomePage } from '@/pages/modules/hr/HrHomePage'
+import { HrKaryawanPage } from '@/pages/modules/hr/HrKaryawanPage'
+import { HrPayrollPage } from '@/pages/modules/hr/HrPayrollPage'
+import { HrPersetujuanPage } from '@/pages/modules/hr/HrPersetujuanPage'
 
 import { KoreksiPage } from '@/pages/modules/persediaan/KoreksiPage'
 import { MutasiPage } from '@/pages/modules/persediaan/MutasiPage'
@@ -60,12 +67,58 @@ export function AppRouter() {
           path="/absensi"
           element={
             <ModuleShell
+              appName="E-Absensi"
+              appTagline="Kehadiran karyawan"
               title="E-Absensi"
-              subtitle="Check-in / check-out harian karyawan"
+              subtitle="Check-in / check-out dan cuti / izin"
+              navItems={[
+                { to: '/absensi', label: 'Absensi hari ini', end: true },
+                { to: '/absensi/cuti', label: 'Cuti & izin' },
+                {
+                  to: '/absensi/rekap',
+                  label: 'Rekap pegawai',
+                  roles: ['admin', 'hr'],
+                },
+              ]}
             />
           }
         >
           <Route index element={<AbsensiPage />} />
+          <Route path="cuti" element={<AbsensiCutiPage />} />
+          <Route path="pengajuan" element={<Navigate to="/absensi/cuti" replace />} />
+          <Route path="riwayat" element={<Navigate to="/absensi/cuti" replace />} />
+          <Route path="rekap" element={<AbsensiRekapPage />} />
+        </Route>
+
+        <Route element={<RequireAnyRole roles={['admin', 'hr']} />}>
+          <Route
+            path="/hr"
+            element={
+              <ModuleShell
+                appName="E-HR"
+                appTagline="SDM & payroll"
+                title="E-HR"
+                subtitle="Persetujuan cuti, rekap, roster, dan persiapan gaji"
+                navItems={[
+                  { to: '/hr', label: 'Beranda', end: true },
+                  { to: '/hr/persetujuan', label: 'Persetujuan cuti' },
+                  { to: '/hr/rekap', label: 'Rekap kehadiran' },
+                  { to: '/hr/karyawan', label: 'Karyawan' },
+                  { to: '/hr/payroll', label: 'Persiapan gaji' },
+                ]}
+              />
+            }
+          >
+            <Route index element={<HrHomePage />} />
+            <Route path="persetujuan" element={<HrPersetujuanPage />} />
+            <Route path="rekap" element={<AbsensiRekapPage />} />
+            <Route path="karyawan" element={<HrKaryawanPage />} />
+            <Route path="payroll" element={<HrPayrollPage />} />
+            <Route
+              path="payroll/persetujuan"
+              element={<Navigate to="/hr/payroll" replace />}
+            />
+          </Route>
         </Route>
 
         <Route element={<RequireRole />}>
@@ -247,8 +300,8 @@ export function AppRouter() {
         </Route>
       </Route>
 
-      <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/portal" replace />} />
+      <Route path="*" element={<Navigate to="/portal" replace />} />
     </Routes>
   )
 }

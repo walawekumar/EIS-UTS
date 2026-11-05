@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { SideOverlay } from '@/components/ops/SideOverlay'
 import { primaryBtn, secondaryBtn, sectionLabel } from '@/components/pembelian/Toolbar'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
@@ -61,24 +62,12 @@ export function OrderFormDrawer({ open, nextId, onClose, onSave }: OrderFormDraw
 
   const [form, setForm] = useState<FormState>(emptyForm)
   const [errors, setErrors] = useState<FormErrors>({})
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
     setForm(emptyForm())
     setErrors({})
-
-    function onEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !document.querySelector('[role="listbox"]')) {
-        onCloseRef.current()
-      }
-    }
-    document.addEventListener('keydown', onEscape)
-    return () => document.removeEventListener('keydown', onEscape)
   }, [open])
-
-  if (!open) return null
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -127,104 +116,107 @@ export function OrderFormDrawer({ open, nextId, onClose, onSave }: OrderFormDraw
     })
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30">
-      <button type="button" aria-label="Tutup" className="absolute inset-0 cursor-default" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-line bg-panel shadow-xl">
-        <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
-          <div>
-            <p className={sectionLabel}>Order baru</p>
-            <h2 className="num mt-1 text-[16px] font-semibold text-ink">{nextId}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl p-2 text-muted transition hover:bg-surface hover:text-ink"
+return (
+    <SideOverlay open={open} onClose={onClose} labelledBy="so-form-title">
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-5 py-4">
+        <div>
+          <p className={sectionLabel}>Order baru</p>
+          <h2
+            id="so-form-title"
+            className="num mt-1 text-[16px] font-semibold text-ink"
           >
-            ✕
-          </button>
-        </header>
+            {nextId}
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl p-2 text-muted transition hover:bg-surface hover:text-ink"
+          aria-label="Tutup"
+        >
+          ✕
+        </button>
+      </header>
 
-        <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-          <div className="scrollbar-brand flex-1 space-y-3 overflow-y-auto px-5 py-4">
-            <Select
-              label="Pelanggan"
-              value={form.customerId}
-              options={customerOptions}
-              onChange={(v) => set('customerId', v)}
+      <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+        <div className="scrollbar-brand flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <Select
+            label="Pelanggan"
+            value={form.customerId}
+            options={customerOptions}
+            onChange={(v) => set('customerId', v)}
+            requiredMark
+            placeholder="Pilih pelanggan"
+          />
+          {errors.customerId ? (
+            <p className="-mt-2 text-[12px] text-red-700">{errors.customerId}</p>
+          ) : null}
+          <TextField
+            id="so-date"
+            label="Tanggal"
+            type="date"
+            value={form.date}
+            onChange={(e) => set('date', e.target.value)}
+            error={errors.date}
+          />
+          <Select
+            label="Produk"
+            value={form.sku}
+            options={productOptions}
+            onChange={changeSku}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              id="so-qty"
+              label={`Jumlah (${product?.unit ?? 'unit'})`}
               requiredMark
-              placeholder="Pilih pelanggan"
+              inputMode="decimal"
+              value={form.qty}
+              onChange={(e) => set('qty', e.target.value)}
+              error={errors.qty}
             />
-            {errors.customerId ? (
-              <p className="-mt-2 text-[12px] text-red-700">{errors.customerId}</p>
-            ) : null}
             <TextField
-              id="so-date"
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => set('date', e.target.value)}
-              error={errors.date}
+              id="so-price"
+              label="Harga"
+              requiredMark
+              inputMode="numeric"
+              value={form.price}
+              onChange={(e) => set('price', e.target.value)}
+              error={errors.price}
             />
-            <Select
-              label="Produk"
-              value={form.sku}
-              options={productOptions}
-              onChange={changeSku}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <TextField
-                id="so-qty"
-                label={`Jumlah (${product?.unit ?? 'unit'})`}
-                requiredMark
-                inputMode="decimal"
-                value={form.qty}
-                onChange={(e) => set('qty', e.target.value)}
-                error={errors.qty}
-              />
-              <TextField
-                id="so-price"
-                label="Harga"
-                requiredMark
-                inputMode="numeric"
-                value={form.price}
-                onChange={(e) => set('price', e.target.value)}
-                error={errors.price}
-              />
+          </div>
+          <TextField
+            id="so-note"
+            label="Catatan"
+            value={form.note}
+            onChange={(e) => set('note', e.target.value)}
+            placeholder="Opsional"
+          />
+          <div className="rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">Qty</span>
+              <span className="num text-ink">
+                {qty > 0 ? formatQty(qty, product.unit) : ','}
+              </span>
             </div>
-            <TextField
-              id="so-note"
-              label="Catatan"
-              value={form.note}
-              onChange={(e) => set('note', e.target.value)}
-              placeholder="Opsional"
-            />
-            <div className="rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px]">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted">Qty</span>
-                <span className="num text-ink">
-                  {qty > 0 ? formatQty(qty, product.unit) : ','}
-                </span>
-              </div>
-              <div className="mt-1 flex justify-between gap-2">
-                <span className="text-muted">Nilai order</span>
-                <span className="num font-semibold text-ink">
-                  {qty > 0 && price > 0 ? formatRupiah(total) : ','}
-                </span>
-              </div>
+            <div className="mt-1 flex justify-between gap-2">
+              <span className="text-muted">Nilai order</span>
+              <span className="num font-semibold text-ink">
+                {qty > 0 && price > 0 ? formatRupiah(total) : ','}
+              </span>
             </div>
           </div>
+        </div>
 
-          <footer className="flex gap-2 border-t border-line px-5 py-4">
-            <button type="button" onClick={onClose} className={[secondaryBtn, 'flex-1'].join(' ')}>
-              Batal
-            </button>
-            <button type="submit" className={[primaryBtn, 'flex-1'].join(' ')}>
-              Simpan order
-            </button>
-          </footer>
-        </form>
-      </aside>
-    </div>
+        <footer className="flex shrink-0 gap-2 border-t border-line px-5 py-4">
+          <button type="button" onClick={onClose} className={[secondaryBtn, 'flex-1'].join(' ')}>
+            Batal
+          </button>
+          <button type="submit" className={[primaryBtn, 'flex-1'].join(' ')}>
+            Simpan order
+          </button>
+        </footer>
+      </form>
+    </SideOverlay>
   )
 }

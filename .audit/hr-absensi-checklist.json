@@ -1,0 +1,180 @@
+{
+  "generatedAt": "2026-11-05T10:03:34.115Z",
+  "skill": "principle-prove-it-works + create-verification-skill",
+  "summary": {
+    "pass": 17,
+    "fail": 2,
+    "needLive": 5,
+    "total": 24
+  },
+  "rows": [
+    {
+      "id": 1,
+      "title": "E-HR portal roles limited to admin|hr",
+      "status": "PASS",
+      "evidence": "src/pages/PortalPage.tsx",
+      "note": ""
+    },
+    {
+      "id": 2,
+      "title": "/hr wrapped in RequireAnyRole admin|hr",
+      "status": "PASS",
+      "evidence": "src/app/router.tsx + RequireAnyRole.tsx",
+      "note": ""
+    },
+    {
+      "id": 3,
+      "title": "Absensi rekap nav only admin|hr",
+      "status": "PASS",
+      "evidence": "src/app/router.tsx",
+      "note": ""
+    },
+    {
+      "id": 4,
+      "title": "Sidebar has no Persetujuan gaji nav item",
+      "status": "PASS",
+      "evidence": "src/app/router.tsx",
+      "note": ""
+    },
+    {
+      "id": 5,
+      "title": "Check-in requires geolocation",
+      "status": "PASS",
+      "evidence": "src/features/absensi/absensi-store.tsx",
+      "note": ""
+    },
+    {
+      "id": 6,
+      "title": "Map markers use teardrop pin SVG (not circle-only)",
+      "status": "PASS",
+      "evidence": "src/components/absensi/AbsensiGeoMap.tsx",
+      "note": ""
+    },
+    {
+      "id": 7,
+      "title": "Lokasi cell uses pin + maps link (not bare dash)",
+      "status": "PASS",
+      "evidence": "AbsensiPage + AbsensiLokasiCell",
+      "note": ""
+    },
+    {
+      "id": 8,
+      "title": "Absensi list uses FinanceFilterBar (no visible Cari label)",
+      "status": "PASS",
+      "evidence": "src/pages/modules/sdm/AbsensiPage.tsx",
+      "note": ""
+    },
+    {
+      "id": 9,
+      "title": "Cuti page is single route with Ajukan modal",
+      "status": "PASS",
+      "evidence": "AbsensiCutiPage + router",
+      "note": ""
+    },
+    {
+      "id": 10,
+      "title": "Dead pengajuan/riwayat page files removed",
+      "status": "PASS",
+      "evidence": "src/pages/modules/sdm/",
+      "note": ""
+    },
+    {
+      "id": 11,
+      "title": "HR home side-by-side charts + queue table",
+      "status": "FAIL",
+      "evidence": "src/pages/modules/hr/HrHomePage.tsx",
+      "note": ""
+    },
+    {
+      "id": 12,
+      "title": "HrQueueTable has filter + sort via FinanceFilterBar",
+      "status": "FAIL",
+      "evidence": "src/components/hr/HrQueueTable.tsx",
+      "note": ""
+    },
+    {
+      "id": 13,
+      "title": "Leave submit requires reason + proof",
+      "status": "PASS",
+      "evidence": "src/features/hr/leave-store.tsx",
+      "note": "Proof enforced in AbsensiCutiPage + store"
+    },
+    {
+      "id": 14,
+      "title": "Leave approve limited in store/UI for admin|hr",
+      "status": "PASS",
+      "evidence": "HrPersetujuanPage.tsx",
+      "note": ""
+    },
+    {
+      "id": 15,
+      "title": "Payroll page plain description (no arrow workflow)",
+      "status": "PASS",
+      "evidence": "HrPayrollPage.tsx",
+      "note": ""
+    },
+    {
+      "id": 16,
+      "title": "No Antrian persetujuan button; queue embedded when pending",
+      "status": "PASS",
+      "evidence": "HrPayrollPage.tsx",
+      "note": ""
+    },
+    {
+      "id": 17,
+      "title": "HrPayrollApprovePage removed (redirect only)",
+      "status": "PASS",
+      "evidence": "src/pages/modules/hr/",
+      "note": ""
+    },
+    {
+      "id": 18,
+      "title": "Geo migration file present",
+      "status": "PASS",
+      "evidence": "supabase/migrations/20261105_12_attendance_geo.sql",
+      "note": ""
+    },
+    {
+      "id": 19,
+      "title": "Leave/payroll migration file present",
+      "status": "PASS",
+      "evidence": "supabase/migrations/20261105_10_hr_leave_payroll.sql",
+      "note": ""
+    },
+    {
+      "id": 20,
+      "title": "Portal: non-HR role does not see E-HR card",
+      "status": "NEED_LIVE",
+      "evidence": "",
+      "note": "Browser login as beli@ / kas@ and inspect /portal"
+    },
+    {
+      "id": 21,
+      "title": "Check-in with GPS writes lat/lng and shows pin + lokasi cell",
+      "status": "NEED_LIVE",
+      "evidence": "",
+      "note": "Browser + geolocation permission on /absensi"
+    },
+    {
+      "id": 22,
+      "title": "Cloud migrations applied (no PGRST205/204 on absensi/leave)",
+      "status": "NEED_LIVE",
+      "evidence": "",
+      "note": "Live Supabase + check-in / leave submit"
+    },
+    {
+      "id": 23,
+      "title": "Payroll stamp sequence HR→admin→keuangan cannot cross-stamp",
+      "status": "NEED_LIVE",
+      "evidence": "",
+      "note": "Multi-role browser or store unit drive"
+    },
+    {
+      "id": 24,
+      "title": "Mobile filter bar layout",
+      "status": "NEED_LIVE",
+      "evidence": "",
+      "note": "Resize browser <640px on /hr and /absensi"
+    }
+  ]
+}

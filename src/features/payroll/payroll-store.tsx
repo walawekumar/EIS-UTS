@@ -15,10 +15,12 @@ import { useFinanceStore } from '@/features/keuangan/finance-store'
 import { assertPeriodOpen } from '@/features/keuangan/period-gate'
 import { todayIsoDate } from '@/features/keuangan/period-helpers'
 import {
+  isPayrollPending,
   nextPayrollId,
   runTotal,
   type PayrollLine,
   type PayrollRun,
+  type PayrollStatus,
 } from '@/features/payroll/payroll-data'
 import { payrollRepository } from '@/features/payroll/payroll-storage'
 import {
@@ -28,6 +30,7 @@ import {
   type ApprovalStamp,
 } from '@/features/workflow/approvals'
 import { hasProof, type ProofAttachment } from '@/features/workflow/proof'
+
 type PayrollStoreValue = {
   runs: PayrollRun[]
   createRun: (period: string, lines: PayrollLine[], note: string) => string
@@ -36,6 +39,7 @@ type PayrollStoreValue = {
     patch: { lines?: PayrollLine[]; note?: string; mutationNote?: string },
   ) => void
   submitForApproval: (id: string) => string | undefined
+  approveAsHr: (id: string) => string | undefined
   approveAsAdmin: (id: string) => string | undefined
   approveAsKeuangan: (id: string) => string | undefined
   rejectRun: (id: string, reason: string) => string | undefined
@@ -46,21 +50,50 @@ type PayrollStoreValue = {
 
 const PayrollContext = createContext<PayrollStoreValue | null>(null)
 
-function refreshReady(run: PayrollRun): PayrollRun {
-  const ready =
-    hasApproval(run.approvals, 'admin') && hasApproval(run.approvals, 'keuangan')
-  if (run.status === 'menunggu_approve' && ready) {
-    return { ...run, status: 'siap_cair' }
-  }
-  return run
-}
-
-function stamp(role: 'admin' | 'keuangan', name: string): ApprovalStamp {
+function stamp(
+  role: 'hr' | 'admin' | 'keuangan',
+  name: string,
+): ApprovalStamp {
   return {
     role,
     by: name,
     at: new Date().toISOString(),
   }
+}
+
+function advanceAfterStamp(
+  run: PayrollRun,
+  approvals: ApprovalStamp[],
+): PayrollRun {
+  const next: PayrollRun = { ...run, approvals }
+  if (run.status === 'menunggu_hr' && hasApproval(approvals, 'hr')) {
+    return { ...next, status: 'menunggu_admin' }
+  }
+  if (run.status === 'menunggu_admin' && hasApproval(approvals, 'admin')) {
+    return { ...next, status: 'menunggu_keuangan' }
+  }
+  if (
+    run.status === 'menunggu_keuangan' &&
+    hasApproval(approvals, 'keuangan')
+  ) {
+    return { ...next, status: 'siap_cair' }
+  }
+  // Legacy parallel path
+  if (run.status === 'menunggu_approve') {
+    if (
+      hasApproval(approvals, 'hr') &&
+      hasApproval(approvals, 'admin') &&
+      hasApproval(approvals, 'keuangan')
+    ) {
+      return { ...next, status: 'siap_cair' }
+    }
+    if (!hasApproval(approvals, 'hr')) return { ...next, status: 'menunggu_hr' }
+    if (!hasApproval(approvals, 'admin')) {
+      return { ...next, status: 'menunggu_admin' }
+    }
+    return { ...next, status: 'menunggu_keuangan' }
+  }
+  return next
 }
 
 function postPayrollJournal(
@@ -99,6 +132,14 @@ function postPayrollJournal(
     ],
   })
 }
+
+const PENDING_EDIT: PayrollStatus[] = [
+  'menunggu_hr',
+  'menunggu_admin',
+  'menunggu_keuangan',
+  'menunggu_approve',
+  'siap_cair',
+]
 
 export function PayrollProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -157,10 +198,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
             patch.lines !== undefined &&
             JSON.stringify(patch.lines) !== JSON.stringify(r.lines)
 
-          if (
-            linesChanged &&
-            (r.status === 'menunggu_approve' || r.status === 'siap_cair')
-          ) {
+          if (linesChanged && PENDING_EDIT.includes(r.status)) {
             return {
               ...r,
               lines: patch.lines!,
@@ -199,6 +237,9 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
 
   const submitForApproval = useCallback(
     (id: string): string | undefined => {
+      if (user?.role !== 'hr' && user?.role !== 'admin') {
+        return 'Hanya HR (atau admin override buat) yang mengajukan — idealnya HR.'
+      }
       const current = runs.find((r) => r.id === id)
       if (!current || current.status !== 'draft') {
         return 'Hanya draft yang bisa diajukan'
@@ -208,7 +249,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
           r.id === id
             ? {
                 ...r,
-                status: 'menunggu_approve',
+                status: 'menunggu_hr',
                 approvals: clearApprovals(),
                 rejectReason: undefined,
               }
@@ -216,33 +257,56 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         ),
       )
       appendAudit({
-        action: 'update',
+        action: 'submit',
         entity: 'expense',
         entityId: id,
-        note: 'Payroll diajukan untuk approve',
+        note: 'Payroll diajukan (menunggu HR)',
       })
       return undefined
     },
-    [runs, appendAudit],
+    [runs, user, appendAudit],
+  )
+
+  const approveAsHr = useCallback(
+    (id: string): string | undefined => {
+      if (user?.role !== 'hr') return 'Hanya HR yang bisa approve tahap HR'
+      const current = runs.find((r) => r.id === id)
+      if (!current || current.status !== 'menunggu_hr') {
+        return 'Payroll tidak menunggu approve HR'
+      }
+      if (hasApproval(current.approvals, 'hr')) {
+        return 'Approve HR sudah tercatat'
+      }
+      const next = advanceAfterStamp(
+        current,
+        upsertApproval(current.approvals, stamp('hr', user.name)),
+      )
+      setRuns((list) => list.map((r) => (r.id === id ? next : r)))
+      appendAudit({
+        action: 'approve',
+        entity: 'expense',
+        entityId: id,
+        note: 'Approve payroll (HR)',
+      })
+      return undefined
+    },
+    [runs, user, appendAudit],
   )
 
   const approveAsAdmin = useCallback(
     (id: string): string | undefined => {
       if (user?.role !== 'admin') return 'Hanya admin yang bisa approve sebagai admin'
       const current = runs.find((r) => r.id === id)
-      if (!current || current.status !== 'menunggu_approve') {
-        return 'Payroll tidak menunggu approve'
+      if (!current || current.status !== 'menunggu_admin') {
+        return 'Payroll tidak menunggu approve admin'
       }
       if (hasApproval(current.approvals, 'admin')) {
         return 'Approve admin sudah tercatat'
       }
-      const next = refreshReady({
-        ...current,
-        approvals: upsertApproval(
-          current.approvals,
-          stamp('admin', user.name),
-        ),
-      })
+      const next = advanceAfterStamp(
+        current,
+        upsertApproval(current.approvals, stamp('admin', user.name)),
+      )
       setRuns((list) => list.map((r) => (r.id === id ? next : r)))
       appendAudit({
         action: 'approve',
@@ -261,19 +325,16 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
         return 'Hanya keuangan yang bisa approve sebagai keuangan'
       }
       const current = runs.find((r) => r.id === id)
-      if (!current || current.status !== 'menunggu_approve') {
-        return 'Payroll tidak menunggu approve'
+      if (!current || current.status !== 'menunggu_keuangan') {
+        return 'Payroll tidak menunggu approve keuangan'
       }
       if (hasApproval(current.approvals, 'keuangan')) {
         return 'Approve keuangan sudah tercatat'
       }
-      const next = refreshReady({
-        ...current,
-        approvals: upsertApproval(
-          current.approvals,
-          stamp('keuangan', user.name),
-        ),
-      })
+      const next = advanceAfterStamp(
+        current,
+        upsertApproval(current.approvals, stamp('keuangan', user.name)),
+      )
       setRuns((list) => list.map((r) => (r.id === id ? next : r)))
       appendAudit({
         action: 'approve',
@@ -289,15 +350,15 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
   const rejectRun = useCallback(
     (id: string, reason: string): string | undefined => {
       const role = user?.role
-      if (role !== 'admin' && role !== 'keuangan') {
-        return 'Hanya admin atau keuangan yang dapat menolak payroll'
+      if (role !== 'admin' && role !== 'keuangan' && role !== 'hr') {
+        return 'Hanya HR, admin, atau keuangan yang dapat menolak payroll'
       }
       const trimmed = reason.trim()
       if (!trimmed) return 'Alasan penolakan wajib diisi.'
       const current = runs.find((r) => r.id === id)
       if (
         !current ||
-        (current.status !== 'menunggu_approve' && current.status !== 'siap_cair')
+        (!isPayrollPending(current.status) && current.status !== 'siap_cair')
       ) {
         return 'Payroll tidak menunggu persetujuan'
       }
@@ -441,6 +502,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       createRun,
       updateDraft,
       submitForApproval,
+      approveAsHr,
       approveAsAdmin,
       approveAsKeuangan,
       rejectRun,
@@ -453,6 +515,7 @@ export function PayrollProvider({ children }: { children: ReactNode }) {
       createRun,
       updateDraft,
       submitForApproval,
+      approveAsHr,
       approveAsAdmin,
       approveAsKeuangan,
       rejectRun,

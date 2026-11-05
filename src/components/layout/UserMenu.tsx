@@ -51,11 +51,11 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2.5 rounded-xl border border-line bg-panel px-2.5 py-2 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
+        className="flex h-10 items-center gap-2.5 rounded-xl border border-line bg-panel px-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-700 text-sm font-semibold text-white">
+        <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-700 text-[12px] font-semibold text-white">
           {profile.avatarUrl ? (
             <img
               src={profile.avatarUrl}

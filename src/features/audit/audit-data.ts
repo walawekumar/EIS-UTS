@@ -19,6 +19,8 @@ export type AuditEntity =
   | 'partner'
   | 'product'
   | 'user'
+  | 'attendance'
+  | 'leave'
 
 export type AuditLog = {
   id: string

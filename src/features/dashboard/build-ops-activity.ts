@@ -32,9 +32,18 @@ export function buildOpsActivity(input: {
   orders: SaleOrder[]
   batches: ProductionBatch[]
   cash: CashEntry[]
+  /** Kosong = semua jenis. Isi untuk membatasi sesuai peran. */
+  include?: {
+    purchase?: boolean
+    sale?: boolean
+    batch?: boolean
+    cash?: boolean
+  }
 }): ActivityRow[] {
+  const allow = input.include
   const rows: Array<ActivityRow & { _sort: string }> = []
 
+  if (!allow || allow.purchase) {
   for (const p of input.purchases) {
     if (p.voidedAt) continue
     const status: ActivityRow['status'] =
@@ -53,7 +62,9 @@ export function buildOpsActivity(input: {
       actor: p.vehicle || 'Pembelian',
     })
   }
+  }
 
+  if (!allow || allow.sale) {
   for (const o of input.orders) {
     if (o.voidedAt) continue
     const status: ActivityRow['status'] =
@@ -72,7 +83,9 @@ export function buildOpsActivity(input: {
       actor: 'Penjualan',
     })
   }
+  }
 
+  if (!allow || allow.batch) {
   for (const b of input.batches) {
     if (b.voidedAt) continue
     const status: ActivityRow['status'] =
@@ -91,7 +104,9 @@ export function buildOpsActivity(input: {
       actor: b.operator || 'Produksi',
     })
   }
+  }
 
+  if (!allow || allow.cash) {
   for (const c of input.cash.slice(0, 20)) {
     rows.push({
       _sort: sortKey(c.date),
@@ -102,6 +117,7 @@ export function buildOpsActivity(input: {
       status: 'ok',
       actor: c.actor || 'Keuangan',
     })
+  }
   }
 
   return rows

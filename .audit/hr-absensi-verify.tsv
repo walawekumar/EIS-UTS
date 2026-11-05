@@ -1,0 +1,6 @@
+ts	phase	decision	why	evidence	result
+2026-11-05T09:05:00Z	start	Started prove-it-works + create-verification-skill run for HR/absensi checklist	User asked to find high-rated skill and check all verification items	agent-run verify-hr-absensi	open
+2026-11-05T09:06:00Z	skill	Chose principle-prove-it-works + create-verification-skill (+ canvas for report)	No star ratings in skill metadata; these are the verification-focused pstack skills that require real evidence not compile-only	~/.cursor/plugins/.../principle-prove-it-works/SKILL.md	selected
+2026-11-05T09:08:00Z	script	Added scripts/verify-hr-absensi-checklist.mjs and .cursor/skills/verify-e-gabah	Encode checklist as re-runnable doctor per prove-it-works	scripts/verify-hr-absensi-checklist.mjs	tests green (19 PASS code)
+2026-11-05T09:12:00Z	browser	Logged in as beli@ then admin@ against Vite :5173	Prove portal gate and HR home against real UI	ARIA snapshots /portal /hr /hr/payroll	#20 PASS live; HR home charts+queue visible
+2026-11-05T09:14:00Z	gap	Left #21 #22 #23 #24 as NEED_LIVE	Geo grant, cloud migration confirm, multi-role payroll stamp, mobile resize need human or longer harness	.audit/hr-absensi-checklist.json	INCONCLUSIVE for those four

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { SideOverlay } from '@/components/ops/SideOverlay'
 import {
   primaryBtn,
   secondaryBtn,
@@ -47,9 +48,6 @@ export function BatchFormDrawer({ open, nextId, onClose, onSave }: Props) {
   const lots = purchases.filter(
     (p) => isPurchaseReceivedForAp(p.stage) && !p.voidedAt && p.lotId,
   )
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
-
   function emptyForm(): FormState {
     const g = gabah[0]
     return {
@@ -74,17 +72,8 @@ export function BatchFormDrawer({ open, nextId, onClose, onSave }: Props) {
     if (!open) return
     setForm(emptyForm())
     setError(null)
-    function onEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !document.querySelector('[role="listbox"]')) {
-        onCloseRef.current()
-      }
-    }
-    document.addEventListener('keydown', onEscape)
-    return () => document.removeEventListener('keydown', onEscape)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
-
-  if (!open) return null
 
   function setOutputQty(index: number, qty: string) {
     setForm((f) => {
@@ -132,23 +121,19 @@ export function BatchFormDrawer({ open, nextId, onClose, onSave }: Props) {
   const locOpts = PRODUKSI_LOCATIONS.map((l) => ({ value: l, label: l }))
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/25 backdrop-blur-[1px]">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        aria-label="Tutup"
-        onClick={onClose}
-      />
+    <SideOverlay open={open} onClose={onClose} panelClassName="max-w-lg" labelledBy="bat-form-title">
       <form
         onSubmit={handleSubmit}
-        className="relative flex h-full w-full max-w-lg flex-col border-l border-line bg-panel shadow-xl"
+        className="flex h-full min-h-0 w-full flex-col"
       >
-        <header className="border-b border-line px-5 py-4">
+        <header className="shrink-0 border-b border-line px-5 py-4">
           <p className={sectionLabel}>Batch baru</p>
-          <h2 className="mt-1 text-[17px] font-semibold text-ink">{nextId}</h2>
+          <h2 id="bat-form-title" className="mt-1 text-[17px] font-semibold text-ink">
+            {nextId}
+          </h2>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="scrollbar-brand min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {error ? (
             <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {error}
@@ -291,7 +276,7 @@ export function BatchFormDrawer({ open, nextId, onClose, onSave }: Props) {
           />
         </div>
 
-        <footer className="flex gap-2 border-t border-line px-5 py-4">
+        <footer className="flex shrink-0 gap-2 border-t border-line px-5 py-4">
           <button type="button" className={secondaryBtn} onClick={onClose}>
             Batal
           </button>
@@ -300,6 +285,6 @@ export function BatchFormDrawer({ open, nextId, onClose, onSave }: Props) {
           </button>
         </footer>
       </form>
-    </div>
+    </SideOverlay>
   )
 }

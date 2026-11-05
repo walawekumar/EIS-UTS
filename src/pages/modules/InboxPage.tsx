@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
 import { StatusPill } from '@/components/keuangan/StatusPill'
@@ -51,8 +52,13 @@ export function InboxPage() {
     rejectPurchase,
   } = usePembelian()
   const { batches, approveBatch, rejectBatch } = useProduksi()
-  const { runs, approveAsAdmin, approveAsKeuangan, rejectRun } =
-    usePayrollStore()
+  const {
+    runs,
+    approveAsHr,
+    approveAsAdmin,
+    approveAsKeuangan,
+    rejectRun,
+  } = usePayrollStore()
   const {
     locks,
     unlockRequests,
@@ -125,8 +131,9 @@ export function InboxPage() {
     else if (item.kind === 'batch') {
       approveBatch(id)
     } else if (item.kind === 'payroll') {
-      err =
-        role === 'admin' ? approveAsAdmin(id) : approveAsKeuangan(id)
+      if (role === 'hr') err = approveAsHr(id)
+      else if (role === 'admin') err = approveAsAdmin(id)
+      else err = approveAsKeuangan(id)
     } else if (item.kind === 'period_unlock') {
       const at = new Date().toISOString()
       const by = actor.name
@@ -283,43 +290,48 @@ export function InboxPage() {
         )}
       </section>
 
-      {rejectId ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 p-3 sm:items-center">
-          <button
-            type="button"
-            aria-label="Tutup"
-            className="motion-backdrop absolute inset-0"
-            onClick={() => setRejectId(null)}
-          />
-          <div className="motion-panel relative w-full max-w-md rounded-2xl border border-line bg-panel p-4 shadow-lg">
-            <h3 className="text-[14px] font-semibold text-ink">Tolak pengajuan</h3>
-            <p className="mt-1 text-[12px] text-muted">Alasan penolakan</p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              rows={3}
-              className="mt-2 w-full rounded-xl border border-line px-3 py-2 text-[13px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
-              placeholder="Contoh: dokumen belum lengkap"
-            />
-            <div className="mt-3 flex justify-end gap-2">
+      {rejectId
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-end justify-center p-3 sm:items-center">
               <button
                 type="button"
+                aria-label="Tutup"
+                className="motion-backdrop absolute inset-0 bg-ink/40"
                 onClick={() => setRejectId(null)}
-                className="h-9 rounded-xl border border-line px-3 text-[12px] font-medium"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={onRejectConfirm}
-                className="h-9 rounded-xl bg-red-700 px-3 text-[12px] font-semibold text-white"
-              >
-                Tolak
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+              />
+              <div className="motion-panel relative w-full max-w-md rounded-2xl border border-line bg-panel p-4 shadow-lg">
+                <h3 className="text-[14px] font-semibold text-ink">
+                  Tolak pengajuan
+                </h3>
+                <p className="mt-1 text-[12px] text-muted">Alasan penolakan</p>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={3}
+                  className="mt-2 w-full rounded-xl border border-line px-3 py-2 text-[13px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+                  placeholder="Contoh: dokumen belum lengkap"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRejectId(null)}
+                    className="h-9 rounded-xl border border-line px-3 text-[12px] font-medium"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onRejectConfirm}
+                    className="h-9 rounded-xl bg-red-700 px-3 text-[12px] font-semibold text-white"
+                  >
+                    Tolak
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
