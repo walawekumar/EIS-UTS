@@ -20,6 +20,7 @@ type PurchaseFormDrawerProps = {
   nextId: string
   onClose: () => void
   onSave: (purchase: NewPurchase) => void
+  error?: string | null
 }
 
 type FormState = {
@@ -54,7 +55,13 @@ const GRAIN_OPTIONS = (Object.keys(GRAIN_STANDARD) as GrainType[]).map((g) => ({
   description: `Maks kadar air ${GRAIN_STANDARD[g].moisture}% · hampa ${GRAIN_STANDARD[g].impurity}%`,
 }))
 
-export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFormDrawerProps) {
+export function PurchaseFormDrawer({
+  open,
+  nextId,
+  onClose,
+  onSave,
+  error,
+}: PurchaseFormDrawerProps) {
   const { suppliers } = useMasterStore()
   const supplierOptions = suppliers
     .filter((s) => s.active)
@@ -234,6 +241,14 @@ export function PurchaseFormDrawer({ open, nextId, onClose, onSave }: PurchaseFo
             </div>
             <p className="num text-[16px] font-semibold text-ink">{formatRupiah(estimatedKg * price)}</p>
           </div>
+          {error ? (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
+            >
+              {error}
+            </p>
+          ) : null}
           <div className="grid grid-cols-[auto_1fr] gap-2">
             <button type="button" onClick={onClose} className={secondaryBtn}>
               Batal

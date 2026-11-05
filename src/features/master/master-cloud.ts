@@ -127,6 +127,35 @@ export async function saveMasterCloud(snap: MasterSnapshot): Promise<void> {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+export async function createBranchUser(input: {
+  email: string
+  password: string
+  name: string
+  role: MasterUser['role']
+  title: string
+  phone: string
+  branch: string
+  department: string
+}): Promise<string> {
+  const sb = getSupabase()
+  if (!sb) throw new Error('Supabase belum dikonfigurasi.')
+  const { data, error } = await sb.rpc('admin_create_branch_user', {
+    p_email: input.email,
+    p_password: input.password,
+    p_name: input.name,
+    p_role: input.role,
+    p_title: input.title,
+    p_phone: input.phone,
+    p_branch: input.branch,
+    p_department: input.department,
+  })
+  if (error) throw error
+  if (typeof data !== 'string' || !data) {
+    throw new Error('Akun tidak terbentuk.')
+  }
+  return data
+}
+
 export async function updateProfileUser(user: MasterUser): Promise<void> {
   const sb = getSupabase()
   if (!sb) throw new Error('Supabase belum dikonfigurasi.')

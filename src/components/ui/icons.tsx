@@ -86,6 +86,16 @@ export function UserBadgeIcon(props: IconProps) {
   )
 }
 
+/** Butir gabah — tanda aplikasi. */
+export function GabahMarkIcon(props: IconProps) {
+  return (
+    <svg {...base({ ...props, strokeWidth: 1.7 })}>
+      <path d="M12 3.8c2.4 2.6 3.5 5.6 3.5 8.7 0 3.8-1.5 6.8-3.5 8.7-2-1.9-3.5-4.9-3.5-8.7 0-3.1 1.1-6.1 3.5-8.7Z" />
+      <path d="M12 8.2v11.2" />
+    </svg>
+  )
+}
+
 export function LeafMarkIcon(props: IconProps) {
   return (
     <svg {...base({ ...props, strokeWidth: 1.6 })}>

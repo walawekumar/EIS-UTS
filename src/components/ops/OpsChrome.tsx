@@ -1,10 +1,10 @@
 import {
   useEffect,
-  useId,
   useRef,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Select } from '@/components/ui/Select'
 
 /** Halaman operasi: scroll alami, tanpa kunci tinggi viewport. */
 export function OpsPage({ children }: { children: ReactNode }) {
@@ -163,33 +163,16 @@ export function OpsSelect<T extends string>({
   onChange: (value: T) => void
   label: string
 }) {
-  const id = useId()
   return (
-    <label className="relative block w-full shrink-0 sm:w-44">
-      <span className="sr-only">{label}</span>
-      <select
-        id={id}
+    <div className="w-full shrink-0 sm:w-44">
+      <Select
+        label={label}
+        hideLabel
         value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="h-10 w-full appearance-none rounded-xl border border-line bg-panel py-2 pr-9 pl-3 text-[13px] text-ink outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <svg
-        viewBox="0 0 24 24"
-        className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        aria-hidden
-      >
-        <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </label>
+        options={options.map((opt) => ({ value: opt.value, label: opt.label }))}
+        onChange={onChange}
+      />
+    </div>
   )
 }
 

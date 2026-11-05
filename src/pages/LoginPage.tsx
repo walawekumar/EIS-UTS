@@ -68,7 +68,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-surface">
       <div className="mx-auto flex min-h-screen max-w-[1120px] items-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full overflow-hidden rounded-2xl border border-line bg-panel lg:grid-cols-[0.92fr_1.08fr]">
+        <div className="motion-rise grid w-full overflow-hidden rounded-2xl border border-line bg-panel lg:grid-cols-[0.92fr_1.08fr]">
           <section className="flex flex-col justify-center px-6 py-9 sm:px-10 lg:px-12 lg:py-12">
             <div className="mb-8 inline-flex items-center gap-2.5">
               <span className="inline-flex size-9 items-center justify-center rounded-[10px] bg-brand-800 text-white">

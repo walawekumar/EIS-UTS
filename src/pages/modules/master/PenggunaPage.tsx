@@ -20,6 +20,7 @@ import {
   type SortState,
 } from '@/components/keuangan/FinanceTable'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { AlertCard } from '@/components/ui/AlertCard'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import { printBukti } from '@/components/keuangan/print-bukti'
 import {
@@ -55,6 +56,20 @@ const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as UserRole[]).map((value) => ({
   label: ROLE_LABELS[value],
 }))
 
+const ADD_OPTION = '__add__'
+
+function uniqueLabels(current: string, ...groups: string[][]): string[] {
+  const values = new Set<string>()
+  for (const group of groups) {
+    for (const item of group) {
+      const text = item.trim()
+      if (text) values.add(text)
+    }
+  }
+  if (current.trim() && current !== ADD_OPTION) values.add(current.trim())
+  return [...values].sort((a, b) => a.localeCompare(b, 'id'))
+}
+
 type FormState = {
   name: string
   email: string
@@ -64,6 +79,7 @@ type FormState = {
   branch: string
   department: string
   active: boolean
+  password: string
 }
 
 const emptyForm = (): FormState => ({
@@ -75,10 +91,18 @@ const emptyForm = (): FormState => ({
   branch: 'Mill Klaten',
   department: ROLE_LABELS.pembelian,
   active: true,
+  password: '',
 })
 
 export function PenggunaPage() {
-  const { users, upsertUser, setUserActive, removeUser } = useMasterStore()
+  const {
+    users,
+    persistError,
+    upsertUser,
+    createBranchAccount,
+    setUserActive,
+    removeUser,
+  } = useMasterStore()
   const PAGE_SIZE = usePageSize()
 
   const [search, setSearch] = useState('')
@@ -95,6 +119,7 @@ export function PenggunaPage() {
   const [form, setForm] = useState(emptyForm)
   const [formErrors, setFormErrors] = useState<UserFieldErrors>({})
   const [toast, setToast] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const stats = useMemo(() => buildPenggunaStats(users), [users])
 
@@ -158,6 +183,7 @@ export function PenggunaPage() {
       branch: row.branch,
       department: row.department,
       active: row.active,
+      password: '',
     })
     setFormErrors({})
     setFormOpen(true)
@@ -169,8 +195,11 @@ export function PenggunaPage() {
     setFormErrors((e) => ({ ...e, [key]: undefined }))
   }
 
-  function saveForm() {
+  async function saveForm() {
     const nextErrors = validateUserForm(form)
+    if (!editing && form.password.trim().length < 8) {
+      nextErrors.password = 'Minimal 8 karakter'
+    }
     setFormErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
       setToast('Periksa kembali isian yang belum valid')
@@ -184,24 +213,37 @@ export function PenggunaPage() {
       setToast('Email sudah terpakai')
       return
     }
-    upsertUser(
-      {
-        name: sanitizeText(form.name, 80).trim(),
-        email,
-        role: form.role,
-        title:
-          sanitizeText(form.title, 80).trim() || ROLE_LABELS[form.role],
-        phone: sanitizePhone(form.phone).trim(),
-        branch: sanitizeText(form.branch, 80).trim() || 'Mill Klaten',
-        department:
-          sanitizeText(form.department, 80).trim() || ROLE_LABELS[form.role],
-        active: form.active,
-      },
-      editing?.id,
-    )
+    const payload = {
+      name: sanitizeText(form.name, 80).trim(),
+      email,
+      role: form.role,
+      title: sanitizeText(form.title, 80).trim() || ROLE_LABELS[form.role],
+      phone: sanitizePhone(form.phone).trim(),
+      branch: sanitizeText(form.branch, 80).trim() || 'Mill Klaten',
+      department:
+        sanitizeText(form.department, 80).trim() || ROLE_LABELS[form.role],
+      active: form.active,
+    }
+    if (!editing) {
+      setSaving(true)
+      const err = await createBranchAccount({
+        ...payload,
+        password: form.password,
+      })
+      setSaving(false)
+      if (err) {
+        setToast(err)
+        return
+      }
+      setFormOpen(false)
+      setFormErrors({})
+      setToast('Akun cabang dibuat. Mereka bisa masuk dengan email dan kata sandi ini.')
+      return
+    }
+    upsertUser(payload, editing.id)
     setFormOpen(false)
     setFormErrors({})
-    setToast(editing ? 'Pengguna diperbarui' : 'Pengguna ditambahkan')
+    setToast('Pengguna diperbarui')
   }
 
   function handlePrint(row: MasterUser) {
@@ -225,6 +267,7 @@ export function PenggunaPage() {
     <div className="space-y-2.5">
       <FinanceStatGrid stats={stats} />
       <FinanceToast message={toast} />
+      {persistError ? <AlertCard tone="danger">{persistError}</AlertCard> : null}
 
       <section className="rounded-2xl border border-line bg-panel p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -233,7 +276,7 @@ export function PenggunaPage() {
               Pengguna & peran
             </h2>
             <p className="mt-0.5 text-[12.5px] text-muted">
-              Akun demo lokal — sinkron dengan login mock
+              Admin membuat akun login beserta cabang. Peran dan lokasi tersimpan di database.
             </p>
           </div>
           <button
@@ -432,10 +475,9 @@ export function PenggunaPage() {
               ]}
             />
           </DrawerSection>
-          <DrawerSection label="Login demo">
+          <DrawerSection label="Login">
             <p className="rounded-xl border border-line/80 bg-surface/70 px-3 py-2.5 text-[13px] text-muted">
-              Password default: <span className="font-medium text-ink">demo123</span>
-              . Email harus cocok dengan peran saat login.
+              Akun bawaan demo memakai kata sandi demo123. Akun yang dibuat admin memakai kata sandi yang diisi saat pendaftaran.
             </p>
           </DrawerSection>
         </DetailDrawer>
@@ -450,8 +492,9 @@ export function PenggunaPage() {
           footer={
             <ModalActions
               onCancel={() => setFormOpen(false)}
-              onConfirm={saveForm}
+              onConfirm={() => void saveForm()}
               confirmLabel="Simpan"
+              confirmLoading={saving}
             />
           }
         >
@@ -500,39 +543,54 @@ export function PenggunaPage() {
                 }))
               }
             />
-            <TextField
+            <AddableSelect
               id="usr-title"
               label="Jabatan"
               value={form.title}
-              placeholder="Jabatan di kartu nama"
-              maxLength={80}
+              choices={uniqueLabels(
+                form.title,
+                users.map((u) => u.title),
+                Object.values(ROLE_LABELS),
+              )}
               error={formErrors.title}
-              onChange={(e) =>
-                patchForm('title', sanitizeText(e.target.value, 80))
-              }
+              onChange={(title) => patchForm('title', title)}
             />
-            <TextField
+            <AddableSelect
               id="usr-dept"
               label="Departemen"
               value={form.department}
-              placeholder="Pembelian / Gudang / Keuangan…"
-              maxLength={80}
+              choices={uniqueLabels(
+                form.department,
+                users.map((u) => u.department),
+                Object.values(ROLE_LABELS),
+              )}
               error={formErrors.department}
-              onChange={(e) =>
-                patchForm('department', sanitizeText(e.target.value, 80))
-              }
+              onChange={(department) => patchForm('department', department)}
             />
-            <TextField
+            <AddableSelect
               id="usr-branch"
               label="Cabang / lokasi"
               value={form.branch}
-              placeholder="Mill Klaten / Kantor Pusat"
-              maxLength={80}
+              choices={uniqueLabels(
+                form.branch,
+                users.map((u) => u.branch),
+                ['Mill Klaten', 'Kantor Pusat'],
+              )}
               error={formErrors.branch}
-              onChange={(e) =>
-                patchForm('branch', sanitizeText(e.target.value, 80))
-              }
+              onChange={(branch) => patchForm('branch', branch)}
             />
+            {editing ? null : (
+              <TextField
+                id="usr-password"
+                label="Kata sandi awal"
+                type="password"
+                requiredMark
+                value={form.password}
+                placeholder="Minimal 8 karakter"
+                error={formErrors.password}
+                onChange={(e) => patchForm('password', e.target.value)}
+              />
+            )}
             <TextField
               id="usr-phone"
               label="Telepon"
@@ -555,6 +613,60 @@ export function PenggunaPage() {
             </div>
           </div>
         </FinanceModal>
+      ) : null}
+    </div>
+  )
+}
+
+function AddableSelect({
+  id,
+  label,
+  value,
+  choices,
+  error,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  choices: string[]
+  error?: string
+  onChange: (value: string) => void
+}) {
+  const [adding, setAdding] = useState(
+    () => value.trim().length > 0 && !choices.includes(value),
+  )
+  const options = [
+    ...choices.map((item) => ({ value: item, label: item })),
+    { value: ADD_OPTION, label: 'Tambah baru…' },
+  ]
+  return (
+    <div className="space-y-2">
+      <Select
+        label={label}
+        value={adding ? ADD_OPTION : value}
+        options={options}
+        onChange={(next) => {
+          if (next === ADD_OPTION) {
+            setAdding(true)
+            onChange('')
+            return
+          }
+          setAdding(false)
+          onChange(next)
+        }}
+      />
+      {adding ? (
+        <TextField
+          id={id}
+          label={`Nama ${label.toLowerCase()}`}
+          requiredMark
+          value={value}
+          placeholder="Ketik nama baru"
+          maxLength={80}
+          error={error}
+          onChange={(e) => onChange(sanitizeText(e.target.value, 80))}
+        />
       ) : null}
     </div>
   )

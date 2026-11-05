@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
 import {
   SETTINGS_EVENT,
@@ -10,6 +10,10 @@ import { ChevronDownIcon } from '@/components/ui/icons'
 export function UserMenu() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const settingsTo = location.pathname.startsWith('/portal')
+    ? '/portal/settings'
+    : '/app/settings'
   const [open, setOpen] = useState(false)
   const [profile, setProfile] = useState(() => readAppSettings().profile)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -85,10 +89,10 @@ export function UserMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
+          className="motion-panel absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-md"
         >
           <Link
-            to="/app/settings"
+            to={settingsTo}
             role="menuitem"
             onClick={() => setOpen(false)}
             className="block px-3.5 py-2.5 text-[13px] text-ink hover:bg-brand-50"

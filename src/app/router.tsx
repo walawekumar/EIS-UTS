@@ -5,6 +5,7 @@ import { RequireAuth } from '@/app/RequireAuth'
 import { RequireRole } from '@/app/RequireRole'
 import { AppShell } from '@/components/layout/AppShell'
 import { ModuleShell } from '@/components/layout/ModuleShell'
+import { PortalNavbar } from '@/components/layout/PortalNavbar'
 import { LoginPage } from '@/pages/LoginPage'
 import { PortalPage } from '@/pages/PortalPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -62,6 +63,17 @@ export function AppRouter() {
       <Route element={<RequireAuth />}>
         <Route element={<AuthenticatedProviders />}>
         <Route path="/portal" element={<PortalPage />} />
+        <Route
+          path="/portal/settings"
+          element={
+            <div className="min-h-screen bg-surface">
+              <PortalNavbar />
+              <main className="motion-page mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+                <SettingsPage />
+              </main>
+            </div>
+          }
+        />
 
         <Route
           path="/absensi"

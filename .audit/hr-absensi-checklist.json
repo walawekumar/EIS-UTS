@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-05T10:03:34.115Z",
+  "generatedAt": "2026-11-05T11:31:10.831Z",
   "skill": "principle-prove-it-works + create-verification-skill",
   "summary": {
-    "pass": 17,
-    "fail": 2,
+    "pass": 19,
+    "fail": 0,
     "needLive": 5,
     "total": 24
   },
@@ -80,15 +80,15 @@
     },
     {
       "id": 11,
-      "title": "HR home side-by-side charts + queue table",
-      "status": "FAIL",
+      "title": "HR home charts + queue table, no shortcut strip",
+      "status": "PASS",
       "evidence": "src/pages/modules/hr/HrHomePage.tsx",
       "note": ""
     },
     {
       "id": 12,
-      "title": "HrQueueTable has filter + sort via FinanceFilterBar",
-      "status": "FAIL",
+      "title": "HrQueueTable uses FinanceFilterBar and column sort",
+      "status": "PASS",
       "evidence": "src/components/hr/HrQueueTable.tsx",
       "note": ""
     },

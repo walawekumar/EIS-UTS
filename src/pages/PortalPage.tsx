@@ -139,7 +139,7 @@ export function PortalPage() {
     <div className="min-h-screen bg-surface">
       <PortalNavbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="motion-page mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <section className="mb-5 flex items-start gap-4 rounded-2xl border border-line bg-panel px-4 py-4 sm:px-5 sm:py-5">
           <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-800 text-white">
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8">

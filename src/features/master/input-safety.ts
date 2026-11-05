@@ -255,6 +255,7 @@ export type UserFieldErrors = Partial<{
   phone: string
   branch: string
   department: string
+  password: string
 }>
 
 export function validateUserForm(input: {

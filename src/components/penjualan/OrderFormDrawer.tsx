@@ -17,6 +17,7 @@ type OrderFormDrawerProps = {
   nextId: string
   onClose: () => void
   onSave: (order: NewSaleOrder) => void
+  error?: string | null
 }
 
 type FormState = {
@@ -30,7 +31,13 @@ type FormState = {
 
 type FormErrors = Partial<Record<keyof FormState, string>>
 
-export function OrderFormDrawer({ open, nextId, onClose, onSave }: OrderFormDrawerProps) {
+export function OrderFormDrawer({
+  open,
+  nextId,
+  onClose,
+  onSave,
+  error,
+}: OrderFormDrawerProps) {
   const { customers, products } = useMasterStore()
   const saleProducts = products.filter(
     (p) => p.active && (p.category === 'beras' || p.category === 'sampingan'),
@@ -208,13 +215,23 @@ return (
           </div>
         </div>
 
-        <footer className="flex shrink-0 gap-2 border-t border-line px-5 py-4">
+        <footer className="shrink-0 border-t border-line px-5 py-4">
+          {error ? (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
+            >
+              {error}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
           <button type="button" onClick={onClose} className={[secondaryBtn, 'flex-1'].join(' ')}>
             Batal
           </button>
           <button type="submit" className={[primaryBtn, 'flex-1'].join(' ')}>
             Simpan order
           </button>
+          </div>
         </footer>
       </form>
     </SideOverlay>

@@ -18,6 +18,7 @@ import {
   type PartnerKind,
 } from '@/features/master/master-data'
 import {
+  createBranchUser,
   loadMasterCloud,
   mapSupabaseError,
   saveMasterCloud,
@@ -44,6 +45,9 @@ type MasterStoreValue = {
   setProductActive: (id: string, active: boolean) => void
   removeProduct: (id: string) => void
   upsertUser: (data: UserInput, id?: string) => string
+  createBranchAccount: (
+    data: UserInput & { password: string },
+  ) => Promise<string | undefined>
   setUserActive: (id: string, active: boolean) => void
   removeUser: (id: string) => void
 }
@@ -215,6 +219,37 @@ export function MasterProvider({ children }: { children: ReactNode }) {
     [assertMasterWritable],
   )
 
+  const createBranchAccount = useCallback(
+    async (data: UserInput & { password: string }) => {
+      if (!assertMasterWritable()) return 'Data master belum siap.'
+      if (!configured) return 'Supabase belum dikonfigurasi.'
+      try {
+        const id = await createBranchUser(data)
+        setPersistError(null)
+        setUsers((prev) => [
+          {
+            id,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            title: data.title,
+            phone: data.phone,
+            branch: data.branch,
+            department: data.department,
+            active: data.active,
+          },
+          ...prev,
+        ])
+        return undefined
+      } catch (e) {
+        const msg = mapSupabaseError(e)
+        setPersistError(msg)
+        return msg
+      }
+    },
+    [assertMasterWritable, configured],
+  )
+
   const upsertUser = useCallback(
     (data: UserInput, id?: string) => {
       if (!assertMasterWritable()) return id ?? ''
@@ -310,6 +345,7 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       setProductActive,
       removeProduct,
       upsertUser,
+      createBranchAccount,
       setUserActive,
       removeUser,
     }),
@@ -327,6 +363,7 @@ export function MasterProvider({ children }: { children: ReactNode }) {
       setProductActive,
       removeProduct,
       upsertUser,
+      createBranchAccount,
       setUserActive,
       removeUser,
     ],

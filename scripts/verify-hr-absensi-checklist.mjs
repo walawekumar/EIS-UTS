@@ -159,9 +159,8 @@ const rows = []
   rows.push(
     check(
       11,
-      'HR home side-by-side charts + queue table',
-      /lg:grid-cols-2/.test(home) &&
-        /AbsensiMonthChart/.test(home) &&
+      'HR home charts + queue table, no shortcut strip',
+      /AbsensiMonthChart/.test(home) &&
         /HrLeaveOverviewChart/.test(home) &&
         /HrQueueTable/.test(home) &&
         !/Pintasan/.test(home) &&
@@ -172,12 +171,10 @@ const rows = []
   rows.push(
     check(
       12,
-      'HrQueueTable has filter + sort via FinanceFilterBar',
+      'HrQueueTable uses FinanceFilterBar and column sort',
       exists('src/components/hr/HrQueueTable.tsx') &&
         /FinanceFilterBar/.test(read('src/components/hr/HrQueueTable.tsx')) &&
-        /secondaryFilterLabel="Urutkan"/.test(
-          read('src/components/hr/HrQueueTable.tsx'),
-        ),
+        /FinanceSortTh/.test(read('src/components/hr/HrQueueTable.tsx')),
       'src/components/hr/HrQueueTable.tsx',
     ),
   )

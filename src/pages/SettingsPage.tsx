@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { TextAreaField } from '@/components/keuangan/FinanceModal'
 import { FinanceToast } from '@/components/keuangan/FinanceToast'
+import { AlertCard } from '@/components/ui/AlertCard'
 import { StatusPill } from '@/components/keuangan/StatusPill'
 import { CameraIcon } from '@/components/ui/icons'
 import { Select } from '@/components/ui/Select'
@@ -9,6 +10,7 @@ import { TextField } from '@/components/ui/TextField'
 import { downloadBackup, restoreBackup } from '@/features/backup/backup'
 import { useAuth } from '@/features/auth/AuthContext'
 import { notifySettingsChanged } from '@/features/settings/app-settings'
+import { pushAppSettings } from '@/features/settings/settings-cloud'
 import {
   applyTheme,
   type ThemeAccent,
@@ -174,8 +176,13 @@ function loadStored(): StoredSettings {
 
 function saveStored(patch: StoredSettings) {
   const prev = loadStored()
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...prev, ...patch }))
+  const next = { ...prev, ...patch }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   notifySettingsChanged()
+  window.dispatchEvent(new Event('egabah-settings-saved'))
+  return pushAppSettings(next).catch(() => {
+    window.dispatchEvent(new Event('egabah-settings-error'))
+  })
 }
 
 function BackupDataCard({ notify }: { notify: (msg: string) => void }) {
@@ -279,18 +286,33 @@ function SaveBar({
   onReset,
 }: {
   dirty: boolean
-  onSave: () => void
+  onSave: () => void | Promise<void>
   onReset: () => void
 }) {
+  const [busy, setBusy] = useState(false)
+
+  async function handleSave() {
+    setBusy(true)
+    try {
+      await onSave()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-[12px] text-muted">
-        {dirty ? 'Ada perubahan yang belum disimpan.' : 'Semua perubahan tersimpan.'}
+        {busy
+          ? 'Menyimpan…'
+          : dirty
+            ? 'Ada perubahan yang belum disimpan.'
+            : 'Semua perubahan tersimpan.'}
       </p>
       <div className="flex gap-2">
         <button
           type="button"
-          disabled={!dirty}
+          disabled={!dirty || busy}
           onClick={onReset}
           className="h-10 rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -298,11 +320,14 @@ function SaveBar({
         </button>
         <button
           type="button"
-          disabled={!dirty}
-          onClick={onSave}
-          className="h-10 rounded-xl bg-brand-800 px-3.5 text-[13px] font-semibold text-white transition hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!dirty || busy}
+          onClick={() => void handleSave()}
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-800 px-3.5 text-[13px] font-semibold text-white transition hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Simpan
+          {busy ? (
+            <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : null}
+          {busy ? 'Menyimpan…' : 'Simpan'}
         </button>
       </div>
     </div>
@@ -323,12 +348,13 @@ export function SettingsPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<SettingsTab>('profil')
   const [toast, setToast] = useState<string | null>(null)
+  const [cloudAlert, setCloudAlert] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string>()
 
   const defaultProfile: ProfileForm = {
     name: stored.profile?.name ?? user?.name ?? '',
     email: stored.profile?.email ?? user?.email ?? '',
-    phone: stored.profile?.phone ?? '0812-3456-7890',
+    phone: stored.profile?.phone ?? '',
     title: stored.profile?.title ?? user?.roleLabel ?? '',
     employeeId: stored.profile?.employeeId ?? `EG-${user?.role?.slice(0, 3).toUpperCase() ?? 'ADM'}-001`,
     nik: stored.profile?.nik ?? '',
@@ -487,6 +513,18 @@ export function SettingsPage() {
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('')
 
+  useEffect(() => {
+    const onError = () =>
+      setCloudAlert('Gagal menyimpan pengaturan ke database. Periksa koneksi, lalu coba lagi.')
+    const onSaved = () => setCloudAlert(null)
+    window.addEventListener('egabah-settings-error', onError)
+    window.addEventListener('egabah-settings-saved', onSaved)
+    return () => {
+      window.removeEventListener('egabah-settings-error', onError)
+      window.removeEventListener('egabah-settings-saved', onSaved)
+    }
+  }, [])
+
   function notify(msg: string) {
     setToast(msg)
   }
@@ -526,7 +564,7 @@ export function SettingsPage() {
                     typeof reader.result === 'string' ? reader.result : ''
                   setProfile((p) => {
                     const next = { ...p, avatarUrl }
-                    saveStored({ profile: next })
+                    void saveStored({ profile: next })
                     return next
                   })
                   setProfileBase((p) => ({ ...p, avatarUrl }))
@@ -565,6 +603,8 @@ export function SettingsPage() {
         </div>
         <FinanceToast message={toast} />
       </div>
+
+      {cloudAlert ? <AlertCard tone="danger">{cloudAlert}</AlertCard> : null}
 
       <div className="grid gap-3 lg:grid-cols-[232px_minmax(0,1fr)]">
         <nav className="h-fit rounded-2xl border border-line bg-panel p-2 lg:sticky lg:top-0">
@@ -624,7 +664,7 @@ export function SettingsPage() {
                       }
                       setProfile(next)
                       setProfileBase(next)
-                      saveStored({ profile: next })
+                      return saveStored({ profile: next })
                       notify('Profil disimpan')
                     }}
                   />
@@ -778,7 +818,7 @@ export function SettingsPage() {
                   onReset={() => setCompany(companyBase)}
                   onSave={() => {
                     setCompanyBase(company)
-                    saveStored({ company })
+                    return saveStored({ company })
                     notify('Data perusahaan disimpan')
                   }}
                 />
@@ -960,7 +1000,7 @@ export function SettingsPage() {
                   onReset={() => setFinance(financeBase)}
                   onSave={() => {
                     setFinanceBase(finance)
-                    saveStored({ finance })
+                    return saveStored({ finance })
                     notify('Pengaturan keuangan disimpan')
                   }}
                 />
@@ -1081,7 +1121,7 @@ export function SettingsPage() {
                   onReset={() => setStock(stockBase)}
                   onSave={() => {
                     setStockBase(stock)
-                    saveStored({ stock })
+                    return saveStored({ stock })
                     notify('Pengaturan persediaan disimpan')
                   }}
                 />
@@ -1184,7 +1224,7 @@ export function SettingsPage() {
                   onReset={() => setDocs(docsBase)}
                   onSave={() => {
                     setDocsBase(docs)
-                    saveStored({ docs })
+                    return saveStored({ docs })
                     notify('Pengaturan dokumen disimpan')
                   }}
                 />
@@ -1281,7 +1321,7 @@ export function SettingsPage() {
                     }}
                     onSave={() => {
                       setPrefsBase(prefs)
-                      saveStored({ prefs })
+                      return saveStored({ prefs })
                       applyTheme({ mode: prefs.mode, accent: prefs.accent })
                       notify('Preferensi & tema disimpan')
                     }}
@@ -1435,7 +1475,7 @@ export function SettingsPage() {
                     }}
                     onSave={() => {
                       setPrefsBase(prefs)
-                      saveStored({ prefs })
+                      return saveStored({ prefs })
                       applyTheme({ mode: prefs.mode, accent: prefs.accent })
                       notify('Preferensi disimpan')
                     }}
@@ -1546,7 +1586,7 @@ export function SettingsPage() {
                   onReset={() => setNotif(notifBase)}
                   onSave={() => {
                     setNotifBase(notif)
-                    saveStored({ notif })
+                    return saveStored({ notif })
                     notify('Notifikasi disimpan')
                   }}
                 />
@@ -1719,7 +1759,7 @@ export function SettingsPage() {
                         loginAlert: security.loginAlert,
                       }
                       setSecurityBase(next)
-                      saveStored({ security: next })
+                      return saveStored({ security: next })
                       notify('Keamanan sesi disimpan')
                     }}
                   />

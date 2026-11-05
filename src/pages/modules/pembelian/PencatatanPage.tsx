@@ -17,6 +17,7 @@ export function PencatatanPage() {
   } = usePembelian()
   const { selectedId, select, goTo } = useSelectedDoc()
   const [formOpen, setFormOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   return (
     <>
@@ -42,13 +43,18 @@ export function PencatatanPage() {
       <PurchaseFormDrawer
         open={formOpen}
         nextId={nextPurchaseId(purchases)}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormError(null)
+          setFormOpen(false)
+        }}
+        error={formError}
         onSave={(data) => {
           const result = createPurchase(data)
           if (!result.ok) {
-            window.alert(result.error)
+            setFormError(result.error)
             return
           }
+          setFormError(null)
           setFormOpen(false)
           select(result.id)
         }}

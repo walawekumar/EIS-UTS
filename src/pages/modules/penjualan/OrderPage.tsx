@@ -8,6 +8,7 @@ export function OrderPage() {
   const { orders, createOrder, deleteOrder } = usePenjualan()
   const { selectedId, select, goTo } = useSelectedOrder()
   const [formOpen, setFormOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   return (
     <>
@@ -26,13 +27,18 @@ export function OrderPage() {
       <OrderFormDrawer
         open={formOpen}
         nextId={nextOrderId(orders)}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormError(null)
+          setFormOpen(false)
+        }}
+        error={formError}
         onSave={(data) => {
           const result = createOrder(data)
           if (!result.ok) {
-            window.alert(result.error)
+            setFormError(result.error)
             return
           }
+          setFormError(null)
           setFormOpen(false)
           select(result.id)
         }}

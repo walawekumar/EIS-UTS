@@ -114,35 +114,42 @@ export function ModalActions({
   onConfirm,
   confirmLabel,
   confirmDisabled,
+  confirmLoading,
   danger,
 }: {
   onCancel: () => void
   onConfirm: () => void
   confirmLabel: string
   confirmDisabled?: boolean
+  confirmLoading?: boolean
   danger?: boolean
 }) {
+  const locked = confirmDisabled || confirmLoading
   return (
     <div className="flex gap-2">
       <button
         type="button"
         onClick={onCancel}
-        className="h-11 flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface"
+        disabled={confirmLoading}
+        className="h-11 flex-1 rounded-xl border border-line text-[14px] font-medium text-ink transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
       >
         Batal
       </button>
       <button
         type="button"
         onClick={onConfirm}
-        disabled={confirmDisabled}
+        disabled={locked}
         className={[
-          'h-11 flex-1 rounded-xl text-[14px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50',
+          'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50',
           danger
             ? 'bg-red-700 hover:bg-red-800'
             : 'bg-brand-800 hover:bg-brand-900',
         ].join(' ')}
       >
-        {confirmLabel}
+        {confirmLoading ? (
+          <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        ) : null}
+        {confirmLoading ? 'Menyimpan…' : confirmLabel}
       </button>
     </div>
   )

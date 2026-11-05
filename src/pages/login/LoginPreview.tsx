@@ -1,42 +1,24 @@
-const MODULES = [
-  {
-    title: 'E-Gabah',
-    detail: 'Pembelian, produksi, stok, penjualan, dan keuangan',
-  },
-  {
-    title: 'E-Absensi',
-    detail: 'Check-in, check-out, dan pengajuan cuti',
-  },
-  {
-    title: 'E-HR',
-    detail: 'Persetujuan cuti, rekap, dan persiapan gaji',
-  },
-]
-
 export function LoginPreview() {
   return (
-    <div className="flex h-full min-h-[560px] flex-col justify-between bg-brand-800 p-8 text-white lg:rounded-none lg:rounded-r-2xl xl:p-10">
-      <div>
-        <p className="text-[12px] font-medium text-white/70">Modul</p>
-        <ul className="mt-4 divide-y divide-white/15 border-y border-white/15">
-          {MODULES.map((item) => (
-            <li key={item.title} className="py-3.5">
-              <p className="text-[14px] font-semibold">{item.title}</p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-white/70">
-                {item.detail}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mt-10 max-w-md">
-        <h2 className="text-[22px] leading-snug font-semibold tracking-tight">
+    <div className="relative h-full min-h-[560px] overflow-hidden lg:rounded-r-2xl">
+      <img
+        src="/login-sawah.jpg"
+        alt="Sawah terasering di Tegallalang, Bali"
+        className="absolute inset-0 h-full w-full object-cover object-center"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+      <div className="motion-rise relative flex h-full min-h-[560px] flex-col justify-end px-8 py-8 xl:px-10 xl:py-10">
+        <p className="text-[12px] font-medium tracking-wide text-white/75">
+          E-Gabah
+        </p>
+        <p className="mt-2 max-w-[16rem] text-[26px] leading-[1.2] font-semibold tracking-tight text-white">
           Satu portal untuk operasi penggilingan.
-        </h2>
-        <p className="mt-3 text-[13px] leading-relaxed text-white/75">
-          Pembelian gabah, batch giling, stok, penjualan, dan kas berada dalam
-          alur yang sama.
+        </p>
+        <p className="mt-3 max-w-[18rem] text-[13px] leading-relaxed text-white/80">
+          Pembelian, giling, stok, penjualan, dan kas dalam satu alur.
+        </p>
+        <p className="mt-6 text-[11px] text-white/55">
+          Sawah Tegallalang · Christophe95 · CC BY-SA 4.0
         </p>
       </div>
     </div>

@@ -9,6 +9,7 @@ import {
   clearCloudPersistError,
   subscribeCloudPersistError,
 } from '@/lib/cloud-persist-bus'
+import { hydrateAppSettings } from '@/features/settings/settings-cloud'
 
 /**
  * Hydrate relational ops tables before feature providers mount.
@@ -31,6 +32,11 @@ export function OpsCloudGate({ children }: { children: ReactNode }) {
         `Gagal memuat tabel cloud: ${failed.join(', ')}. Periksa koneksi / migrasi, lalu coba lagi.`,
       )
     } else {
+      try {
+        await hydrateAppSettings()
+      } catch {
+        // Pengaturan tetap bisa dibaca dari cache lokal.
+      }
       setReady(true)
       setHydrateError(null)
     }
